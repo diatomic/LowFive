@@ -40,7 +40,7 @@
 #include "hdf5.h"
 
 /* This connector's header */
-#include "H5VLpassthru.h"
+#include "our-passthru-plugin.h"
 
 
 /**********/
@@ -63,16 +63,16 @@
 /************/
 
 /* The pass through VOL info object */
-typedef struct H5VL_pass_through_t {
+typedef struct OUR_pass_through_t {
     hid_t  under_vol_id;        /* ID for underlying VOL connector */
     void   *under_object;       /* Info object for underlying VOL connector */
-} H5VL_pass_through_t;
+} OUR_pass_through_t;
 
 /* The pass through VOL wrapper context */
-typedef struct H5VL_pass_through_wrap_ctx_t {
+typedef struct OUR_pass_through_wrap_ctx_t {
     hid_t under_vol_id;         /* VOL ID for under VOL */
     void *under_wrap_ctx;       /* Object wrapping context for under VOL */
-} H5VL_pass_through_wrap_ctx_t;
+} OUR_pass_through_wrap_ctx_t;
 
 
 /********************* */
@@ -80,203 +80,203 @@ typedef struct H5VL_pass_through_wrap_ctx_t {
 /********************* */
 
 /* Helper routines */
-static herr_t H5VL_pass_through_file_specific_reissue(void *obj, hid_t connector_id,
+static herr_t OUR_pass_through_file_specific_reissue(void *obj, hid_t connector_id,
     H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...);
-static herr_t H5VL_pass_through_request_specific_reissue(void *obj, hid_t connector_id,
+static herr_t OUR_pass_through_request_specific_reissue(void *obj, hid_t connector_id,
     H5VL_request_specific_t specific_type, ...);
-static herr_t H5VL_pass_through_link_create_reissue(H5VL_link_create_type_t create_type,
+static herr_t OUR_pass_through_link_create_reissue(H5VL_link_create_type_t create_type,
     void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id,
     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...);
-static H5VL_pass_through_t *H5VL_pass_through_new_obj(void *under_obj,
+static OUR_pass_through_t *OUR_pass_through_new_obj(void *under_obj,
     hid_t under_vol_id);
-static herr_t H5VL_pass_through_free_obj(H5VL_pass_through_t *obj);
+static herr_t OUR_pass_through_free_obj(OUR_pass_through_t *obj);
 
 /* "Management" callbacks */
-static herr_t H5VL_pass_through_init(hid_t vipl_id);
-static herr_t H5VL_pass_through_term(void);
+static herr_t OUR_pass_through_init(hid_t vipl_id);
+static herr_t OUR_pass_through_term(void);
 
 /* VOL info callbacks */
-static void *H5VL_pass_through_info_copy(const void *info);
-static herr_t H5VL_pass_through_info_cmp(int *cmp_value, const void *info1, const void *info2);
-static herr_t H5VL_pass_through_info_free(void *info);
-static herr_t H5VL_pass_through_info_to_str(const void *info, char **str);
-static herr_t H5VL_pass_through_str_to_info(const char *str, void **info);
+static void *OUR_pass_through_info_copy(const void *info);
+static herr_t OUR_pass_through_info_cmp(int *cmp_value, const void *info1, const void *info2);
+static herr_t OUR_pass_through_info_free(void *info);
+static herr_t OUR_pass_through_info_to_str(const void *info, char **str);
+static herr_t OUR_pass_through_str_to_info(const char *str, void **info);
 
 /* VOL object wrap / retrieval callbacks */
-static void *H5VL_pass_through_get_object(const void *obj);
-static herr_t H5VL_pass_through_get_wrap_ctx(const void *obj, void **wrap_ctx);
-static void *H5VL_pass_through_wrap_object(void *obj, H5I_type_t obj_type,
+static void *OUR_pass_through_get_object(const void *obj);
+static herr_t OUR_pass_through_get_wrap_ctx(const void *obj, void **wrap_ctx);
+static void *OUR_pass_through_wrap_object(void *obj, H5I_type_t obj_type,
     void *wrap_ctx);
-static void *H5VL_pass_through_unwrap_object(void *obj);
-static herr_t H5VL_pass_through_free_wrap_ctx(void *obj);
+static void *OUR_pass_through_unwrap_object(void *obj);
+static herr_t OUR_pass_through_free_wrap_ctx(void *obj);
 
 /* Attribute callbacks */
-static void *H5VL_pass_through_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_pass_through_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_attr_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_attr_close(void *attr, hid_t dxpl_id, void **req); 
+static void *OUR_pass_through_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_attr_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_attr_close(void *attr, hid_t dxpl_id, void **req); 
 
 /* Dataset callbacks */
-static void *H5VL_pass_through_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_pass_through_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
+static void *OUR_pass_through_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
                                     hid_t file_space_id, hid_t plist_id, void *buf, void **req);
-static herr_t H5VL_pass_through_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
-static herr_t H5VL_pass_through_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_dataset_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_dataset_close(void *dset, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
+static herr_t OUR_pass_through_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_dataset_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_dataset_close(void *dset, hid_t dxpl_id, void **req);
 
 /* Datatype callbacks */
-static void *H5VL_pass_through_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_pass_through_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_datatype_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_datatype_close(void *dt, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_datatype_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_datatype_close(void *dt, hid_t dxpl_id, void **req);
 
 /* File callbacks */
-static void *H5VL_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_file_optional(void *file, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_file_close(void *file, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_file_optional(void *file, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_file_close(void *file, hid_t dxpl_id, void **req);
 
 /* Group callbacks */
-static void *H5VL_pass_through_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_pass_through_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_group_specific(void *obj, H5VL_group_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_group_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_group_close(void *grp, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
+static void *OUR_pass_through_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_group_specific(void *obj, H5VL_group_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_group_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_group_close(void *grp, hid_t dxpl_id, void **req);
 
 /* Link callbacks */
-static herr_t H5VL_pass_through_link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_link_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_link_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
 
 /* Object callbacks */
-static void *H5VL_pass_through_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_pass_through_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_pass_through_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static void *OUR_pass_through_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req);
+static herr_t OUR_pass_through_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t OUR_pass_through_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
 
 /* Async request callbacks */
-static herr_t H5VL_pass_through_request_wait(void *req, uint64_t timeout, H5ES_status_t *status);
-static herr_t H5VL_pass_through_request_notify(void *obj, H5VL_request_notify_t cb, void *ctx);
-static herr_t H5VL_pass_through_request_cancel(void *req);
-static herr_t H5VL_pass_through_request_specific(void *req, H5VL_request_specific_t specific_type, va_list arguments);
-static herr_t H5VL_pass_through_request_optional(void *req, va_list arguments);
-static herr_t H5VL_pass_through_request_free(void *req);
+static herr_t OUR_pass_through_request_wait(void *req, uint64_t timeout, H5ES_status_t *status);
+static herr_t OUR_pass_through_request_notify(void *obj, H5VL_request_notify_t cb, void *ctx);
+static herr_t OUR_pass_through_request_cancel(void *req);
+static herr_t OUR_pass_through_request_specific(void *req, H5VL_request_specific_t specific_type, va_list arguments);
+static herr_t OUR_pass_through_request_optional(void *req, va_list arguments);
+static herr_t OUR_pass_through_request_free(void *req);
 
 /*******************/
 /* Local variables */
 /*******************/
 
 /* Pass through VOL connector class struct */
-static const H5VL_class_t H5VL_pass_through_g = {
-    H5VL_PASSTHRU_VERSION,                          /* version      */
-    (H5VL_class_value_t)H5VL_PASSTHRU_VALUE,        /* value        */
-    H5VL_PASSTHRU_NAME,                             /* name         */
+static const H5VL_class_t OUR_pass_through_g = {
+    OUR_PASSTHRU_VERSION,                          /* version      */
+    (H5VL_class_value_t)OUR_PASSTHRU_VALUE,        /* value        */
+    OUR_PASSTHRU_NAME,                             /* name         */
     0,                                              /* capability flags */
-    H5VL_pass_through_init,                         /* initialize   */
-    H5VL_pass_through_term,                         /* terminate    */
+    OUR_pass_through_init,                         /* initialize   */
+    OUR_pass_through_term,                         /* terminate    */
     {                                           /* info_cls */
-        sizeof(H5VL_pass_through_info_t),           /* size    */
-        H5VL_pass_through_info_copy,                /* copy    */
-        H5VL_pass_through_info_cmp,                 /* compare */
-        H5VL_pass_through_info_free,                /* free    */
-        H5VL_pass_through_info_to_str,              /* to_str  */
-        H5VL_pass_through_str_to_info,              /* from_str */
+        sizeof(OUR_pass_through_info_t),           /* size    */
+        OUR_pass_through_info_copy,                /* copy    */
+        OUR_pass_through_info_cmp,                 /* compare */
+        OUR_pass_through_info_free,                /* free    */
+        OUR_pass_through_info_to_str,              /* to_str  */
+        OUR_pass_through_str_to_info,              /* from_str */
     },
     {                                           /* wrap_cls */
-        H5VL_pass_through_get_object,               /* get_object   */
-        H5VL_pass_through_get_wrap_ctx,             /* get_wrap_ctx */
-        H5VL_pass_through_wrap_object,              /* wrap_object  */
-        H5VL_pass_through_unwrap_object,            /* unwrap_object */
-        H5VL_pass_through_free_wrap_ctx,            /* free_wrap_ctx */
+        OUR_pass_through_get_object,               /* get_object   */
+        OUR_pass_through_get_wrap_ctx,             /* get_wrap_ctx */
+        OUR_pass_through_wrap_object,              /* wrap_object  */
+        OUR_pass_through_unwrap_object,            /* unwrap_object */
+        OUR_pass_through_free_wrap_ctx,            /* free_wrap_ctx */
     },
     {                                           /* attribute_cls */
-        H5VL_pass_through_attr_create,              /* create */
-        H5VL_pass_through_attr_open,                /* open */
-        H5VL_pass_through_attr_read,                /* read */
-        H5VL_pass_through_attr_write,               /* write */
-        H5VL_pass_through_attr_get,                 /* get */
-        H5VL_pass_through_attr_specific,            /* specific */
-        H5VL_pass_through_attr_optional,            /* optional */
-        H5VL_pass_through_attr_close                /* close */
+        OUR_pass_through_attr_create,              /* create */
+        OUR_pass_through_attr_open,                /* open */
+        OUR_pass_through_attr_read,                /* read */
+        OUR_pass_through_attr_write,               /* write */
+        OUR_pass_through_attr_get,                 /* get */
+        OUR_pass_through_attr_specific,            /* specific */
+        OUR_pass_through_attr_optional,            /* optional */
+        OUR_pass_through_attr_close                /* close */
     },
     {                                           /* dataset_cls */
-        H5VL_pass_through_dataset_create,           /* create */
-        H5VL_pass_through_dataset_open,             /* open */
-        H5VL_pass_through_dataset_read,             /* read */
-        H5VL_pass_through_dataset_write,            /* write */
-        H5VL_pass_through_dataset_get,              /* get */
-        H5VL_pass_through_dataset_specific,         /* specific */
-        H5VL_pass_through_dataset_optional,         /* optional */
-        H5VL_pass_through_dataset_close             /* close */
+        OUR_pass_through_dataset_create,           /* create */
+        OUR_pass_through_dataset_open,             /* open */
+        OUR_pass_through_dataset_read,             /* read */
+        OUR_pass_through_dataset_write,            /* write */
+        OUR_pass_through_dataset_get,              /* get */
+        OUR_pass_through_dataset_specific,         /* specific */
+        OUR_pass_through_dataset_optional,         /* optional */
+        OUR_pass_through_dataset_close             /* close */
     },
     {                                           /* datatype_cls */
-        H5VL_pass_through_datatype_commit,          /* commit */
-        H5VL_pass_through_datatype_open,            /* open */
-        H5VL_pass_through_datatype_get,             /* get_size */
-        H5VL_pass_through_datatype_specific,        /* specific */
-        H5VL_pass_through_datatype_optional,        /* optional */
-        H5VL_pass_through_datatype_close            /* close */
+        OUR_pass_through_datatype_commit,          /* commit */
+        OUR_pass_through_datatype_open,            /* open */
+        OUR_pass_through_datatype_get,             /* get_size */
+        OUR_pass_through_datatype_specific,        /* specific */
+        OUR_pass_through_datatype_optional,        /* optional */
+        OUR_pass_through_datatype_close            /* close */
     },
     {                                           /* file_cls */
-        H5VL_pass_through_file_create,              /* create */
-        H5VL_pass_through_file_open,                /* open */
-        H5VL_pass_through_file_get,                 /* get */
-        H5VL_pass_through_file_specific,            /* specific */
-        H5VL_pass_through_file_optional,            /* optional */
-        H5VL_pass_through_file_close                /* close */
+        OUR_pass_through_file_create,              /* create */
+        OUR_pass_through_file_open,                /* open */
+        OUR_pass_through_file_get,                 /* get */
+        OUR_pass_through_file_specific,            /* specific */
+        OUR_pass_through_file_optional,            /* optional */
+        OUR_pass_through_file_close                /* close */
     },
     {                                           /* group_cls */
-        H5VL_pass_through_group_create,             /* create */
-        H5VL_pass_through_group_open,               /* open */
-        H5VL_pass_through_group_get,                /* get */
-        H5VL_pass_through_group_specific,           /* specific */
-        H5VL_pass_through_group_optional,           /* optional */
-        H5VL_pass_through_group_close               /* close */
+        OUR_pass_through_group_create,             /* create */
+        OUR_pass_through_group_open,               /* open */
+        OUR_pass_through_group_get,                /* get */
+        OUR_pass_through_group_specific,           /* specific */
+        OUR_pass_through_group_optional,           /* optional */
+        OUR_pass_through_group_close               /* close */
     },
     {                                           /* link_cls */
-        H5VL_pass_through_link_create,              /* create */
-        H5VL_pass_through_link_copy,                /* copy */
-        H5VL_pass_through_link_move,                /* move */
-        H5VL_pass_through_link_get,                 /* get */
-        H5VL_pass_through_link_specific,            /* specific */
-        H5VL_pass_through_link_optional,            /* optional */
+        OUR_pass_through_link_create,              /* create */
+        OUR_pass_through_link_copy,                /* copy */
+        OUR_pass_through_link_move,                /* move */
+        OUR_pass_through_link_get,                 /* get */
+        OUR_pass_through_link_specific,            /* specific */
+        OUR_pass_through_link_optional,            /* optional */
     },
     {                                           /* object_cls */
-        H5VL_pass_through_object_open,              /* open */
-        H5VL_pass_through_object_copy,              /* copy */
-        H5VL_pass_through_object_get,               /* get */
-        H5VL_pass_through_object_specific,          /* specific */
-        H5VL_pass_through_object_optional,          /* optional */
+        OUR_pass_through_object_open,              /* open */
+        OUR_pass_through_object_copy,              /* copy */
+        OUR_pass_through_object_get,               /* get */
+        OUR_pass_through_object_specific,          /* specific */
+        OUR_pass_through_object_optional,          /* optional */
     },
     {                                           /* request_cls */
-        H5VL_pass_through_request_wait,             /* wait */
-        H5VL_pass_through_request_notify,           /* notify */
-        H5VL_pass_through_request_cancel,           /* cancel */
-        H5VL_pass_through_request_specific,         /* specific */
-        H5VL_pass_through_request_optional,         /* optional */
-        H5VL_pass_through_request_free              /* free */
+        OUR_pass_through_request_wait,             /* wait */
+        OUR_pass_through_request_notify,           /* notify */
+        OUR_pass_through_request_cancel,           /* cancel */
+        OUR_pass_through_request_specific,         /* specific */
+        OUR_pass_through_request_optional,         /* optional */
+        OUR_pass_through_request_free              /* free */
     },
     NULL                                        /* optional */
 };
 
 /* The connector identification number, initialized at runtime */
-static hid_t H5VL_PASSTHRU_g = H5I_INVALID_HID;
+static hid_t OUR_PASSTHRU_g = H5I_INVALID_HID;
 
 
 /*-------------------------------------------------------------------------
@@ -292,18 +292,18 @@ static hid_t H5VL_PASSTHRU_g = H5I_INVALID_HID;
  *
  *-------------------------------------------------------------------------
  */
-static H5VL_pass_through_t *
-H5VL_pass_through_new_obj(void *under_obj, hid_t under_vol_id)
+static OUR_pass_through_t *
+OUR_pass_through_new_obj(void *under_obj, hid_t under_vol_id)
 {
-    H5VL_pass_through_t *new_obj;
+    OUR_pass_through_t *new_obj;
 
-    new_obj = (H5VL_pass_through_t *)calloc(1, sizeof(H5VL_pass_through_t));
+    new_obj = (OUR_pass_through_t *)calloc(1, sizeof(OUR_pass_through_t));
     new_obj->under_object = under_obj;
     new_obj->under_vol_id = under_vol_id;
     H5Iinc_ref(new_obj->under_vol_id);
 
     return new_obj;
-} /* end H5VL__pass_through_new_obj() */
+} /* end OUR__pass_through_new_obj() */
 
 
 /*-------------------------------------------------------------------------
@@ -323,7 +323,7 @@ H5VL_pass_through_new_obj(void *under_obj, hid_t under_vol_id)
  *-------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_free_obj(H5VL_pass_through_t *obj)
+OUR_pass_through_free_obj(OUR_pass_through_t *obj)
 {
     hid_t err_id;
 
@@ -336,11 +336,11 @@ H5VL_pass_through_free_obj(H5VL_pass_through_t *obj)
     free(obj);
 
     return 0;
-} /* end H5VL__pass_through_free_obj() */
+} /* end OUR__pass_through_free_obj() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_register
+ * Function:    OUR_pass_through_register
  *
  * Purpose:     Register the pass-through VOL connector and retrieve an ID
  *              for it.
@@ -354,18 +354,18 @@ H5VL_pass_through_free_obj(H5VL_pass_through_t *obj)
  *-------------------------------------------------------------------------
  */
 hid_t
-H5VL_pass_through_register(void)
+OUR_pass_through_register(void)
 {
     /* Singleton register the pass-through VOL connector ID */
-    if(H5VL_PASSTHRU_g < 0)
-        H5VL_PASSTHRU_g = H5VLregister_connector(&H5VL_pass_through_g, H5P_DEFAULT);
+    if(OUR_PASSTHRU_g < 0)
+        OUR_PASSTHRU_g = H5VLregister_connector(&OUR_pass_through_g, H5P_DEFAULT);
 
-    return H5VL_PASSTHRU_g;
-} /* end H5VL_pass_through_register() */
+    return OUR_PASSTHRU_g;
+} /* end OUR_pass_through_register() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_init
+ * Function:    OUR_pass_through_init
  *
  * Purpose:     Initialize this VOL connector, performing any necessary
  *              operations for the connector that will apply to all containers
@@ -377,7 +377,7 @@ H5VL_pass_through_register(void)
  *-------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_init(hid_t vipl_id)
+OUR_pass_through_init(hid_t vipl_id)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL INIT\n");
@@ -387,11 +387,11 @@ H5VL_pass_through_init(hid_t vipl_id)
     vipl_id = vipl_id;
 
     return 0;
-} /* end H5VL_pass_through_init() */
+} /* end OUR_pass_through_init() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_term
+ * Function:    OUR_pass_through_term
  *
  * Purpose:     Terminate this VOL connector, performing any necessary
  *              operations for the connector that release connector-wide
@@ -404,21 +404,21 @@ H5VL_pass_through_init(hid_t vipl_id)
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_term(void)
+OUR_pass_through_term(void)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL TERM\n");
 #endif
 
     /* Reset VOL ID */
-    H5VL_PASSTHRU_g = H5I_INVALID_HID;
+    OUR_PASSTHRU_g = H5I_INVALID_HID;
 
     return 0;
-} /* end H5VL_pass_through_term() */
+} /* end OUR_pass_through_term() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_info_copy
+ * Function:    OUR_pass_through_info_copy
  *
  * Purpose:     Duplicate the connector's info object.
  *
@@ -428,17 +428,17 @@ H5VL_pass_through_term(void)
  *---------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_info_copy(const void *_info)
+OUR_pass_through_info_copy(const void *_info)
 {
-    const H5VL_pass_through_info_t *info = (const H5VL_pass_through_info_t *)_info;
-    H5VL_pass_through_info_t *new_info;
+    const OUR_pass_through_info_t *info = (const OUR_pass_through_info_t *)_info;
+    OUR_pass_through_info_t *new_info;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL INFO Copy\n");
 #endif
 
     /* Allocate new VOL info struct for the pass through connector */
-    new_info = (H5VL_pass_through_info_t *)calloc(1, sizeof(H5VL_pass_through_info_t));
+    new_info = (OUR_pass_through_info_t *)calloc(1, sizeof(OUR_pass_through_info_t));
 
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_info->under_vol_id = info->under_vol_id;
@@ -447,11 +447,11 @@ H5VL_pass_through_info_copy(const void *_info)
         H5VLcopy_connector_info(new_info->under_vol_id, &(new_info->under_vol_info), info->under_vol_info);
 
     return new_info;
-} /* end H5VL_pass_through_info_copy() */
+} /* end OUR_pass_through_info_copy() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_info_cmp
+ * Function:    OUR_pass_through_info_cmp
  *
  * Purpose:     Compare two of the connector's info objects, setting *cmp_value,
  *              following the same rules as strcmp().
@@ -462,10 +462,10 @@ H5VL_pass_through_info_copy(const void *_info)
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_info_cmp(int *cmp_value, const void *_info1, const void *_info2)
+OUR_pass_through_info_cmp(int *cmp_value, const void *_info1, const void *_info2)
 {
-    const H5VL_pass_through_info_t *info1 = (const H5VL_pass_through_info_t *)_info1;
-    const H5VL_pass_through_info_t *info2 = (const H5VL_pass_through_info_t *)_info2;
+    const OUR_pass_through_info_t *info1 = (const OUR_pass_through_info_t *)_info1;
+    const OUR_pass_through_info_t *info2 = (const OUR_pass_through_info_t *)_info2;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL INFO Compare\n");
@@ -489,11 +489,11 @@ H5VL_pass_through_info_cmp(int *cmp_value, const void *_info1, const void *_info
         return 0;
 
     return 0;
-} /* end H5VL_pass_through_info_cmp() */
+} /* end OUR_pass_through_info_cmp() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_info_free
+ * Function:    OUR_pass_through_info_free
  *
  * Purpose:     Release an info object for the connector.
  *
@@ -506,9 +506,9 @@ H5VL_pass_through_info_cmp(int *cmp_value, const void *_info1, const void *_info
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_info_free(void *_info)
+OUR_pass_through_info_free(void *_info)
 {
-    H5VL_pass_through_info_t *info = (H5VL_pass_through_info_t *)_info;
+    OUR_pass_through_info_t *info = (OUR_pass_through_info_t *)_info;
     hid_t err_id;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
@@ -528,11 +528,11 @@ H5VL_pass_through_info_free(void *_info)
     free(info);
 
     return 0;
-} /* end H5VL_pass_through_info_free() */
+} /* end OUR_pass_through_info_free() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_info_to_str
+ * Function:    OUR_pass_through_info_to_str
  *
  * Purpose:     Serialize an info object for this connector into a string
  *
@@ -542,9 +542,9 @@ H5VL_pass_through_info_free(void *_info)
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_info_to_str(const void *_info, char **str)
+OUR_pass_through_info_to_str(const void *_info, char **str)
 {
-    const H5VL_pass_through_info_t *info = (const H5VL_pass_through_info_t *)_info;
+    const OUR_pass_through_info_t *info = (const OUR_pass_through_info_t *)_info;
     H5VL_class_value_t under_value = (H5VL_class_value_t)-1;
     char *under_vol_string = NULL;
     size_t under_vol_str_len = 0;
@@ -573,11 +573,11 @@ H5VL_pass_through_info_to_str(const void *_info, char **str)
     sprintf(*str, "under_vol=%u;under_info={%s}", (unsigned)under_value, (under_vol_string ? under_vol_string : ""));
 
     return 0;
-} /* end H5VL_pass_through_info_to_str() */
+} /* end OUR_pass_through_info_to_str() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_str_to_info
+ * Function:    OUR_pass_through_str_to_info
  *
  * Purpose:     Deserialize a string into an info object for this connector.
  *
@@ -587,9 +587,9 @@ H5VL_pass_through_info_to_str(const void *_info, char **str)
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_str_to_info(const char *str, void **_info)
+OUR_pass_through_str_to_info(const char *str, void **_info)
 {
-    H5VL_pass_through_info_t *info;
+    OUR_pass_through_info_t *info;
     unsigned under_vol_value;
     const char *under_vol_info_start, *under_vol_info_end;
     hid_t under_vol_id;
@@ -618,7 +618,7 @@ H5VL_pass_through_str_to_info(const char *str, void **_info)
     } /* end else */
 
     /* Allocate new pass-through VOL connector info and set its fields */
-    info = (H5VL_pass_through_info_t *)calloc(1, sizeof(H5VL_pass_through_info_t));
+    info = (OUR_pass_through_info_t *)calloc(1, sizeof(OUR_pass_through_info_t));
     info->under_vol_id = under_vol_id;
     info->under_vol_info = under_vol_info;
 
@@ -626,11 +626,11 @@ H5VL_pass_through_str_to_info(const char *str, void **_info)
     *_info = info;
 
     return 0;
-} /* end H5VL_pass_through_str_to_info() */
+} /* end OUR_pass_through_str_to_info() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_get_object
+ * Function:    OUR_pass_through_get_object
  *
  * Purpose:     Retrieve the 'data' for a VOL object.
  *
@@ -640,20 +640,20 @@ H5VL_pass_through_str_to_info(const char *str, void **_info)
  *---------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_get_object(const void *obj)
+OUR_pass_through_get_object(const void *obj)
 {
-    const H5VL_pass_through_t *o = (const H5VL_pass_through_t *)obj;
+    const OUR_pass_through_t *o = (const OUR_pass_through_t *)obj;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL Get object\n");
 #endif
 
     return H5VLget_object(o->under_object, o->under_vol_id);
-} /* end H5VL_pass_through_get_object() */
+} /* end OUR_pass_through_get_object() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_get_wrap_ctx
+ * Function:    OUR_pass_through_get_wrap_ctx
  *
  * Purpose:     Retrieve a "wrapper context" for an object
  *
@@ -663,17 +663,17 @@ H5VL_pass_through_get_object(const void *obj)
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_get_wrap_ctx(const void *obj, void **wrap_ctx)
+OUR_pass_through_get_wrap_ctx(const void *obj, void **wrap_ctx)
 {
-    const H5VL_pass_through_t *o = (const H5VL_pass_through_t *)obj;
-    H5VL_pass_through_wrap_ctx_t *new_wrap_ctx;
+    const OUR_pass_through_t *o = (const OUR_pass_through_t *)obj;
+    OUR_pass_through_wrap_ctx_t *new_wrap_ctx;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Get\n");
 #endif
 
     /* Allocate new VOL object wrapping context for the pass through connector */
-    new_wrap_ctx = (H5VL_pass_through_wrap_ctx_t *)calloc(1, sizeof(H5VL_pass_through_wrap_ctx_t));
+    new_wrap_ctx = (OUR_pass_through_wrap_ctx_t *)calloc(1, sizeof(OUR_pass_through_wrap_ctx_t));
 
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_wrap_ctx->under_vol_id = o->under_vol_id;
@@ -684,11 +684,11 @@ H5VL_pass_through_get_wrap_ctx(const void *obj, void **wrap_ctx)
     *wrap_ctx = new_wrap_ctx;
 
     return 0;
-} /* end H5VL_pass_through_get_wrap_ctx() */
+} /* end OUR_pass_through_get_wrap_ctx() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_wrap_object
+ * Function:    OUR_pass_through_wrap_object
  *
  * Purpose:     Use a "wrapper context" to wrap a data object
  *
@@ -698,10 +698,10 @@ H5VL_pass_through_get_wrap_ctx(const void *obj, void **wrap_ctx)
  *---------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
+OUR_pass_through_wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
 {
-    H5VL_pass_through_wrap_ctx_t *wrap_ctx = (H5VL_pass_through_wrap_ctx_t *)_wrap_ctx;
-    H5VL_pass_through_t *new_obj;
+    OUR_pass_through_wrap_ctx_t *wrap_ctx = (OUR_pass_through_wrap_ctx_t *)_wrap_ctx;
+    OUR_pass_through_t *new_obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
@@ -711,16 +711,16 @@ H5VL_pass_through_wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     /* Wrap the object with the underlying VOL */
     under = H5VLwrap_object(obj, obj_type, wrap_ctx->under_vol_id, wrap_ctx->under_wrap_ctx);
     if(under)
-        new_obj = H5VL_pass_through_new_obj(under, wrap_ctx->under_vol_id);
+        new_obj = OUR_pass_through_new_obj(under, wrap_ctx->under_vol_id);
     else
         new_obj = NULL;
 
     return new_obj;
-} /* end H5VL_pass_through_wrap_object() */
+} /* end OUR_pass_through_wrap_object() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_unwrap_object
+ * Function:    OUR_pass_through_unwrap_object
  *
  * Purpose:     Unwrap a wrapped object, discarding the wrapper, but returning
  *		underlying object.
@@ -731,9 +731,9 @@ H5VL_pass_through_wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
  *---------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_unwrap_object(void *obj)
+OUR_pass_through_unwrap_object(void *obj)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
@@ -744,14 +744,14 @@ H5VL_pass_through_unwrap_object(void *obj)
     under = H5VLunwrap_object(o->under_object, o->under_vol_id);
 
     if(under)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return under;
-} /* end H5VL_pass_through_unwrap_object() */
+} /* end OUR_pass_through_unwrap_object() */
 
 
 /*---------------------------------------------------------------------------
- * Function:    H5VL_pass_through_free_wrap_ctx
+ * Function:    OUR_pass_through_free_wrap_ctx
  *
  * Purpose:     Release a "wrapper context" for an object
  *
@@ -764,9 +764,9 @@ H5VL_pass_through_unwrap_object(void *obj)
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_free_wrap_ctx(void *_wrap_ctx)
+OUR_pass_through_free_wrap_ctx(void *_wrap_ctx)
 {
-    H5VL_pass_through_wrap_ctx_t *wrap_ctx = (H5VL_pass_through_wrap_ctx_t *)_wrap_ctx;
+    OUR_pass_through_wrap_ctx_t *wrap_ctx = (OUR_pass_through_wrap_ctx_t *)_wrap_ctx;
     hid_t err_id;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
@@ -786,11 +786,11 @@ H5VL_pass_through_free_wrap_ctx(void *_wrap_ctx)
     free(wrap_ctx);
 
     return 0;
-} /* end H5VL_pass_through_free_wrap_ctx() */
+} /* end OUR_pass_through_free_wrap_ctx() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_create
+ * Function:    OUR_pass_through_attr_create
  *
  * Purpose:     Creates an attribute on an object.
  *
@@ -800,12 +800,12 @@ H5VL_pass_through_free_wrap_ctx(void *_wrap_ctx)
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_attr_create(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_attr_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id,
     hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *attr;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *attr;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -814,21 +814,21 @@ H5VL_pass_through_attr_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLattr_create(o->under_object, loc_params, o->under_vol_id, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
     if(under) {
-        attr = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        attr = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         attr = NULL;
 
     return (void*)attr;
-} /* end H5VL_pass_through_attr_create() */
+} /* end OUR_pass_through_attr_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_open
+ * Function:    OUR_pass_through_attr_open
  *
  * Purpose:     Opens an attribute on an object.
  *
@@ -838,11 +838,11 @@ H5VL_pass_through_attr_create(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_attr_open(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_attr_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *attr;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *attr;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -851,21 +851,21 @@ H5VL_pass_through_attr_open(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLattr_open(o->under_object, loc_params, o->under_vol_id, name, aapl_id, dxpl_id, req);
     if(under) {
-        attr = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        attr = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         attr = NULL;
 
     return (void *)attr;
-} /* end H5VL_pass_through_attr_open() */
+} /* end OUR_pass_through_attr_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_read
+ * Function:    OUR_pass_through_attr_read
  *
  * Purpose:     Reads data from attribute.
  *
@@ -875,10 +875,10 @@ H5VL_pass_through_attr_open(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_attr_read(void *attr, hid_t mem_type_id, void *buf,
+OUR_pass_through_attr_read(void *attr, hid_t mem_type_id, void *buf,
     hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)attr;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)attr;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -889,14 +889,14 @@ H5VL_pass_through_attr_read(void *attr, hid_t mem_type_id, void *buf,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_attr_read() */
+} /* end OUR_pass_through_attr_read() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_write
+ * Function:    OUR_pass_through_attr_write
  *
  * Purpose:     Writes data to attribute.
  *
@@ -906,10 +906,10 @@ H5VL_pass_through_attr_read(void *attr, hid_t mem_type_id, void *buf,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_attr_write(void *attr, hid_t mem_type_id, const void *buf,
+OUR_pass_through_attr_write(void *attr, hid_t mem_type_id, const void *buf,
     hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)attr;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)attr;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -920,14 +920,14 @@ H5VL_pass_through_attr_write(void *attr, hid_t mem_type_id, const void *buf,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_attr_write() */
+} /* end OUR_pass_through_attr_write() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_get
+ * Function:    OUR_pass_through_attr_get
  *
  * Purpose:     Gets information about an attribute
  *
@@ -937,10 +937,10 @@ H5VL_pass_through_attr_write(void *attr, hid_t mem_type_id, const void *buf,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
+OUR_pass_through_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -951,14 +951,14 @@ H5VL_pass_through_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_attr_get() */
+} /* end OUR_pass_through_attr_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_specific
+ * Function:    OUR_pass_through_attr_specific
  *
  * Purpose:     Specific operation on attribute
  *
@@ -968,10 +968,10 @@ H5VL_pass_through_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -982,14 +982,14 @@ H5VL_pass_through_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_attr_specific() */
+} /* end OUR_pass_through_attr_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_optional
+ * Function:    OUR_pass_through_attr_optional
  *
  * Purpose:     Perform a connector-specific operation on an attribute
  *
@@ -999,10 +999,10 @@ H5VL_pass_through_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_attr_optional(void *obj, hid_t dxpl_id, void **req,
+OUR_pass_through_attr_optional(void *obj, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1013,14 +1013,14 @@ H5VL_pass_through_attr_optional(void *obj, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_attr_optional() */
+} /* end OUR_pass_through_attr_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_attr_close
+ * Function:    OUR_pass_through_attr_close
  *
  * Purpose:     Closes an attribute.
  *
@@ -1030,9 +1030,9 @@ H5VL_pass_through_attr_optional(void *obj, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_attr_close(void *attr, hid_t dxpl_id, void **req)
+OUR_pass_through_attr_close(void *attr, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)attr;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)attr;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1043,18 +1043,18 @@ H5VL_pass_through_attr_close(void *attr, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     /* Release our wrapper, if underlying attribute was closed */
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_attr_close() */
+} /* end OUR_pass_through_attr_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_create
+ * Function:    OUR_pass_through_dataset_create
  *
  * Purpose:     Creates a dataset in a container
  *
@@ -1064,12 +1064,12 @@ H5VL_pass_through_attr_close(void *attr, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) 
 {
-    H5VL_pass_through_t *dset;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *dset;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1078,21 +1078,21 @@ H5VL_pass_through_dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
     if(under) {
-        dset = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        dset = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         dset = NULL;
 
     return (void *)dset;
-} /* end H5VL_pass_through_dataset_create() */
+} /* end OUR_pass_through_dataset_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_open
+ * Function:    OUR_pass_through_dataset_open
  *
  * Purpose:     Opens a dataset in a container
  *
@@ -1102,11 +1102,11 @@ H5VL_pass_through_dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *dset;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *dset;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1115,21 +1115,21 @@ H5VL_pass_through_dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLdataset_open(o->under_object, loc_params, o->under_vol_id, name, dapl_id, dxpl_id, req);
     if(under) {
-        dset = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        dset = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         dset = NULL;
 
     return (void *)dset;
-} /* end H5VL_pass_through_dataset_open() */
+} /* end OUR_pass_through_dataset_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_read
+ * Function:    OUR_pass_through_dataset_read
  *
  * Purpose:     Reads data elements from a dataset into a buffer.
  *
@@ -1139,10 +1139,10 @@ H5VL_pass_through_dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
+OUR_pass_through_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
     hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)dset;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)dset;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1153,14 +1153,14 @@ H5VL_pass_through_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_dataset_read() */
+} /* end OUR_pass_through_dataset_read() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_write
+ * Function:    OUR_pass_through_dataset_write
  *
  * Purpose:     Writes data elements from a buffer into a dataset.
  *
@@ -1170,10 +1170,10 @@ H5VL_pass_through_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id,
+OUR_pass_through_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id,
     hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)dset;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)dset;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1184,14 +1184,14 @@ H5VL_pass_through_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_i
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_dataset_write() */
+} /* end OUR_pass_through_dataset_write() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_get
+ * Function:    OUR_pass_through_dataset_get
  *
  * Purpose:     Gets information about a dataset
  *
@@ -1201,10 +1201,10 @@ H5VL_pass_through_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_i
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_dataset_get(void *dset, H5VL_dataset_get_t get_type,
+OUR_pass_through_dataset_get(void *dset, H5VL_dataset_get_t get_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)dset;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)dset;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1215,14 +1215,14 @@ H5VL_pass_through_dataset_get(void *dset, H5VL_dataset_get_t get_type,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_dataset_get() */
+} /* end OUR_pass_through_dataset_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_specific
+ * Function:    OUR_pass_through_dataset_specific
  *
  * Purpose:     Specific operation on a dataset
  *
@@ -1232,10 +1232,10 @@ H5VL_pass_through_dataset_get(void *dset, H5VL_dataset_get_t get_type,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
+OUR_pass_through_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     hid_t under_vol_id;
     herr_t ret_value;
 
@@ -1251,14 +1251,14 @@ H5VL_pass_through_dataset_specific(void *obj, H5VL_dataset_specific_t specific_t
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_dataset_specific() */
+} /* end OUR_pass_through_dataset_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_optional
+ * Function:    OUR_pass_through_dataset_optional
  *
  * Purpose:     Perform a connector-specific operation on a dataset
  *
@@ -1268,10 +1268,10 @@ H5VL_pass_through_dataset_specific(void *obj, H5VL_dataset_specific_t specific_t
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_dataset_optional(void *obj, hid_t dxpl_id, void **req,
+OUR_pass_through_dataset_optional(void *obj, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1282,14 +1282,14 @@ H5VL_pass_through_dataset_optional(void *obj, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_dataset_optional() */
+} /* end OUR_pass_through_dataset_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_dataset_close
+ * Function:    OUR_pass_through_dataset_close
  *
  * Purpose:     Closes a dataset.
  *
@@ -1299,9 +1299,9 @@ H5VL_pass_through_dataset_optional(void *obj, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_dataset_close(void *dset, hid_t dxpl_id, void **req)
+OUR_pass_through_dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)dset;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)dset;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1312,18 +1312,18 @@ H5VL_pass_through_dataset_close(void *dset, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     /* Release our wrapper, if underlying dataset was closed */
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_dataset_close() */
+} /* end OUR_pass_through_dataset_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_datatype_commit
+ * Function:    OUR_pass_through_datatype_commit
  *
  * Purpose:     Commits a datatype inside a container.
  *
@@ -1333,12 +1333,12 @@ H5VL_pass_through_dataset_close(void *dset, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id,
     hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *dt;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *dt;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1347,21 +1347,21 @@ H5VL_pass_through_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params
 
     under = H5VLdatatype_commit(o->under_object, loc_params, o->under_vol_id, name, type_id, lcpl_id, tcpl_id, tapl_id, dxpl_id, req);
     if(under) {
-        dt = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        dt = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         dt = NULL;
 
     return (void *)dt;
-} /* end H5VL_pass_through_datatype_commit() */
+} /* end OUR_pass_through_datatype_commit() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_datatype_open
+ * Function:    OUR_pass_through_datatype_open
  *
  * Purpose:     Opens a named datatype inside a container.
  *
@@ -1371,11 +1371,11 @@ H5VL_pass_through_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *dt;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;  
+    OUR_pass_through_t *dt;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;  
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1384,21 +1384,21 @@ H5VL_pass_through_datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLdatatype_open(o->under_object, loc_params, o->under_vol_id, name, tapl_id, dxpl_id, req);
     if(under) {
-        dt = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        dt = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         dt = NULL;
 
     return (void *)dt;
-} /* end H5VL_pass_through_datatype_open() */
+} /* end OUR_pass_through_datatype_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_datatype_get
+ * Function:    OUR_pass_through_datatype_get
  *
  * Purpose:     Get information about a datatype
  *
@@ -1408,10 +1408,10 @@ H5VL_pass_through_datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_datatype_get(void *dt, H5VL_datatype_get_t get_type,
+OUR_pass_through_datatype_get(void *dt, H5VL_datatype_get_t get_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)dt;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)dt;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1422,14 +1422,14 @@ H5VL_pass_through_datatype_get(void *dt, H5VL_datatype_get_t get_type,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_datatype_get() */
+} /* end OUR_pass_through_datatype_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_datatype_specific
+ * Function:    OUR_pass_through_datatype_specific
  *
  * Purpose:     Specific operations for datatypes
  *
@@ -1439,10 +1439,10 @@ H5VL_pass_through_datatype_get(void *dt, H5VL_datatype_get_t get_type,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
+OUR_pass_through_datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     hid_t under_vol_id;
     herr_t ret_value;
 
@@ -1458,14 +1458,14 @@ H5VL_pass_through_datatype_specific(void *obj, H5VL_datatype_specific_t specific
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_datatype_specific() */
+} /* end OUR_pass_through_datatype_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_datatype_optional
+ * Function:    OUR_pass_through_datatype_optional
  *
  * Purpose:     Perform a connector-specific operation on a datatype
  *
@@ -1475,10 +1475,10 @@ H5VL_pass_through_datatype_specific(void *obj, H5VL_datatype_specific_t specific
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_datatype_optional(void *obj, hid_t dxpl_id, void **req,
+OUR_pass_through_datatype_optional(void *obj, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1489,14 +1489,14 @@ H5VL_pass_through_datatype_optional(void *obj, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_datatype_optional() */
+} /* end OUR_pass_through_datatype_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_datatype_close
+ * Function:    OUR_pass_through_datatype_close
  *
  * Purpose:     Closes a datatype.
  *
@@ -1506,9 +1506,9 @@ H5VL_pass_through_datatype_optional(void *obj, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_datatype_close(void *dt, hid_t dxpl_id, void **req)
+OUR_pass_through_datatype_close(void *dt, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)dt;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)dt;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1521,18 +1521,18 @@ H5VL_pass_through_datatype_close(void *dt, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     /* Release our wrapper, if underlying datatype was closed */
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_datatype_close() */
+} /* end OUR_pass_through_datatype_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_create
+ * Function:    OUR_pass_through_file_create
  *
  * Purpose:     Creates a container using this connector
  *
@@ -1542,11 +1542,11 @@ H5VL_pass_through_datatype_close(void *dt, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id,
+OUR_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id,
     hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_info_t *info;
-    H5VL_pass_through_t *file;
+    OUR_pass_through_info_t *info;
+    OUR_pass_through_t *file;
     hid_t under_fapl_id;
     void *under;
 
@@ -1566,11 +1566,11 @@ H5VL_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id,
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = H5VL_pass_through_new_obj(under, info->under_vol_id);
+        file = OUR_pass_through_new_obj(under, info->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, info->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, info->under_vol_id);
     } /* end if */
     else
         file = NULL;
@@ -1579,14 +1579,14 @@ H5VL_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id,
     H5Pclose(under_fapl_id);
 
     /* Release copy of our VOL info */
-    H5VL_pass_through_info_free(info);
+    OUR_pass_through_info_free(info);
 
     return (void *)file;
-} /* end H5VL_pass_through_file_create() */
+} /* end OUR_pass_through_file_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_open
+ * Function:    OUR_pass_through_file_open
  *
  * Purpose:     Opens a container created with this connector
  *
@@ -1596,11 +1596,11 @@ H5VL_pass_through_file_create(const char *name, unsigned flags, hid_t fcpl_id,
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id,
+OUR_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id,
     hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_info_t *info;
-    H5VL_pass_through_t *file;
+    OUR_pass_through_info_t *info;
+    OUR_pass_through_t *file;
     hid_t under_fapl_id;
     void *under;
 
@@ -1620,11 +1620,11 @@ H5VL_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id,
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_open(name, flags, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = H5VL_pass_through_new_obj(under, info->under_vol_id);
+        file = OUR_pass_through_new_obj(under, info->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, info->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, info->under_vol_id);
     } /* end if */
     else
         file = NULL;
@@ -1633,14 +1633,14 @@ H5VL_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id,
     H5Pclose(under_fapl_id);
 
     /* Release copy of our VOL info */
-    H5VL_pass_through_info_free(info);
+    OUR_pass_through_info_free(info);
 
     return (void *)file;
-} /* end H5VL_pass_through_file_open() */
+} /* end OUR_pass_through_file_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_get
+ * Function:    OUR_pass_through_file_get
  *
  * Purpose:     Get info about a file
  *
@@ -1650,10 +1650,10 @@ H5VL_pass_through_file_open(const char *name, unsigned flags, hid_t fapl_id,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
+OUR_pass_through_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)file;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)file;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1664,14 +1664,14 @@ H5VL_pass_through_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_file_get() */
+} /* end OUR_pass_through_file_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_specific_reissue
+ * Function:    OUR_pass_through_file_specific_reissue
  *
  * Purpose:     Re-wrap vararg arguments into a va_list and reissue the
  *              file specific callback to the underlying VOL connector.
@@ -1682,7 +1682,7 @@ H5VL_pass_through_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_file_specific_reissue(void *obj, hid_t connector_id,
+OUR_pass_through_file_specific_reissue(void *obj, hid_t connector_id,
     H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...)
 {
     va_list arguments;
@@ -1693,11 +1693,11 @@ H5VL_pass_through_file_specific_reissue(void *obj, hid_t connector_id,
     va_end(arguments);
 
     return ret_value;
-} /* end H5VL_pass_through_file_specific_reissue() */
+} /* end OUR_pass_through_file_specific_reissue() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_specific
+ * Function:    OUR_pass_through_file_specific
  *
  * Purpose:     Specific operation on file
  *
@@ -1707,10 +1707,10 @@ H5VL_pass_through_file_specific_reissue(void *obj, hid_t connector_id,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
+OUR_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)file;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)file;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
@@ -1722,23 +1722,23 @@ H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
     if(specific_type == H5VL_FILE_MOUNT) {
         H5I_type_t loc_type;
         const char *name;
-        H5VL_pass_through_t *child_file;
+        OUR_pass_through_t *child_file;
         hid_t plist_id;
 
         /* Retrieve parameters for 'mount' operation, so we can unwrap the child file */
         loc_type = (H5I_type_t)va_arg(arguments, int); /* enum work-around */
         name = va_arg(arguments, const char *);
-        child_file = (H5VL_pass_through_t *)va_arg(arguments, void *);
+        child_file = (OUR_pass_through_t *)va_arg(arguments, void *);
         plist_id = va_arg(arguments, hid_t);
 
         /* Keep the correct underlying VOL ID for possible async request token */
         under_vol_id = o->under_vol_id;
 
         /* Re-issue 'file specific' call, using the unwrapped pieces */
-        ret_value = H5VL_pass_through_file_specific_reissue(o->under_object, o->under_vol_id, specific_type, dxpl_id, req, (int)loc_type, name, child_file->under_object, plist_id);
+        ret_value = OUR_pass_through_file_specific_reissue(o->under_object, o->under_vol_id, specific_type, dxpl_id, req, (int)loc_type, name, child_file->under_object, plist_id);
     } /* end if */
     else if(specific_type == H5VL_FILE_IS_ACCESSIBLE || specific_type == H5VL_FILE_DELETE) {
-        H5VL_pass_through_info_t *info;
+        OUR_pass_through_info_t *info;
         hid_t fapl_id, under_fapl_id;
         const char *name;
         htri_t *ret;
@@ -1761,13 +1761,13 @@ H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
         under_vol_id = info->under_vol_id;
 
         /* Re-issue 'file specific' call */
-        ret_value = H5VL_pass_through_file_specific_reissue(NULL, info->under_vol_id, specific_type, dxpl_id, req, under_fapl_id, name, ret);
+        ret_value = OUR_pass_through_file_specific_reissue(NULL, info->under_vol_id, specific_type, dxpl_id, req, under_fapl_id, name, ret);
 
         /* Close underlying FAPL */
         H5Pclose(under_fapl_id);
 
         /* Release copy of our VOL info */
-        H5VL_pass_through_info_free(info);
+        OUR_pass_through_info_free(info);
     } /* end else-if */
     else {
         va_list my_arguments;
@@ -1787,7 +1787,7 @@ H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
                 void      **ret = va_arg(my_arguments, void **);
 
                 if(ret && *ret)
-                    *ret = H5VL_pass_through_new_obj(*ret, o->under_vol_id);
+                    *ret = OUR_pass_through_new_obj(*ret, o->under_vol_id);
             } /* end if */
 
             /* Finish use of copied vararg list */
@@ -1797,14 +1797,14 @@ H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_file_specific() */
+} /* end OUR_pass_through_file_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_optional
+ * Function:    OUR_pass_through_file_optional
  *
  * Purpose:     Perform a connector-specific operation on a file
  *
@@ -1814,10 +1814,10 @@ H5VL_pass_through_file_specific(void *file, H5VL_file_specific_t specific_type,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_file_optional(void *file, hid_t dxpl_id, void **req,
+OUR_pass_through_file_optional(void *file, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)file;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)file;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1828,14 +1828,14 @@ H5VL_pass_through_file_optional(void *file, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_file_optional() */
+} /* end OUR_pass_through_file_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_file_close
+ * Function:    OUR_pass_through_file_close
  *
  * Purpose:     Closes a file.
  *
@@ -1845,9 +1845,9 @@ H5VL_pass_through_file_optional(void *file, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_file_close(void *file, hid_t dxpl_id, void **req)
+OUR_pass_through_file_close(void *file, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)file;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)file;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1858,18 +1858,18 @@ H5VL_pass_through_file_close(void *file, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     /* Release our wrapper, if underlying file was closed */
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_file_close() */
+} /* end OUR_pass_through_file_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_group_create
+ * Function:    OUR_pass_through_group_create
  *
  * Purpose:     Creates a group inside a container
  *
@@ -1879,12 +1879,12 @@ H5VL_pass_through_file_close(void *file, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_group_create(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *group;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *group;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1893,21 +1893,21 @@ H5VL_pass_through_group_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLgroup_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
     if(under) {
-        group = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        group = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         group = NULL;
 
     return (void *)group;
-} /* end H5VL_pass_through_group_create() */
+} /* end OUR_pass_through_group_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_group_open
+ * Function:    OUR_pass_through_group_open
  *
  * Purpose:     Opens a group inside a container
  *
@@ -1917,11 +1917,11 @@ H5VL_pass_through_group_create(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_group_open(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_group_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *group;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *group;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1930,21 +1930,21 @@ H5VL_pass_through_group_open(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLgroup_open(o->under_object, loc_params, o->under_vol_id, name, gapl_id, dxpl_id, req);
     if(under) {
-        group = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        group = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         group = NULL;
 
     return (void *)group;
-} /* end H5VL_pass_through_group_open() */
+} /* end OUR_pass_through_group_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_group_get
+ * Function:    OUR_pass_through_group_get
  *
  * Purpose:     Get info about a group
  *
@@ -1954,10 +1954,10 @@ H5VL_pass_through_group_open(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id,
+OUR_pass_through_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -1968,14 +1968,14 @@ H5VL_pass_through_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_group_get() */
+} /* end OUR_pass_through_group_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_group_specific
+ * Function:    OUR_pass_through_group_specific
  *
  * Purpose:     Specific operation on a group
  *
@@ -1985,10 +1985,10 @@ H5VL_pass_through_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_group_specific(void *obj, H5VL_group_specific_t specific_type,
+OUR_pass_through_group_specific(void *obj, H5VL_group_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     hid_t under_vol_id;
     herr_t ret_value;
 
@@ -2004,14 +2004,14 @@ H5VL_pass_through_group_specific(void *obj, H5VL_group_specific_t specific_type,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_group_specific() */
+} /* end OUR_pass_through_group_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_group_optional
+ * Function:    OUR_pass_through_group_optional
  *
  * Purpose:     Perform a connector-specific operation on a group
  *
@@ -2021,10 +2021,10 @@ H5VL_pass_through_group_specific(void *obj, H5VL_group_specific_t specific_type,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_group_optional(void *obj, hid_t dxpl_id, void **req,
+OUR_pass_through_group_optional(void *obj, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2035,14 +2035,14 @@ H5VL_pass_through_group_optional(void *obj, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_group_optional() */
+} /* end OUR_pass_through_group_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_group_close
+ * Function:    OUR_pass_through_group_close
  *
  * Purpose:     Closes a group.
  *
@@ -2052,9 +2052,9 @@ H5VL_pass_through_group_optional(void *obj, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_group_close(void *grp, hid_t dxpl_id, void **req)
+OUR_pass_through_group_close(void *grp, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)grp;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)grp;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2065,18 +2065,18 @@ H5VL_pass_through_group_close(void *grp, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     /* Release our wrapper, if underlying file was closed */
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_group_close() */
+} /* end OUR_pass_through_group_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_create_reissue
+ * Function:    OUR_pass_through_link_create_reissue
  *
  * Purpose:     Re-wrap vararg arguments into a va_list and reissue the
  *              link create callback to the underlying VOL connector.
@@ -2087,7 +2087,7 @@ H5VL_pass_through_group_close(void *grp, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_link_create_reissue(H5VL_link_create_type_t create_type,
+OUR_pass_through_link_create_reissue(H5VL_link_create_type_t create_type,
     void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id,
     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...)
 {
@@ -2099,10 +2099,10 @@ H5VL_pass_through_link_create_reissue(H5VL_link_create_type_t create_type,
     va_end(arguments);
 
     return ret_value;
-} /* end H5VL_pass_through_link_create_reissue() */
+} /* end OUR_pass_through_link_create_reissue() */
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_create
+ * Function:    OUR_pass_through_link_create
  *
  * Purpose:     Creates a hard / soft / UD / external link.
  *
@@ -2112,11 +2112,11 @@ H5VL_pass_through_link_create_reissue(H5VL_link_create_type_t create_type,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_link_create(H5VL_link_create_type_t create_type, void *obj,
+OUR_pass_through_link_create(H5VL_link_create_type_t create_type, void *obj,
     const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
@@ -2141,28 +2141,28 @@ H5VL_pass_through_link_create(H5VL_link_create_type_t create_type, void *obj,
         if(cur_obj) {
             /* Check if we still need the "under" VOL ID */
             if(under_vol_id < 0)
-                under_vol_id = ((H5VL_pass_through_t *)cur_obj)->under_vol_id;
+                under_vol_id = ((OUR_pass_through_t *)cur_obj)->under_vol_id;
 
             /* Set the object for the link target */
-            cur_obj = ((H5VL_pass_through_t *)cur_obj)->under_object;
+            cur_obj = ((OUR_pass_through_t *)cur_obj)->under_object;
         } /* end if */
 
         /* Re-issue 'link create' call, using the unwrapped pieces */
-        ret_value = H5VL_pass_through_link_create_reissue(create_type, (o ? o->under_object : NULL), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, cur_obj, cur_params);
+        ret_value = OUR_pass_through_link_create_reissue(create_type, (o ? o->under_object : NULL), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, cur_obj, cur_params);
     } /* end if */
     else
         ret_value = H5VLlink_create(create_type, (o ? o->under_object : NULL), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_link_create() */
+} /* end OUR_pass_through_link_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_copy
+ * Function:    OUR_pass_through_link_copy
  *
  * Purpose:     Renames an object within an HDF5 container and copies it to a new
  *              group.  The original name SRC is unlinked from the group graph
@@ -2177,12 +2177,12 @@ H5VL_pass_through_link_create(H5VL_link_create_type_t create_type, void *obj,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
+OUR_pass_through_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o_src = (H5VL_pass_through_t *)src_obj;
-    H5VL_pass_through_t *o_dst = (H5VL_pass_through_t *)dst_obj;
+    OUR_pass_through_t *o_src = (OUR_pass_through_t *)src_obj;
+    OUR_pass_through_t *o_dst = (OUR_pass_through_t *)dst_obj;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
@@ -2201,14 +2201,14 @@ H5VL_pass_through_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
             
     return ret_value;
-} /* end H5VL_pass_through_link_copy() */
+} /* end OUR_pass_through_link_copy() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_move
+ * Function:    OUR_pass_through_link_move
  *
  * Purpose:     Moves a link within an HDF5 file to a new group.  The original
  *              name SRC is unlinked from the group graph
@@ -2223,12 +2223,12 @@ H5VL_pass_through_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
+OUR_pass_through_link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *o_src = (H5VL_pass_through_t *)src_obj;
-    H5VL_pass_through_t *o_dst = (H5VL_pass_through_t *)dst_obj;
+    OUR_pass_through_t *o_src = (OUR_pass_through_t *)src_obj;
+    OUR_pass_through_t *o_dst = (OUR_pass_through_t *)dst_obj;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
@@ -2247,14 +2247,14 @@ H5VL_pass_through_link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_link_move() */
+} /* end OUR_pass_through_link_move() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_get
+ * Function:    OUR_pass_through_link_get
  *
  * Purpose:     Get info about a link
  *
@@ -2264,10 +2264,10 @@ H5VL_pass_through_link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_link_get(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_link_get(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2278,14 +2278,14 @@ H5VL_pass_through_link_get(void *obj, const H5VL_loc_params_t *loc_params,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
             
     return ret_value;
-} /* end H5VL_pass_through_link_get() */
+} /* end OUR_pass_through_link_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_specific
+ * Function:    OUR_pass_through_link_specific
  *
  * Purpose:     Specific operation on a link
  *
@@ -2295,10 +2295,10 @@ H5VL_pass_through_link_get(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_link_specific(void *obj, const H5VL_loc_params_t *loc_params, 
+OUR_pass_through_link_specific(void *obj, const H5VL_loc_params_t *loc_params, 
     H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2309,14 +2309,14 @@ H5VL_pass_through_link_specific(void *obj, const H5VL_loc_params_t *loc_params,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_link_specific() */
+} /* end OUR_pass_through_link_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_link_optional
+ * Function:    OUR_pass_through_link_optional
  *
  * Purpose:     Perform a connector-specific operation on a link
  *
@@ -2326,10 +2326,10 @@ H5VL_pass_through_link_specific(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t
-H5VL_pass_through_link_optional(void *obj, hid_t dxpl_id, void **req,
+OUR_pass_through_link_optional(void *obj, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2340,14 +2340,14 @@ H5VL_pass_through_link_optional(void *obj, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_link_optional() */
+} /* end OUR_pass_through_link_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_object_open
+ * Function:    OUR_pass_through_object_open
  *
  * Purpose:     Opens an object inside a container.
  *
@@ -2357,11 +2357,11 @@ H5VL_pass_through_link_optional(void *obj, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static void *
-H5VL_pass_through_object_open(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_object_open(void *obj, const H5VL_loc_params_t *loc_params,
     H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
-    H5VL_pass_through_t *new_obj;
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *new_obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2370,21 +2370,21 @@ H5VL_pass_through_object_open(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLobject_open(o->under_object, loc_params, o->under_vol_id, opened_type, dxpl_id, req);
     if(under) {
-        new_obj = H5VL_pass_through_new_obj(under, o->under_vol_id);
+        new_obj = OUR_pass_through_new_obj(under, o->under_vol_id);
 
         /* Check for async request */
         if(req && *req)
-            *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+            *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
     } /* end if */
     else
         new_obj = NULL;
 
     return (void *)new_obj;
-} /* end H5VL_pass_through_object_open() */
+} /* end OUR_pass_through_object_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_object_copy
+ * Function:    OUR_pass_through_object_copy
  *
  * Purpose:     Copies an object inside a container.
  *
@@ -2394,13 +2394,13 @@ H5VL_pass_through_object_open(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
+OUR_pass_through_object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
     const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id,
     void **req)
 {
-    H5VL_pass_through_t *o_src = (H5VL_pass_through_t *)src_obj;
-    H5VL_pass_through_t *o_dst = (H5VL_pass_through_t *)dst_obj;
+    OUR_pass_through_t *o_src = (OUR_pass_through_t *)src_obj;
+    OUR_pass_through_t *o_dst = (OUR_pass_through_t *)dst_obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2411,14 +2411,14 @@ H5VL_pass_through_object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_pa
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o_src->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o_src->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_object_copy() */
+} /* end OUR_pass_through_object_copy() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_object_get
+ * Function:    OUR_pass_through_object_get
  *
  * Purpose:     Get info about an object
  *
@@ -2428,9 +2428,9 @@ H5VL_pass_through_object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_pa
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+OUR_pass_through_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2441,14 +2441,14 @@ H5VL_pass_through_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5V
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_object_get() */
+} /* end OUR_pass_through_object_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_object_specific
+ * Function:    OUR_pass_through_object_specific
  *
  * Purpose:     Specific operation on an object
  *
@@ -2458,11 +2458,11 @@ H5VL_pass_through_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5V
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_object_specific(void *obj, const H5VL_loc_params_t *loc_params,
+OUR_pass_through_object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     hid_t under_vol_id;
     herr_t ret_value;
 
@@ -2478,14 +2478,14 @@ H5VL_pass_through_object_specific(void *obj, const H5VL_loc_params_t *loc_params
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_object_specific() */
+} /* end OUR_pass_through_object_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_object_optional
+ * Function:    OUR_pass_through_object_optional
  *
  * Purpose:     Perform a connector-specific operation for an object
  *
@@ -2495,10 +2495,10 @@ H5VL_pass_through_object_specific(void *obj, const H5VL_loc_params_t *loc_params
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_object_optional(void *obj, hid_t dxpl_id, void **req,
+OUR_pass_through_object_optional(void *obj, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2509,14 +2509,14 @@ H5VL_pass_through_object_optional(void *obj, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = H5VL_pass_through_new_obj(*req, o->under_vol_id);
+        *req = OUR_pass_through_new_obj(*req, o->under_vol_id);
 
     return ret_value;
-} /* end H5VL_pass_through_object_optional() */
+} /* end OUR_pass_through_object_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_wait
+ * Function:    OUR_pass_through_request_wait
  *
  * Purpose:     Wait (with a timeout) for an async operation to complete
  *
@@ -2529,10 +2529,10 @@ H5VL_pass_through_object_optional(void *obj, hid_t dxpl_id, void **req,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_wait(void *obj, uint64_t timeout,
+OUR_pass_through_request_wait(void *obj, uint64_t timeout,
     H5ES_status_t *status)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2542,14 +2542,14 @@ H5VL_pass_through_request_wait(void *obj, uint64_t timeout,
     ret_value = H5VLrequest_wait(o->under_object, o->under_vol_id, timeout, status);
 
     if(ret_value >= 0 && *status != H5ES_STATUS_IN_PROGRESS)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_request_wait() */
+} /* end OUR_pass_through_request_wait() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_notify
+ * Function:    OUR_pass_through_request_notify
  *
  * Purpose:     Registers a user callback to be invoked when an asynchronous
  *              operation completes
@@ -2562,9 +2562,9 @@ H5VL_pass_through_request_wait(void *obj, uint64_t timeout,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_notify(void *obj, H5VL_request_notify_t cb, void *ctx)
+OUR_pass_through_request_notify(void *obj, H5VL_request_notify_t cb, void *ctx)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2574,14 +2574,14 @@ H5VL_pass_through_request_notify(void *obj, H5VL_request_notify_t cb, void *ctx)
     ret_value = H5VLrequest_notify(o->under_object, o->under_vol_id, cb, ctx);
 
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_request_notify() */
+} /* end OUR_pass_through_request_notify() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_cancel
+ * Function:    OUR_pass_through_request_cancel
  *
  * Purpose:     Cancels an asynchronous operation
  *
@@ -2593,9 +2593,9 @@ H5VL_pass_through_request_notify(void *obj, H5VL_request_notify_t cb, void *ctx)
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_cancel(void *obj)
+OUR_pass_through_request_cancel(void *obj)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2605,14 +2605,14 @@ H5VL_pass_through_request_cancel(void *obj)
     ret_value = H5VLrequest_cancel(o->under_object, o->under_vol_id);
 
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_request_cancel() */
+} /* end OUR_pass_through_request_cancel() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_specific_reissue
+ * Function:    OUR_pass_through_request_specific_reissue
  *
  * Purpose:     Re-wrap vararg arguments into a va_list and reissue the
  *              request specific callback to the underlying VOL connector.
@@ -2623,7 +2623,7 @@ H5VL_pass_through_request_cancel(void *obj)
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_specific_reissue(void *obj, hid_t connector_id,
+OUR_pass_through_request_specific_reissue(void *obj, hid_t connector_id,
     H5VL_request_specific_t specific_type, ...)
 {
     va_list arguments;
@@ -2634,11 +2634,11 @@ H5VL_pass_through_request_specific_reissue(void *obj, hid_t connector_id,
     va_end(arguments);
 
     return ret_value;
-} /* end H5VL_pass_through_request_specific_reissue() */
+} /* end OUR_pass_through_request_specific_reissue() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_specific
+ * Function:    OUR_pass_through_request_specific
  *
  * Purpose:     Specific operation on a request
  *
@@ -2648,7 +2648,7 @@ H5VL_pass_through_request_specific_reissue(void *obj, hid_t connector_id,
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_type, 
+OUR_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_type, 
     va_list arguments)
 {
     herr_t ret_value = -1;
@@ -2675,19 +2675,19 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
             void **req_array;
             void **under_req_array;
             uint64_t timeout;
-            H5VL_pass_through_t *o;
+            OUR_pass_through_t *o;
             size_t u;               /* Local index variable */
 
             /* Get the request array */
             req_array = va_arg(tmp_arguments, void **);
 
             /* Get a request to use for determining the underlying VOL connector */
-            o = (H5VL_pass_through_t *)req_array[0];
+            o = (OUR_pass_through_t *)req_array[0];
 
             /* Create array of underlying VOL requests */
             under_req_array = (void **)malloc(req_count * sizeof(void **));
             for(u = 0; u < req_count; u++)
-                under_req_array[u] = ((H5VL_pass_through_t *)req_array[u])->under_object;
+                under_req_array[u] = ((OUR_pass_through_t *)req_array[u])->under_object;
 
             /* Remove the timeout value from the vararg list (it's used in all the calls below) */
             timeout = va_arg(tmp_arguments, uint64_t);
@@ -2703,14 +2703,14 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
                 status = va_arg(tmp_arguments, H5ES_status_t *);
 
                 /* Reissue the WAITANY 'request specific' call */
-                ret_value = H5VL_pass_through_request_specific_reissue(o->under_object, o->under_vol_id, specific_type, req_count, under_req_array, timeout, index, status);
+                ret_value = OUR_pass_through_request_specific_reissue(o->under_object, o->under_vol_id, specific_type, req_count, under_req_array, timeout, index, status);
 
                 /* Release the completed request, if it completed */
                 if(ret_value >= 0 && *status != H5ES_STATUS_IN_PROGRESS) {
-                    H5VL_pass_through_t *tmp_o;
+                    OUR_pass_through_t *tmp_o;
 
-                    tmp_o = (H5VL_pass_through_t *)req_array[*index];
-                    H5VL_pass_through_free_obj(tmp_o);
+                    tmp_o = (OUR_pass_through_t *)req_array[*index];
+                    OUR_pass_through_free_obj(tmp_o);
                 } /* end if */
             } /* end if */
             else if(H5VL_REQUEST_WAITSOME == specific_type) {
@@ -2725,7 +2725,7 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
                 array_of_statuses = va_arg(tmp_arguments, H5ES_status_t *);
 
                 /* Reissue the WAITSOME 'request specific' call */
-                ret_value = H5VL_pass_through_request_specific_reissue(o->under_object, o->under_vol_id, specific_type, req_count, under_req_array, timeout, outcount, array_of_indices, array_of_statuses);
+                ret_value = OUR_pass_through_request_specific_reissue(o->under_object, o->under_vol_id, specific_type, req_count, under_req_array, timeout, outcount, array_of_indices, array_of_statuses);
 
                 /* If any requests completed, release them */
                 if(ret_value >= 0 && *outcount > 0) {
@@ -2736,10 +2736,10 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
 
                     /* Release the completed requests */
                     for(u = 0; u < *outcount; u++) {
-                        H5VL_pass_through_t *tmp_o;
+                        OUR_pass_through_t *tmp_o;
 
-                        tmp_o = (H5VL_pass_through_t *)req_array[idx_array[u]];
-                        H5VL_pass_through_free_obj(tmp_o);
+                        tmp_o = (OUR_pass_through_t *)req_array[idx_array[u]];
+                        OUR_pass_through_free_obj(tmp_o);
                     } /* end for */
                 } /* end if */
             } /* end else-if */
@@ -2750,16 +2750,16 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
                 array_of_statuses = va_arg(tmp_arguments, H5ES_status_t *);
 
                 /* Reissue the WAITALL 'request specific' call */
-                ret_value = H5VL_pass_through_request_specific_reissue(o->under_object, o->under_vol_id, specific_type, req_count, under_req_array, timeout, array_of_statuses);
+                ret_value = OUR_pass_through_request_specific_reissue(o->under_object, o->under_vol_id, specific_type, req_count, under_req_array, timeout, array_of_statuses);
 
                 /* Release the completed requests */
                 if(ret_value >= 0) {
                     for(u = 0; u < req_count; u++) {
                         if(array_of_statuses[u] != H5ES_STATUS_IN_PROGRESS) {
-                            H5VL_pass_through_t *tmp_o;
+                            OUR_pass_through_t *tmp_o;
 
-                            tmp_o = (H5VL_pass_through_t *)req_array[u];
-                            H5VL_pass_through_free_obj(tmp_o);
+                            tmp_o = (OUR_pass_through_t *)req_array[u];
+                            OUR_pass_through_free_obj(tmp_o);
                         } /* end if */
                     } /* end for */
                 } /* end if */
@@ -2776,11 +2776,11 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
         assert(0 && "Unknown 'specific' operation");
 
     return ret_value;
-} /* end H5VL_pass_through_request_specific() */
+} /* end OUR_pass_through_request_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_optional
+ * Function:    OUR_pass_through_request_optional
  *
  * Purpose:     Perform a connector-specific operation for a request
  *
@@ -2790,9 +2790,9 @@ H5VL_pass_through_request_specific(void *obj, H5VL_request_specific_t specific_t
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_optional(void *obj, va_list arguments)
+OUR_pass_through_request_optional(void *obj, va_list arguments)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2802,11 +2802,11 @@ H5VL_pass_through_request_optional(void *obj, va_list arguments)
     ret_value = H5VLrequest_optional(o->under_object, o->under_vol_id, arguments);
 
     return ret_value;
-} /* end H5VL_pass_through_request_optional() */
+} /* end OUR_pass_through_request_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_pass_through_request_free
+ * Function:    OUR_pass_through_request_free
  *
  * Purpose:     Releases a request, allowing the operation to complete without
  *              application tracking
@@ -2817,9 +2817,9 @@ H5VL_pass_through_request_optional(void *obj, va_list arguments)
  *-------------------------------------------------------------------------
  */
 static herr_t 
-H5VL_pass_through_request_free(void *obj)
+OUR_pass_through_request_free(void *obj)
 {
-    H5VL_pass_through_t *o = (H5VL_pass_through_t *)obj;
+    OUR_pass_through_t *o = (OUR_pass_through_t *)obj;
     herr_t ret_value;
 
 #ifdef ENABLE_PASSTHRU_LOGGING 
@@ -2829,8 +2829,8 @@ H5VL_pass_through_request_free(void *obj)
     ret_value = H5VLrequest_free(o->under_object, o->under_vol_id);
 
     if(ret_value >= 0)
-        H5VL_pass_through_free_obj(o);
+        OUR_pass_through_free_obj(o);
 
     return ret_value;
-} /* end H5VL_pass_through_request_free() */
+} /* end OUR_pass_through_request_free() */
 

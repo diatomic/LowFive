@@ -14,29 +14,29 @@
  * Purpose:	The public header file for the pass-through VOL connector.
  */
 
-#ifndef _H5VLpassthru_H
-#define _H5VLpassthru_H
+#ifndef _OURpassthru_H
+#define _OURpassthru_H
 
 /* Identifier for the pass-through VOL connector */
-#define H5VL_PASSTHRU	(H5VL_pass_through_register())
+#define OUR_PASSTHRU	(OUR_pass_through_register())
 
 /* Characteristics of the pass-through VOL connector */
-#define H5VL_PASSTHRU_NAME        "pass_through"
-#define H5VL_PASSTHRU_VALUE       505           /* VOL connector ID */
-#define H5VL_PASSTHRU_VERSION     0
+#define OUR_PASSTHRU_NAME        "our_pass_through"
+#define OUR_PASSTHRU_VALUE       510           /* VOL connector ID */
+#define OUR_PASSTHRU_VERSION     0
 
 /* Pass-through VOL connector info */
-typedef struct H5VL_pass_through_info_t {
+typedef struct OUR_pass_through_info_t {
     hid_t under_vol_id;         /* VOL ID for under VOL */
     void *under_vol_info;       /* VOL info for under VOL */
-} H5VL_pass_through_info_t;
+} OUR_pass_through_info_t;
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-H5_DLL hid_t H5VL_pass_through_register(void);
+H5_DLL hid_t OUR_pass_through_register(void);
 
 #ifdef __cplusplus
 }

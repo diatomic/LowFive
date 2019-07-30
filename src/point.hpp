@@ -13,7 +13,7 @@
 #include    <highfive/H5DataSpace.hpp>
 #include    <highfive/H5File.hpp>
 
-#include    "printf-plugin.h"
+#include "our-passthru-plugin.h"
 
 using namespace HighFive;
 using namespace std;
@@ -222,8 +222,8 @@ struct PointBlock
         under_fapl = H5VL_NATIVE;
         assert(H5VLis_connector_registered("native") == 1);
 
-        vol_id = H5VL_pass_through_register();
-        assert(H5VLis_registered("pass_through") == 1);
+        vol_id = OUR_pass_through_register();
+        assert(H5VLis_registered("our_pass_through") == 1);
 
         //hid_t native_plugin_id = H5VLget_connector_id("native");
         //assert(native_plugin_id > 0);
@@ -290,7 +290,7 @@ struct PointBlock
         //H5VLclose(native_plugin_id);
         H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered("pass_through") == 0);
+        assert(H5VLis_connector_registered("our_pass_through") == 0);
     }
 
     // block data
