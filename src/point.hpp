@@ -220,16 +220,16 @@ struct PointBlock
         static hsize_t ds_size[2] = {10, 20};
 
         under_fapl = H5VL_NATIVE;
-        assert(H5VLis_connector_registered("native") == 1);
+        printf("native registered: %d\n", H5VLis_connector_registered("native"));
 
         vol_id = OUR_pass_through_register();
-        assert(H5VLis_registered("our_pass_through") == 1);
+        printf("our_pass_through registered: %d\n", H5VLis_connector_registered("our_pass_through"));
 
-        //hid_t native_plugin_id = H5VLget_connector_id("native");
-        //assert(native_plugin_id > 0);
+        hid_t native_plugin_id = H5VLget_connector_id("native");
+        assert(native_plugin_id > 0);
 
         acc_tpl = H5Pcreate (H5P_FILE_ACCESS);
-        H5Pset_vol(acc_tpl, vol_id, &under_fapl);
+        H5Pset_vol(acc_tpl, vol_id, &under_fapl);   // XXX: this line gives an error at runtime, but seems to work correctly (activates our plugin)
 
         file_id = H5Fcreate(file_name, H5F_ACC_TRUNC, H5P_DEFAULT, acc_tpl);
         len = H5VLget_connector_name(file_id, name, 25);
@@ -276,8 +276,6 @@ struct PointBlock
         H5Dwrite(datasetId, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
         H5Dclose(datasetId);
 
-        // TODO: H5Ovisit maps to H5Ovisit2, which needs 6 args, 5 given
-//         H5Ovisit(file_id, H5_INDEX_NAME, H5_ITER_NATIVE, visit_cb, NULL);
         free(data);
         H5Oclose(int_id);
         H5Sclose(space);
