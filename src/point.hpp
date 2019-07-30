@@ -219,30 +219,19 @@ struct PointBlock
         char name[25];
         static hsize_t ds_size[2] = {10, 20};
 
-        under_fapl = H5Pcreate (H5P_FILE_ACCESS);
-        // TODO: H5Pset_fapl_native undeclared
-//         H5Pset_fapl_native(under_fapl);
-        // TODO: H5VLis_registered undeclared (trying H5VL_is_connector_registered instead?)
+        under_fapl = H5VL_NATIVE;
         assert(H5VLis_connector_registered("native") == 1);
 
-        // TODO: need to get H5VL_log_g to build, currently commented out
-//         vol_id = H5VLregister (&H5VL_log_g);
-//         assert(vol_id > 0);
-//         assert(H5VLis_registered("log") == 1);
+        vol_id = H5VL_pass_through_register();
+        assert(H5VLis_registered("pass_through") == 1);
 
-        // TODO: H5VLget_plugin_id undeclared, trying H5VLget_connector_id everywhere instead
-        vol_id2 = H5VLget_connector_id("log");
-        H5VLinitialize(vol_id2, H5P_DEFAULT);
-        H5VLclose(vol_id2);
+        //hid_t native_plugin_id = H5VLget_connector_id("native");
+        //assert(native_plugin_id > 0);
 
-        hid_t native_plugin_id = H5VLget_connector_id("native");
-
-        assert(native_plugin_id > 0);
-            acc_tpl = H5Pcreate (H5P_FILE_ACCESS);
+        acc_tpl = H5Pcreate (H5P_FILE_ACCESS);
         H5Pset_vol(acc_tpl, vol_id, &under_fapl);
 
         file_id = H5Fcreate(file_name, H5F_ACC_TRUNC, H5P_DEFAULT, acc_tpl);
-        // TODO: H5VLget_plugin_name undeclared; trying H5VLget_connector_name everywhere instead
         len = H5VLget_connector_name(file_id, name, 25);
         printf ("FILE VOL name = %s %zd\n", name, len);
 
@@ -296,12 +285,12 @@ struct PointBlock
 
         H5Fclose(file_id);
         H5Pclose(acc_tpl);
-        H5Pclose(under_fapl);
+        //H5Pclose(under_fapl);
 
-        H5VLclose(native_plugin_id);
+        //H5VLclose(native_plugin_id);
         H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered("log") == 0);
+        assert(H5VLis_connector_registered("pass_through") == 0);
     }
 
     // block data
