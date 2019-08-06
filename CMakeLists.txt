@@ -61,13 +61,7 @@ set                         (libraries ${libraries} ${HDF5_LIBRARY})
 include_directories         (SYSTEM ${HDF5_INCLUDE_DIR})
 
 # HighFive
-if                          (HighFive_INCLUDE_DIR)
-    message                 ("HighFive_INCLUDE_DIR = " ${HighFive_INCLUDE_DIR})
-else                        ()
-    message                 ("Looking for HighFive")
-    find_package            (HighFive 2.0 REQUIRED)
-endif                       ()
-include_directories         (SYSTEM ${HighFive_INCLUDE_DIR})
+include_directories         (SYSTEM ext/HighFive/include)
 
 # Include dirs
 set                         (CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-isystem")
