@@ -206,8 +206,7 @@ struct PointBlock
         hid_t dataspaceId;
         hid_t datasetId;
         hid_t acc_tpl;
-        hid_t under_fapl;
-        hid_t vol_id, vol_id2;
+        hid_t vol_id;
         hid_t int_id;
         hid_t attr;
         hid_t space;
@@ -219,7 +218,6 @@ struct PointBlock
         char name[25];
         static hsize_t ds_size[2] = {10, 20};
 
-        under_fapl = H5VL_NATIVE;
         printf("native registered: %d\n", H5VLis_connector_registered("native"));
 
         vol_id = OUR_pass_through_register();
@@ -228,8 +226,11 @@ struct PointBlock
         hid_t native_plugin_id = H5VLget_connector_id("native");
         assert(native_plugin_id > 0);
 
+        OUR_pass_through_info_t opt_info;
+        opt_info.under_vol_id   = H5VL_NATIVE;
+        opt_info.under_vol_info = NULL;
         acc_tpl = H5Pcreate (H5P_FILE_ACCESS);
-        H5Pset_vol(acc_tpl, vol_id, &under_fapl);   // XXX: this line gives an error at runtime, but seems to work correctly (activates our plugin)
+        H5Pset_vol(acc_tpl, vol_id, &opt_info);
 
         file_id = H5Fcreate(file_name, H5F_ACC_TRUNC, H5P_DEFAULT, acc_tpl);
         len = H5VLget_connector_name(file_id, name, 25);
@@ -283,7 +284,6 @@ struct PointBlock
 
         H5Fclose(file_id);
         H5Pclose(acc_tpl);
-        //H5Pclose(under_fapl);
 
         //H5VLclose(native_plugin_id);
         H5VLterminate(vol_id);
