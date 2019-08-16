@@ -195,13 +195,13 @@ struct PointBlock
         DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
 
         // write
-        dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, 2}).
+        dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
             write((float*)(&points[0]));
 //         dataset.write((float*)(&points[0]));
 
         // read back
         vector<Point> read_points(points.size());
-        dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, 2}).
+        dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
             read((float*)(&read_points[0]));
         for (size_t i = 0; i < points.size(); ++i)
         {
@@ -210,7 +210,7 @@ struct PointBlock
                 fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
                 exit(0);
             }
-            fmt::print("  {} {}\n", points[i], read_points[i]);
+            fmt::print("  {} == {}\n", points[i], read_points[i]);
         }
 
         fmt::print("HighFive success.\n");
