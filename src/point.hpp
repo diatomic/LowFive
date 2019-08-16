@@ -22,6 +22,27 @@ using namespace std;
 template<unsigned D>
 using SimplePoint = diy::Point<float, D>;
 
+struct VOLProperty
+{
+            VOLProperty()
+    {
+        vol_id = OUR_pass_through_register();
+        opt_info.under_vol_id   = H5VL_NATIVE;
+        opt_info.under_vol_info = NULL;
+    }
+            ~VOLProperty()
+    {
+        H5VLterminate(vol_id);
+        H5VLunregister_connector(vol_id);
+        assert(H5VLis_connector_registered("our_pass_through") == 0);
+    }
+
+    void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &opt_info); }
+
+    hid_t   vol_id;
+    OUR_pass_through_info_t opt_info;
+};
+
 // block structure
 // the contents of a block are completely user-defined
 // however, a block must have functions defined to create, destroy, save, and load it
@@ -157,8 +178,13 @@ struct PointBlock
         fmt::print("Writing in HighFive API...\n");
 
         // open file for parallel read/write
-        File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate,
-                MPIOFileDriver(cp.master()->communicator(), MPI_INFO_NULL));
+        VOLProperty vol_prop;
+        printf("our_pass_through registered: %d\n", H5VLis_connector_registered("our_pass_through"));
+
+        MPIOFileDriver file_driver(cp.master()->communicator(), MPI_INFO_NULL);
+        file_driver.add(vol_prop);
+
+        File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
         // dataset size
         vector<size_t> dims(2);
