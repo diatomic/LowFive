@@ -177,6 +177,9 @@ static herr_t OUR_pass_through_request_specific(void *req, H5VL_request_specific
 static herr_t OUR_pass_through_request_optional(void *req, va_list arguments);
 static herr_t OUR_pass_through_request_free(void *req);
 
+/* added by Tom */
+static void* vol = NULL;                        /* pointer to Vol C++ object */
+
 /*******************/
 /* Local variables */
 /*******************/
@@ -381,6 +384,10 @@ OUR_pass_through_init(hid_t vipl_id)
     printf("------- PASS THROUGH VOL INIT\n");
 #endif
 
+    /* added by Tom */
+    vol = vol_new();
+    vol_init(vol);
+
     /* Shut compiler up about unused parameter */
     vipl_id = vipl_id;
 
@@ -407,6 +414,14 @@ OUR_pass_through_term(void)
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL TERM\n");
 #endif
+
+    /* added by Tom */
+    if (vol)
+    {
+        vol_term(vol);
+        vol_delete(vol);
+        vol = NULL;
+    }
 
     /* Reset VOL ID */
     OUR_PASSTHRU_g = H5I_INVALID_HID;

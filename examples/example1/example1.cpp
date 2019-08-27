@@ -1,13 +1,14 @@
-#include <cmath>
+#include    <cmath>
 
-#include <diy/master.hpp>
-#include <diy/reduce.hpp>
-#include <diy/partners/swap.hpp>
-#include <diy/decomposition.hpp>
-#include <diy/assigner.hpp>
-#include <diy/../../examples/opts.h>
+#include    <diy/master.hpp>
+#include    <diy/reduce.hpp>
+#include    <diy/partners/swap.hpp>
+#include    <diy/decomposition.hpp>
+#include    <diy/assigner.hpp>
+#include    <diy/../../examples/opts.h>
 
-#include "point.hpp"
+#include    "example1.hpp"
+#include    "example1_vol.hpp"
 
 typedef     diy::ContinuousBounds       Bounds;
 typedef     diy::RegularContinuousLink  RCLink;
@@ -89,17 +90,6 @@ int main(int argc, char* argv[])
     diy::RegularDecomposer<Bounds> decomposer(dim, domain, nblocks);
     decomposer.decompose(world.rank(), assigner, create);
 
-
-    // callback functions for local block
-//     master.foreach([verbose](Block* b, const diy::Master::ProxyWithLink& cp)
-//             { b->print_block(cp, verbose); });
-
-    // test writing an HDF5 file in parallel using HDF5 API
-//     master.foreach(&Block::write_block_hdf5);
-
     // test writing an HDF5 file in parallel using HighFive API
-//     master.foreach(&Block::write_block_highfive);
-
-    // test VOL printf plugin using HDF5 API
-    master.foreach(&Block::test_plugin_hdf5);
+    master.foreach(&Block::write_block_highfive);
 }

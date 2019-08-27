@@ -83,6 +83,7 @@ include                     (CTest)
 
 # Subdirectories
 add_subdirectory            (src)
+add_subdirectory            (examples)
 
 # Install the headers
 file                        (GLOB DEPLOY_FILES_AND_DIRS "${PROJECT_SOURCE_DIR}/include/*")
