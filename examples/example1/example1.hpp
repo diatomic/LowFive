@@ -13,7 +13,8 @@
 #include    <highfive/H5DataSpace.hpp>
 #include    <highfive/H5File.hpp>
 
-#include "../../src/our-passthru-plugin.h"
+#include    "../../src/tom-passthru-plugin.hpp"
+#include    "example1_vol.hpp"
 
 using namespace HighFive;
 using namespace std;
@@ -22,13 +23,15 @@ using namespace std;
 template<unsigned D>
 using SimplePoint = diy::Point<float, D>;
 
+template <typename V>
 struct VOLProperty
 {
             VOLProperty()
     {
-        vol_id = OUR_pass_through_register();
+        vol_id                  = OUR_pass_through_register();
         opt_info.under_vol_id   = H5VL_NATIVE;
         opt_info.under_vol_info = NULL;
+        opt_info.vol_derived    = &vol_plugin;
     }
             ~VOLProperty()
     {
@@ -39,8 +42,9 @@ struct VOLProperty
 
     void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &opt_info); }
 
-    hid_t   vol_id;
+    hid_t                   vol_id;
     OUR_pass_through_info_t opt_info;
+    V                       vol_plugin;         // vol plugin object
 };
 
 // block structure
@@ -124,7 +128,7 @@ struct PointBlock
         fmt::print("Writing in HighFive API...\n");
 
         // open file for parallel read/write
-        VOLProperty vol_prop;
+        VOLProperty<Vol> vol_prop;
         printf("our_pass_through registered: %d\n", H5VLis_connector_registered("our_pass_through"));
 
         MPIOFileDriver file_driver(cp.master()->communicator(), MPI_INFO_NULL);

@@ -6,6 +6,9 @@ option                      (wrapped_mpi    "MPI compiler wrapper requires no fu
 # C++11
 set                         (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
+# ignore variadic args warning (no other good solution)
+set                         (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-varargs")
+
 # Default to Release
 if                          (NOT CMAKE_BUILD_TYPE)
     set                     (CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)

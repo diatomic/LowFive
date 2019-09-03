@@ -40,7 +40,11 @@
 #include "hdf5.h"
 
 /* This connector's header */
-#include "our-passthru-plugin.h"
+#include "tom-passthru-plugin.hpp"
+
+// added by Tom
+// temporarily including custom Vol plugin (TODO:must be passed as a template parameter)
+#include    "../examples/example1/example1_vol.hpp"
 
 /**********/
 /* Macros */
@@ -57,22 +61,19 @@
 #define va_copy(D,S)      ((D) = (S))
 #endif
 
-/************/
-/* Typedefs */
-/************/
-
-/* The pass through VOL info object */
-typedef struct OUR_pass_through_t {
-    hid_t  under_vol_id;        /* ID for underlying VOL connector */
-    void   *under_object;       /* Info object for underlying VOL connector */
-} OUR_pass_through_t;
+// The pass through VOL info object
+struct OUR_pass_through_t
+{
+    hid_t   under_vol_id;           // ID for underlying VOL connector
+    void*   under_object;           // Info object for underlying VOL connector */
+    void*   vol_derived;            // pointer to custom plugin object TODO: not being used currently
+};
 
 /* The pass through VOL wrapper context */
-typedef struct OUR_pass_through_wrap_ctx_t {
+struct OUR_pass_through_wrap_ctx_t {
     hid_t under_vol_id;         /* VOL ID for under VOL */
     void *under_wrap_ctx;       /* Object wrapping context for under VOL */
-} OUR_pass_through_wrap_ctx_t;
-
+};
 
 /********************* */
 /* Function prototypes */
@@ -91,8 +92,12 @@ static OUR_pass_through_t *OUR_pass_through_new_obj(void *under_obj,
 static herr_t OUR_pass_through_free_obj(OUR_pass_through_t *obj);
 
 /* "Management" callbacks */
-static herr_t OUR_pass_through_init(hid_t vipl_id);
-static herr_t OUR_pass_through_term(void);
+template <typename V>
+herr_t OUR_pass_through_init(hid_t vipl_id);
+template <typename V>
+herr_t OUR_pass_through_term(void);
+
+// TODO: templatize remaining functions
 
 /* VOL info callbacks */
 static void *OUR_pass_through_info_copy(const void *info);
@@ -177,28 +182,28 @@ static herr_t OUR_pass_through_request_specific(void *req, H5VL_request_specific
 static herr_t OUR_pass_through_request_optional(void *req, va_list arguments);
 static herr_t OUR_pass_through_request_free(void *req);
 
-/* added by Tom */
-static void* vol = NULL;                        /* pointer to Vol C++ object */
-
 /*******************/
 /* Local variables */
 /*******************/
 
-/* Pass through VOL connector class struct */
-static const H5VL_class_t OUR_pass_through_g = {
-    OUR_PASSTHRU_VERSION,                          /* version      */
-    (H5VL_class_value_t)OUR_PASSTHRU_VALUE,        /* value        */
-    OUR_PASSTHRU_NAME,                             /* name         */
+// Pass through VOL connector class struct for a given custom plugin object
+// TODO: add <Vol> parameter to remaining functions
+// TODO: how do we know what object to pass as the parameter?
+static const H5VL_class<Vol> OUR_pass_through_g =
+{
+    OUR_PASSTHRU_VERSION,                           /* version      */
+    (H5VL_class_value_t)OUR_PASSTHRU_VALUE,         /* value        */
+    OUR_PASSTHRU_NAME,                              /* name         */
     0,                                              /* capability flags */
-    OUR_pass_through_init,                         /* initialize   */
-    OUR_pass_through_term,                         /* terminate    */
+    OUR_pass_through_init<Vol>,                     /* initialize   */
+    OUR_pass_through_term<Vol>,                     /* terminate    */
     {                                           /* info_cls */
-        sizeof(OUR_pass_through_info_t),           /* size    */
-        OUR_pass_through_info_copy,                /* copy    */
-        OUR_pass_through_info_cmp,                 /* compare */
-        OUR_pass_through_info_free,                /* free    */
-        OUR_pass_through_info_to_str,              /* to_str  */
-        OUR_pass_through_str_to_info,              /* from_str */
+        sizeof(OUR_pass_through_info_t),            /* size    */
+        OUR_pass_through_info_copy,                 /* copy    */
+        OUR_pass_through_info_cmp,                  /* compare */
+        OUR_pass_through_info_free,                 /* free    */
+        OUR_pass_through_info_to_str,               /* to_str  */
+        OUR_pass_through_str_to_info,               /* from_str */
     },
     {                                           /* wrap_cls */
         OUR_pass_through_get_object,               /* get_object   */
@@ -357,14 +362,13 @@ OUR_pass_through_free_obj(OUR_pass_through_t *obj)
 hid_t
 OUR_pass_through_register(void)
 {
-    /* Singleton register the pass-through VOL connector ID */
-    if(OUR_PASSTHRU_g < 0)
-        OUR_PASSTHRU_g = H5VLregister_connector(&OUR_pass_through_g, H5P_DEFAULT);
+    // Singleton register the pass-through VOL connector ID
+    if (OUR_PASSTHRU_g < 0)
+        OUR_PASSTHRU_g = H5VLregister_connector((H5VL_class_t*)(&OUR_pass_through_g), H5P_DEFAULT);
 
     return OUR_PASSTHRU_g;
-} /* end OUR_pass_through_register() */
+}
 
-
 /*-------------------------------------------------------------------------
  * Function:    OUR_pass_through_init
  *
@@ -377,24 +381,24 @@ OUR_pass_through_register(void)
  *
  *-------------------------------------------------------------------------
  */
-static herr_t
+template<typename V>
+herr_t
 OUR_pass_through_init(hid_t vipl_id)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL INIT\n");
 #endif
 
-    /* added by Tom */
-    vol = vol_new();
-    vol_init(vol);
+    // added by Tom
+    V vol;
+    vol.init();
 
-    /* Shut compiler up about unused parameter */
+    // Shut compiler up about unused parameter
     vipl_id = vipl_id;
 
     return 0;
-} /* end OUR_pass_through_init() */
+}
 
-
 /*---------------------------------------------------------------------------
  * Function:    OUR_pass_through_term
  *
@@ -408,28 +412,24 @@ OUR_pass_through_init(hid_t vipl_id)
  *
  *---------------------------------------------------------------------------
  */
-static herr_t
+template <typename V>
+herr_t
 OUR_pass_through_term(void)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL TERM\n");
 #endif
 
-    /* added by Tom */
-    if (vol)
-    {
-        vol_term(vol);
-        vol_delete(vol);
-        vol = NULL;
-    }
+    // added by Tom
+    V vol;
+    vol.term();
 
-    /* Reset VOL ID */
+    // Reset VOL ID
     OUR_PASSTHRU_g = H5I_INVALID_HID;
 
     return 0;
-} /* end OUR_pass_through_term() */
+}
 
-
 /*---------------------------------------------------------------------------
  * Function:    OUR_pass_through_info_copy
  *

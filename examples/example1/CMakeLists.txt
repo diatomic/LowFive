@@ -1,7 +1,7 @@
 set                         (targets    example1)
 
 foreach                     (t ${targets})
-  add_executable            (${t} ${t}.cpp ../../src/tom-passthru-plugin.c)
+  add_executable            (${t} ${t}.cpp ../../src/tom-passthru-plugin.cpp)
   target_link_libraries     (${t} ${libraries})
   target_compile_definitions(${t} PRIVATE ENABLE_PASSTHRU_LOGGING)
 
