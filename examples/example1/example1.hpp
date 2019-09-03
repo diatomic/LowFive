@@ -28,7 +28,9 @@ struct VOLProperty
 {
             VOLProperty()
     {
-        vol_id                  = OUR_pass_through_register();
+        //create_vl_class<V>();
+
+        vol_id                  = OUR_pass_through_register<V>();
         opt_info.under_vol_id   = H5VL_NATIVE;
         opt_info.under_vol_info = NULL;
         opt_info.vol_derived    = &vol_plugin;
