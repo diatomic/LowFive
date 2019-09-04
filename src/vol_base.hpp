@@ -42,9 +42,11 @@ struct VOLBase
     static herr_t           term();
 
     // info
-    static void*            info_copy(const void *_info);
+    static void*           _info_copy(const void *_info);
+    void*                   info_copy(const void *_info);
     //void info_cmp()                 {}
-    static herr_t           info_free(void *_info);
+    static herr_t          _info_free(void *_info);
+    herr_t                  info_free(void *_info);
     //void info_to_str()              {}
     //void str_to_info()              {}
 

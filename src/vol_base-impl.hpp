@@ -16,9 +16,9 @@ VOLBase(unsigned version_, int value_, std::string name_):
         &term,                                          /* terminate    */
         {                                               /* info_cls */
             sizeof(info_t),                             /* size    */
-            &info_copy,                                 /* copy    */
+            &_info_copy,                                /* copy    */
             NULL, //&OUR_pass_through_info_cmp,                  /* compare */
-            &info_free,                                 /* free    */
+            &_info_free,                                /* free    */
             NULL, //&OUR_pass_through_info_to_str,               /* to_str  */
             NULL  //&OUR_pass_through_str_to_info,               /* from_str */
         },
@@ -249,7 +249,7 @@ term(void)
 template<class Derived>
 void *
 VOLBase<Derived>::
-info_copy(const void *_info)
+_info_copy(const void *_info)
 {
     const info_t *info = (const info_t *)_info;
     info_t *new_info;
@@ -262,8 +262,7 @@ info_copy(const void *_info)
     new_info = (info_t *)calloc(1, sizeof(info_t));
 
     // XXX: this is currently pointless; think of a situation, where this could be useful
-    if (&Derived::info_copy != &VOLBase<Derived>::info_copy)
-        Derived::info_copy(_info);
+    static_cast<Derived*>(info->vol_derived)->info_copy(_info);
 
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_info->under_vol_id = info->under_vol_id;
@@ -290,7 +289,7 @@ info_copy(const void *_info)
 template<class Derived>
 herr_t
 VOLBase<Derived>::
-info_free(void *_info)
+_info_free(void *_info)
 {
     info_t *info = (info_t *)_info;
     hid_t err_id;
@@ -406,7 +405,7 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     H5Pclose(under_fapl_id);
 
     /* Release copy of our VOL info */
-    info_free(info);
+    _info_free(info);
 
     return (void *)file;
 } /* end file_create() */
@@ -460,7 +459,7 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     H5Pclose(under_fapl_id);
 
     /* Release copy of our VOL info */
-    info_free(info);
+    _info_free(info);
 
     return (void *)file;
 } /* end file_open() */
