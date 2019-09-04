@@ -13,7 +13,7 @@
 #include    <highfive/H5DataSpace.hpp>
 #include    <highfive/H5File.hpp>
 
-#include    "../../src/tom-passthru-plugin.hpp"
+//#include    "../../src/tom-passthru-plugin.hpp"
 #include    "example1_vol.hpp"
 
 using namespace HighFive;
@@ -28,9 +28,7 @@ struct VOLProperty
 {
             VOLProperty()
     {
-        //create_vl_class<V>();
-
-        vol_id                  = OUR_pass_through_register<V>();
+        vol_id                  = vol_plugin.register_plugin();
         opt_info.under_vol_id   = H5VL_NATIVE;
         opt_info.under_vol_info = NULL;
         opt_info.vol_derived    = &vol_plugin;
@@ -39,14 +37,14 @@ struct VOLProperty
     {
         H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered("our_pass_through") == 0);
+        assert(H5VLis_connector_registered("our-vol-plugin") == 0);
     }
 
     void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &opt_info); }
 
     hid_t                   vol_id;
-    OUR_pass_through_info_t opt_info;
-    V                       vol_plugin;         // vol plugin object
+    typename V::info_t      opt_info;
+    V                       vol_plugin { /* version = */ 0, /* value = */ 510, /* name = */ "our-vol-plugin" };         // vol plugin object; TODO: make this external
 };
 
 // block structure
@@ -131,7 +129,7 @@ struct PointBlock
 
         // open file for parallel read/write
         VOLProperty<Vol> vol_prop;
-        printf("our_pass_through registered: %d\n", H5VLis_connector_registered("our_pass_through"));
+        printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered("our-vol-plugin"));
 
         MPIOFileDriver file_driver(cp.master()->communicator(), MPI_INFO_NULL);
         file_driver.add(vol_prop);

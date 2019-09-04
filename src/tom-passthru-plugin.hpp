@@ -25,38 +25,6 @@
 #define OUR_PASSTHRU_VALUE       510           /* VOL connector ID */
 #define OUR_PASSTHRU_VERSION     0
 
-// Templated version of class information for each VOL connector
-template <typename V>
-struct H5VL_class
-{
-    /* Overall connector fields & callbacks */
-    unsigned int version;                   /* VOL connector class struct version #     */
-    H5VL_class_value_t value;               /* Value to identify connector              */
-    const char *name;                       /* Connector name (MUST be unique!)         */
-    unsigned cap_flags;                     /* Capability flags for connector           */
-    herr_t (*initialize)(hid_t vipl_id);    /* Connector initialization callback        */
-    herr_t (*terminate)(void);              /* Connector termination callback           */
-
-    /* VOL framework */
-    H5VL_info_class_t       info_cls;       /* VOL info fields & callbacks  */
-    H5VL_wrap_class_t       wrap_cls;       /* VOL object wrap / retrieval callbacks */
-
-    /* Data Model */
-    H5VL_attr_class_t       attr_cls;       /* Attribute (H5A*) class callbacks */
-    H5VL_dataset_class_t    dataset_cls;    /* Dataset (H5D*) class callbacks   */
-    H5VL_datatype_class_t   datatype_cls;   /* Datatype (H5T*) class callbacks  */
-    H5VL_file_class_t       file_cls;       /* File (H5F*) class callbacks      */
-    H5VL_group_class_t      group_cls;      /* Group (H5G*) class callbacks     */
-    H5VL_link_class_t       link_cls;       /* Link (H5L*) class callbacks      */
-    H5VL_object_class_t     object_cls;     /* Object (H5O*) class callbacks    */
-
-    /* Services */
-    H5VL_request_class_t    request_cls;    /* Asynchronous request class callbacks */
-
-    /* Catch-all */
-    herr_t (*optional)(void *obj, hid_t dxpl_id, void **req, va_list arguments); /* Optional callback */
-};
-
 struct OUR_pass_through_info_t
 {
     hid_t   under_vol_id;           // VOL ID for under VOL
@@ -66,7 +34,6 @@ struct OUR_pass_through_info_t
 
 /* The connector identification number, initialized at runtime */
 static hid_t OUR_PASSTHRU_g = H5I_INVALID_HID;
-//static H5VL_class_t OUR_pass_through_g;
 
 template<class Vol>
 H5VL_class_t create_vl_class();

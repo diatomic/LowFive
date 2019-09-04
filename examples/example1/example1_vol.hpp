@@ -7,12 +7,14 @@
 // custom VOL object
 // only need to specialize those functions that are custom
 
-struct Vol : public VolBase
+struct Vol: public VOLBase<Vol>
 {
-    void init()                     { fmt::print(stderr, "Hello Vol\n"); }
-    void term()                     { fmt::print(stderr, "Goodbye Vol\n"); }
+    using VOLBase<Vol>::VOLBase;
 
-    void info_copy()                { fmt::print(stderr, "Copy Info\n"); }
+    static herr_t   init(hid_t vipl_id)             { fmt::print(stderr, "Hello Vol\n"); return 0; }
+    static herr_t   term()                          { fmt::print(stderr, "Goodbye Vol\n"); return 0; }
+
+    static void*    info_copy(const void *_info)    { fmt::print(stderr, "Copy Info\n"); return 0; }
 };
 
 #endif
