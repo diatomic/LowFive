@@ -15,6 +15,8 @@ struct Vol: public VOLBase<Vol>
     static herr_t   term()                          { fmt::print(stderr, "Goodbye Vol\n"); return 0; }
 
     static void*    info_copy(const void *_info)    { fmt::print(stderr, "Copy Info\n"); return 0; }
+    void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
+                                                    { fmt::print(stderr, "Dataset Create\n"); return 0; }
 };
 
 #endif

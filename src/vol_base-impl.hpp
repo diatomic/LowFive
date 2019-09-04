@@ -40,7 +40,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
             NULL  // OUR_pass_through_attr_close                /* close */
         },
         {                                               /* dataset_cls */
-            &dataset_create,                            /* create */
+            &_dataset_create,                            /* create */
             NULL, // OUR_pass_through_dataset_open,             /* open */
             NULL, // OUR_pass_through_dataset_read,             /* read */
             NULL, // OUR_pass_through_dataset_write,            /* write */
@@ -58,12 +58,12 @@ VOLBase(unsigned version_, int value_, std::string name_):
             NULL  // OUR_pass_through_datatype_close            /* close */
         },
         {                                           /* file_cls */
-            &file_create,                               /* create */
-            &file_open,                                 /* open */
+            &_file_create,                               /* create */
+            &_file_open,                                 /* open */
             NULL, // OUR_pass_through_file_get,                 /* get */
             NULL, // OUR_pass_through_file_specific,            /* specific */
             NULL, // OUR_pass_through_file_optional,            /* optional */
-            &file_close                                 /* close */
+            &_file_close                                 /* close */
         },
         {                                           /* group_cls */
             NULL, // OUR_pass_through_group_create,             /* create */
@@ -98,6 +98,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
         },
         NULL                                        /* optional */
     };
+    info.vol_derived = this;
 }
 
 template<class Derived>
@@ -128,13 +129,14 @@ register_plugin()
 template<class Derived>
 typename VOLBase<Derived>::pass_through_t*
 VOLBase<Derived>::
-new_obj(void *under_obj, hid_t under_vol_id)
+new_obj(void *under_obj, hid_t under_vol_id, void* vol_derived)
 {
     pass_through_t *new_obj;
 
     new_obj = (pass_through_t *)calloc(1, sizeof(pass_through_t));
     new_obj->under_object = under_obj;
     new_obj->under_vol_id = under_vol_id;
+    new_obj->vol_derived  = vol_derived;
     H5Iinc_ref(new_obj->under_vol_id);
 
     return new_obj;
@@ -325,7 +327,7 @@ info_free(void *_info)
 template<class Derived>
 void*
 VOLBase<Derived>::
-dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
+_dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
@@ -337,19 +339,16 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL DATASET Create\n");
 #endif
 
-    void* result;
-    if (&Derived::dataset_create != &VOLBase<Derived>::dataset_create)
-        result = Derived::dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
-
+    void* result = static_cast<Derived*>(o->vol_derived)->dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
     // TODO: need a mechanism to skip the following code, depending on the result
 
     under = H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
     if(under) {
-        dset = new_obj(under, o->under_vol_id);
+        dset = new_obj(under, o->under_vol_id, o->vol_derived);
 
         /* Check for async request */
         if(req && *req)
-            *req = new_obj(*req, o->under_vol_id);
+            *req = new_obj(*req, o->under_vol_id, o->vol_derived);
     } /* end if */
     else
         dset = NULL;
@@ -371,7 +370,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 template<class Derived>
 void*
 VOLBase<Derived>::
-file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
+_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     info_t *info;
     pass_through_t *file;
@@ -394,11 +393,11 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = new_obj(under, info->under_vol_id);
+        file = new_obj(under, info->under_vol_id, info->vol_derived);
 
         /* Check for async request */
         if(req && *req)
-            *req = new_obj(*req, info->under_vol_id);
+            *req = new_obj(*req, info->under_vol_id, info->vol_derived);
     } /* end if */
     else
         file = NULL;
@@ -425,7 +424,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
 template<class Derived>
 void*
 VOLBase<Derived>::
-file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
+_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     info_t *info;
     pass_through_t *file;
@@ -448,11 +447,11 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_open(name, flags, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = new_obj(under, info->under_vol_id);
+        file = new_obj(under, info->under_vol_id, info->vol_derived);
 
         /* Check for async request */
         if(req && *req)
-            *req = new_obj(*req, info->under_vol_id);
+            *req = new_obj(*req, info->under_vol_id, info->vol_derived);
     } /* end if */
     else
         file = NULL;
@@ -479,7 +478,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 template<class Derived>
 herr_t
 VOLBase<Derived>::
-file_close(void *file, hid_t dxpl_id, void **req)
+_file_close(void *file, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)file;
     herr_t ret_value;
@@ -492,7 +491,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = new_obj(*req, o->under_vol_id);
+        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
 
     /* Release our wrapper, if underlying file was closed */
     if(ret_value >= 0)
