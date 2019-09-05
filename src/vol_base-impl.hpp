@@ -42,12 +42,12 @@ VOLBase(unsigned version_, int value_, std::string name_):
         {                                               /* dataset_cls */
             &_dataset_create,                            /* create */
             NULL, // OUR_pass_through_dataset_open,             /* open */
-            NULL, // OUR_pass_through_dataset_read,             /* read */
-            NULL, // OUR_pass_through_dataset_write,            /* write */
-            NULL, // OUR_pass_through_dataset_get,              /* get */
+            &_dataset_read,                             /* read */
+            &_dataset_write,                            /* write */
+            &_dataset_get,                              /* get */
             NULL, // OUR_pass_through_dataset_specific,         /* specific */
             NULL, // OUR_pass_through_dataset_optional,         /* optional */
-            NULL  // OUR_pass_through_dataset_close             /* close */
+            &_dataset_close                             /* close */
         },
         {                                           /* datatype_cls */
             NULL, // OUR_pass_through_datatype_commit,          /* commit */
@@ -355,6 +355,133 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     return (void *)dset;
 } /* end dataset_create() */
 
+/*-------------------------------------------------------------------------
+ * Function:    OUR_pass_through_dataset_read
+ *
+ * Purpose:     Reads data elements from a dataset into a buffer.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL DATASET Read\n");
+#endif
+
+    ret_value = H5VLdataset_read(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+
+    return ret_value;
+} /* end dataset_read() */
+
+/*-------------------------------------------------------------------------
+ * Function:    OUR_pass_through_dataset_write
+ *
+ * Purpose:     Writes data elements from a buffer into a dataset.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL DATASET Write\n");
+#endif
+
+    ret_value = H5VLdataset_write(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+
+    return ret_value;
+} /* end dataset_write() */
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_get
+ *
+ * Purpose:     Gets information about a dataset
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL DATASET Get\n");
+#endif
+
+    ret_value = H5VLdataset_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+
+    return ret_value;
+} /* end pass_through_dataset_get() */
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_close
+ *
+ * Purpose:     Closes a dataset.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1, dataset not closed.
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_dataset_close(void *dset, hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL DATASET Close\n");
+#endif
+
+    ret_value = H5VLdataset_close(o->under_object, o->under_vol_id, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+
+    /* Release our wrapper, if underlying dataset was closed */
+    if(ret_value >= 0)
+        free_obj(o);
+
+    return ret_value;
+} /* end dataset_close() */
 
 /*-------------------------------------------------------------------------
  * Function:    file_create
