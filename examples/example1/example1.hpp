@@ -13,7 +13,6 @@
 #include    <highfive/H5DataSpace.hpp>
 #include    <highfive/H5File.hpp>
 
-//#include    "../../src/tom-passthru-plugin.hpp"
 #include    "example1_vol.hpp"
 
 using namespace HighFive;
@@ -29,7 +28,7 @@ struct VOLProperty
             VOLProperty(V& vol_plugin_):
                 vol_plugin(vol_plugin_)
     {
-        vol_id                  = vol_plugin.register_plugin();
+        vol_id = vol_plugin.register_plugin();
     }
             ~VOLProperty()
     {
@@ -40,8 +39,8 @@ struct VOLProperty
 
     void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &vol_plugin.info); }
 
-    hid_t                   vol_id;
-    V&                      vol_plugin;
+    hid_t   vol_id;
+    V&      vol_plugin;
 };
 
 // block structure
