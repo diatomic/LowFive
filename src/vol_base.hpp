@@ -8,9 +8,11 @@
 // TODO: namespace LowFive
 
 // base class for VOL object
-template<class Derived>
+template<class Derived_>
 struct VOLBase
 {
+    using Derived = Derived_;
+
     // automatically manage reference count
     struct UnderObject
     {
@@ -25,21 +27,21 @@ struct VOLBase
     struct pass_through_t: public UnderObject
     {
         using UnderObject::UnderObject;
-                            pass_through_t(void* under_object_, hid_t under_vol_id_, void* vol_derived_):
-                                UnderObject(under_vol_id_), under_object(under_object_), vol_derived(vol_derived_)      {}
+                            pass_through_t(void* under_object_, hid_t under_vol_id_, Derived* vol_):
+                                UnderObject(under_vol_id_), under_object(under_object_), vol(vol_)      {}
 
-        pass_through_t*     create(void* o)                 { auto x = new pass_through_t(o, this->under_vol_id, vol_derived); return x; }
-        static void         destroy(pass_through_t* x)      { delete x; }       // TODO: do we really need this?
+        pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, this->under_vol_id, vol); return x; }
+        static void         destroy(pass_through_t* x)          { delete x; }       // TODO: do we really need this?
 
-        void*   under_object;           // Info object for underlying VOL connector */
-        void*   vol_derived;            // pointer to custom plugin object TODO: not being used currently
+        void*               under_object;                       // Info object for underlying VOL connector
+        Derived*            vol;                                // pointer to this
     };
 
-    struct info_t       // formerly known as OUR_pass_through_info_t
+    struct info_t
     {
-        hid_t   under_vol_id    = H5VL_NATIVE;      // VOL ID for under VOL
-        void*   under_vol_info  = NULL;             // VOL info for under VOL
-        void*   vol_derived;                        // pointer to this
+        hid_t               under_vol_id    = H5VL_NATIVE;      // VOL ID for under VOL
+        void*               under_vol_info  = NULL;             // VOL info for under VOL
+        Derived*            vol;                                // pointer to this
     } info;
 
     unsigned                version;

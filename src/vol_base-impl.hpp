@@ -98,7 +98,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
         },
         NULL                                        /* optional */
     };
-    info.vol_derived = this;
+    info.vol = static_cast<Derived*>(this);
 }
 
 template<class Derived>
@@ -193,7 +193,7 @@ _info_copy(const void *_info)
     new_info = (info_t *)calloc(1, sizeof(info_t));
 
     // XXX: this is currently pointless; think of a situation, where this could be useful
-    static_cast<Derived*>(info->vol_derived)->info_copy(_info);
+    info->vol->info_copy(_info);
 
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_info->under_vol_id = info->under_vol_id;
@@ -269,7 +269,7 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL DATASET Create\n");
 #endif
 
-    void* result = static_cast<Derived*>(o->vol_derived)->dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
+    void* result = o->vol->dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
     // TODO: need a mechanism to skip the following code, depending on the result
 
     under = H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
@@ -308,7 +308,7 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     printf("------- PASS THROUGH VOL DATASET Read\n");
 #endif
 
-    ret_value = static_cast<Derived*>(o->vol_derived)->dataset_read(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    ret_value = o->vol->dataset_read(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
     // TODO: need a mechanism to skip the following code, depending on the result
 
     ret_value = H5VLdataset_read(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -453,11 +453,11 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = new pass_through_t(under, info->under_vol_id, info->vol_derived);
+        file = new pass_through_t(under, info->under_vol_id, info->vol);
 
         /* Check for async request */
         if(req && *req)
-            *req = new pass_through_t(*req, info->under_vol_id, info->vol_derived);
+            *req = new pass_through_t(*req, info->under_vol_id, info->vol);
     } /* end if */
     else
         file = NULL;
@@ -507,11 +507,11 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_open(name, flags, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = new pass_through_t(under, info->under_vol_id, info->vol_derived);
+        file = new pass_through_t(under, info->under_vol_id, info->vol);
 
         /* Check for async request */
         if(req && *req)
-            *req = new pass_through_t(*req, info->under_vol_id, info->vol_derived);
+            *req = new pass_through_t(*req, info->under_vol_id, info->vol);
     } /* end if */
     else
         file = NULL;
