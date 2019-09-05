@@ -114,70 +114,6 @@ register_plugin()
 }
 
 /*-------------------------------------------------------------------------
- * Function:    new_obj
- *
- * Purpose:     Create a new pass through object for an underlying object
- *
- * Return:      Success:    Pointer to the new pass through object
- *              Failure:    NULL
- *
- * Programmer:  Quincey Koziol
- *              Monday, December 3, 2018
- *
- *-------------------------------------------------------------------------
- */
-template<class Derived>
-typename VOLBase<Derived>::pass_through_t*
-VOLBase<Derived>::
-new_obj(void *under_obj, hid_t under_vol_id, void* vol_derived)
-{
-    pass_through_t *new_obj;
-
-    new_obj = (pass_through_t *)calloc(1, sizeof(pass_through_t));
-    new_obj->under_object = under_obj;
-    new_obj->under_vol_id = under_vol_id;
-    new_obj->vol_derived  = vol_derived;
-    H5Iinc_ref(new_obj->under_vol_id);
-
-    return new_obj;
-} /* end new_obj() */
-
-/*-------------------------------------------------------------------------
- * Function:    free_obj
- *
- * Purpose:     Release a pass through object
- *
- * Note:        Take care to preserve the current HDF5 error stack
- *              when calling HDF5 API calls.
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- * Programmer:  Quincey Koziol
- *              Monday, December 3, 2018
- *
- *-------------------------------------------------------------------------
- */
-template<class Derived>
-herr_t
-VOLBase<Derived>::
-free_obj(pass_through_t *obj)
-{
-    hid_t err_id;
-
-    err_id = H5Eget_current_stack();
-
-    H5Idec_ref(obj->under_vol_id);
-
-    H5Eset_current_stack(err_id);
-
-    free(obj);
-
-    return 0;
-} /* end free_obj() */
-
-
-/*-------------------------------------------------------------------------
  * Function:    init
  *
  * Purpose:     Initialize this VOL connector, performing any necessary
@@ -343,11 +279,11 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     under = H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
     if(under) {
-        dset = new_obj(under, o->under_vol_id, o->vol_derived);
+        dset = o->create(under);
 
         /* Check for async request */
         if(req && *req)
-            *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+            *req = o->create(*req);
     } /* end if */
     else
         dset = NULL;
@@ -381,7 +317,7 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 
     /* Check for async request */
     if(req && *req)
-        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+        *req = o->create(*req);
 
     return ret_value;
 } /* end dataset_read() */
@@ -412,7 +348,7 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
 
     /* Check for async request */
     if(req && *req)
-        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+        *req = o->create(*req);
 
     return ret_value;
 } /* end dataset_write() */
@@ -443,7 +379,7 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
 
     /* Check for async request */
     if(req && *req)
-        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+        *req = o->create(*req);
 
     return ret_value;
 } /* end pass_through_dataset_get() */
@@ -474,11 +410,11 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+        *req = o->create(*req);
 
     /* Release our wrapper, if underlying dataset was closed */
     if(ret_value >= 0)
-        free_obj(o);
+        pass_through_t::destroy(o);
 
     return ret_value;
 } /* end dataset_close() */
@@ -519,11 +455,11 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = new_obj(under, info->under_vol_id, info->vol_derived);
+        file = new pass_through_t(under, info->under_vol_id, info->vol_derived);
 
         /* Check for async request */
         if(req && *req)
-            *req = new_obj(*req, info->under_vol_id, info->vol_derived);
+            *req = new pass_through_t(*req, info->under_vol_id, info->vol_derived);
     } /* end if */
     else
         file = NULL;
@@ -573,11 +509,11 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     /* Open the file with the underlying VOL connector */
     under = H5VLfile_open(name, flags, under_fapl_id, dxpl_id, req);
     if(under) {
-        file = new_obj(under, info->under_vol_id, info->vol_derived);
+        file = new pass_through_t(under, info->under_vol_id, info->vol_derived);
 
         /* Check for async request */
         if(req && *req)
-            *req = new_obj(*req, info->under_vol_id, info->vol_derived);
+            *req = new pass_through_t(*req, info->under_vol_id, info->vol_derived);
     } /* end if */
     else
         file = NULL;
@@ -617,11 +553,11 @@ _file_close(void *file, hid_t dxpl_id, void **req)
 
     /* Check for async request */
     if(req && *req)
-        *req = new_obj(*req, o->under_vol_id, o->vol_derived);
+        *req = o->create(*req);
 
     /* Release our wrapper, if underlying file was closed */
     if(ret_value >= 0)
-        free_obj(o);
+        pass_through_t::destroy(o);
 
     return ret_value;
 } /* end file_close() */

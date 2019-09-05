@@ -11,10 +11,26 @@
 template<class Derived>
 struct VOLBase
 {
-    // The pass through VOL info object
-    struct pass_through_t       // formerly known as OUR_pass_through_t
+    // automatically manage reference count
+    struct UnderObject
     {
-        hid_t   under_vol_id;           // ID for underlying VOL connector
+        hid_t   under_vol_id;                   // ID for underlying VOL connector
+
+                UnderObject(hid_t uvi):
+                    under_vol_id(uvi)           { H5Iinc_ref(under_vol_id); }
+                ~UnderObject()                  { hid_t err_id; err_id = H5Eget_current_stack(); H5Idec_ref(under_vol_id); H5Eset_current_stack(err_id); }
+    };
+
+    // The pass through VOL info object
+    struct pass_through_t: public UnderObject
+    {
+        using UnderObject::UnderObject;
+                            pass_through_t(void* under_object_, hid_t under_vol_id_, void* vol_derived_):
+                                UnderObject(under_vol_id_), under_object(under_object_), vol_derived(vol_derived_)      {}
+
+        pass_through_t*     create(void* o)                 { auto x = new pass_through_t(o, this->under_vol_id, vol_derived); return x; }
+        static void         destroy(pass_through_t* x)      { delete x; }       // TODO: do we really need this?
+
         void*   under_object;           // Info object for underlying VOL connector */
         void*   vol_derived;            // pointer to custom plugin object TODO: not being used currently
     };
@@ -35,8 +51,6 @@ struct VOLBase
                             VOLBase(unsigned version_, int value_, std::string name_);
 
     hid_t                   register_plugin();
-    static pass_through_t*  new_obj(void *under_obj, hid_t under_vol_id, void* vol_derived);
-    static herr_t           free_obj(pass_through_t *obj);
 
     static herr_t           init(hid_t vipl_id);
     static herr_t           term();
