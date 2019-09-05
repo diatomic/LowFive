@@ -12,8 +12,8 @@ VOLBase(unsigned version_, int value_, std::string name_):
         (H5VL_class_value_t) value,                     /* value        */
         name.c_str(),                                   /* name         */
         0,                                              /* capability flags */
-        &init,                                          /* initialize   */
-        &term,                                          /* terminate    */
+        &_init,                                         /* initialize   */
+        &_term,                                         /* terminate    */
         {                                               /* info_cls */
             sizeof(info_t),                             /* size    */
             &_info_copy,                                /* copy    */
@@ -128,16 +128,13 @@ register_plugin()
 template<class Derived>
 herr_t
 VOLBase<Derived>::
-init(hid_t vipl_id)
+_init(hid_t vipl_id)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL INIT\n");
 #endif
 
-    if (&Derived::init != &VOLBase<Derived>::init)
-        return Derived::init(vipl_id);
-    else
-        return 0;
+    return Derived::init(vipl_id);
 }
 
 /*---------------------------------------------------------------------------
@@ -156,15 +153,13 @@ init(hid_t vipl_id)
 template<class Derived>
 herr_t
 VOLBase<Derived>::
-term(void)
+_term(void)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL TERM\n");
 #endif
 
-    herr_t result = 0;
-    if (&Derived::term != &VOLBase<Derived>::term)
-        result = Derived::term();
+    herr_t result = Derived::term();
 
     // Reset VOL ID
     connector_id = H5I_INVALID_HID;     // NB: this is the only reason connector_id is static
@@ -312,6 +307,9 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 #ifdef ENABLE_PASSTHRU_LOGGING 
     printf("------- PASS THROUGH VOL DATASET Read\n");
 #endif
+
+    ret_value = static_cast<Derived*>(o->vol_derived)->dataset_read(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    // TODO: need a mechanism to skip the following code, depending on the result
 
     ret_value = H5VLdataset_read(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 

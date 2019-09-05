@@ -52,15 +52,17 @@ struct VOLBase
 
     hid_t                   register_plugin();
 
-    static herr_t           init(hid_t vipl_id);
-    static herr_t           term();
+    static herr_t           _init(hid_t vipl_id);
+    static herr_t           init(hid_t vipl_id)             { return 0; }
+    static herr_t           _term();
+    static herr_t           term()                          { return 0; }
 
     // info
     static void*           _info_copy(const void *_info);
-    void*                   info_copy(const void *_info);
+    void*                   info_copy(const void *_info)    { return 0; }
     //void info_cmp()                 {}
     static herr_t          _info_free(void *_info);
-    herr_t                  info_free(void *_info);
+    herr_t                  info_free(void *_info)          { return 0; }
     //void info_to_str()              {}
     //void str_to_info()              {}
 
@@ -86,15 +88,15 @@ struct VOLBase
     void*                   dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)         { return 0; }
     //void dset_open()                {}
     static herr_t          _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req);
-    herr_t                  dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req);
+    herr_t                  dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)         { return 0; }
     static herr_t          _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
-    herr_t                  dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
+    herr_t                  dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)  { return 0; }
     static herr_t          _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    herr_t                  dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    herr_t                  dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)      { return 0; }
     //void dset_specific()            {}
     //void dset_optional()            {}
     static herr_t          _dataset_close(void *dset, hid_t dxpl_id, void **req);
-    herr_t                  dataset_close(void *dset, hid_t dxpl_id, void **req);
+    herr_t                  dataset_close(void *dset, hid_t dxpl_id, void **req)                                                    { return 0; }
 
     //// datatype
     //void dtype_commit()             {}
