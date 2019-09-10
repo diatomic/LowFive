@@ -139,7 +139,8 @@ struct PointBlock
         dims[1] = points.size() * DIM;                              // local size
 
         // create the dataset
-        DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
+        auto group = file.createGroup("/group");
+        DataSet dataset = group.createDataSet<float>("dset", DataSpace(dims));
 
         // write
         dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).

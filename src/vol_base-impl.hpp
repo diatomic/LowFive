@@ -66,12 +66,12 @@ VOLBase(unsigned version_, int value_, std::string name_):
             &_file_close                                 /* close */
         },
         {                                           /* group_cls */
-            NULL, // OUR_pass_through_group_create,             /* create */
+            &_group_create,                                     /* create */
             NULL, // OUR_pass_through_group_open,               /* open */
             NULL, // OUR_pass_through_group_get,                /* get */
             NULL, // OUR_pass_through_group_specific,           /* specific */
             NULL, // OUR_pass_through_group_optional,           /* optional */
-            NULL  // OUR_pass_through_group_close               /* close */
+            &_group_close                                       /* close */
         },
         {                                           /* link_cls */
             NULL, // OUR_pass_through_link_create,              /* create */
@@ -559,3 +559,84 @@ _file_close(void *file, hid_t dxpl_id, void **req)
 
     return ret_value;
 } /* end file_close() */
+
+/*-------------------------------------------------------------------------
+ * Function:    group_create
+ *
+ * Purpose:     Creates a group inside a container
+ *
+ * Return:      Success:    Pointer to a group object
+ *              Failure:    NULL
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+void*
+VOLBase<Derived>::
+_group_create(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
+    hid_t dxpl_id, void **req)
+{
+    pass_through_t *group;
+    pass_through_t *o = (pass_through_t *)obj;
+    void *under;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL GROUP Create\n");
+#endif
+
+    void* result = o->vol->group_create(obj, loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
+    // TODO: do something with the result
+
+    under = H5VLgroup_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
+    if(under) {
+        group = o->create(under);
+
+        /* Check for async request */
+        if(req && *req)
+            *req = o->create(*req);
+    } /* end if */
+    else
+        group = NULL;
+
+    return (void *)group;
+} /* end group_create() */
+
+/*-------------------------------------------------------------------------
+ * Function:    group_close
+ *
+ * Purpose:     Closes a group.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1, group not closed.
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_group_close(void *grp, hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)grp;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL H5Gclose\n");
+#endif
+
+    ret_value = o->vol->group_close(grp, dxpl_id, req);
+    // TODO: do something with ret_value
+
+    ret_value = H5VLgroup_close(o->under_object, o->under_vol_id, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    /* Release our wrapper, if underlying file was closed */
+    if(ret_value >= 0)
+        pass_through_t::destroy(o);
+
+    return ret_value;
+} /* end group_close() */
+

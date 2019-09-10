@@ -120,12 +120,14 @@ struct VOLBase
     herr_t                  file_close(void *file, hid_t dxpl_id, void **req)           { return 0; }
 
     //// group
-    //void group_create()             {}
+    static void*           _group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
+    void*                   group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)  { return 0; }
     //void group_open()               {}
     //void group_get()                {}
     //void group_specific()           {}
     //void group_optional()           {}
-    //void group_close()              {}
+    static herr_t          _group_close(void *grp, hid_t dxpl_id, void **req);
+    herr_t                  group_close(void *grp, hid_t dxpl_id, void **req)           { return 0; }
 
     //// link
     //void link_create()              {}
