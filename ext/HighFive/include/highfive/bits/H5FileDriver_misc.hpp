@@ -42,12 +42,47 @@ private:
   Info _info;
 };
 
+// --- added by Tom ---
+
+class CoreFileAccess
+{
+    public:
+        CoreFileAccess(size_t incr)
+            : _incr(incr)
+        {}
+
+        void apply(const hid_t list) const
+        {
+            // debug
+            fprintf(stderr, "CoreFileAccess applied\n");
+
+            if (H5Pset_fapl_core(list, _incr, 0))
+                HDF5ErrMapper::ToException<FileException>("Unable to setup Core Driver configuration");
+        }
+    private:
+        size_t _incr;               // increment by which to grow memory (bytes)
+};
+
+// --- end of added by Tom ---
+
 }  //namespace
 
 template <typename Comm, typename Info>
 inline MPIOFileDriver::MPIOFileDriver(Comm comm, Info info) {
     add(MPIOFileAccess<Comm, Info>(comm, info));
 }
+
+// --- added by Tom ---
+
+inline CoreFileDriver::CoreFileDriver(size_t incr)
+{
+    // debug
+    fprintf(stderr, "CoreFileDriver\n");
+
+    add(CoreFileAccess(incr));
+}
+
+// --- end of added Tom ---
 
 } // namespace HighFive
 

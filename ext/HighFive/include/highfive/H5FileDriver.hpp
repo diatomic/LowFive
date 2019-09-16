@@ -29,6 +29,18 @@ class MPIOFileDriver : public FileDriver {
   private:
 };
 
+// --- added by Tom ---
+
+class CoreFileDriver : public FileDriver
+{
+    public:
+        inline CoreFileDriver(size_t incr);
+
+    private:
+};
+
+// --- end of added by Tom ---
+
 }  // namespace HighFive
 
 #include "bits/H5FileDriver_misc.hpp"
