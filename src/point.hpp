@@ -34,7 +34,7 @@ struct VOLProperty
     {
         H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered("our_pass_through") == 0);
+        assert(H5VLis_connector_registered_by_name("our_pass_through") == 0);
     }
 
     void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &opt_info); }
@@ -179,9 +179,9 @@ struct PointBlock
 
         // open file for parallel read/write
         VOLProperty vol_prop;
-        printf("our_pass_through registered: %d\n", H5VLis_connector_registered("our_pass_through"));
+        printf("our_pass_through registered: %d\n", H5VLis_connector_registered_by_name("our_pass_through"));
 
-        MPIOFileDriver file_driver(cp.master()->communicator(), MPI_INFO_NULL);
+        MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
         file_driver.add(vol_prop);
 
         File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
@@ -243,12 +243,12 @@ struct PointBlock
         char name[25];
         static hsize_t ds_size[2] = {10, 20};
 
-        printf("native registered: %d\n", H5VLis_connector_registered("native"));
+        printf("native registered: %d\n", H5VLis_connector_registered_by_name("native"));
 
         vol_id = OUR_pass_through_register();
-        printf("our_pass_through registered: %d\n", H5VLis_connector_registered("our_pass_through"));
+        printf("our_pass_through registered: %d\n", H5VLis_connector_registered_by_name("our_pass_through"));
 
-        hid_t native_plugin_id = H5VLget_connector_id("native");
+        hid_t native_plugin_id = H5VLget_connector_id_by_name("native");
         assert(native_plugin_id > 0);
 
         OUR_pass_through_info_t opt_info;
@@ -313,7 +313,7 @@ struct PointBlock
         //H5VLclose(native_plugin_id);
         H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered("our_pass_through") == 0);
+        assert(H5VLis_connector_registered_by_name("our_pass_through") == 0);
     }
 
     // block data

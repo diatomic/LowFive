@@ -13,7 +13,6 @@
 
 #include "H5FileDriver.hpp"
 #include "H5Object.hpp"
-
 #include "bits/H5Annotate_traits.hpp"
 #include "bits/H5Node_traits.hpp"
 
@@ -26,6 +25,9 @@ class File : public Object,
              public NodeTraits<File>,
              public AnnotateTraits<File> {
  public:
+
+    const static ObjectType type = ObjectType::File;
+
     enum : unsigned {
         /// Open flag: Read only access
         ReadOnly = 0x00u,
@@ -41,7 +43,7 @@ class File : public Object,
         Create = 0x10u,
         /// Derived open flag: common write mode (=ReadWrite|Create|Truncate)
         Overwrite = Truncate,
-        /// Derived open flag: Opens RW or exclusivelly creates
+        /// Derived open flag: Opens RW or exclusively creates
         OpenOrCreate = ReadWrite | Create
     };
 
@@ -49,6 +51,7 @@ class File : public Object,
     /// \brief File
     /// \param filename: filepath of the HDF5 file
     /// \param openFlags: Open mode / flags ( ReadOnly, ReadWrite)
+    /// \param fileAccessProps: the file access properties
     ///
     /// Open or create a new HDF5 file
     explicit File(const std::string& filename, unsigned openFlags = ReadOnly,
@@ -57,7 +60,7 @@ class File : public Object,
     ///
     /// \brief Return the name of the file
     ///
-    const std::string& getName() const;
+    const std::string& getName() const noexcept;
 
     ///
     /// \brief flush
@@ -69,9 +72,12 @@ class File : public Object,
  private:
     std::string _filename;
 };
+
 }  // namespace HighFive
 
+// H5File is the main user constructible -> bring in implementation headers
+#include "bits/H5Annotate_traits_misc.hpp"
 #include "bits/H5File_misc.hpp"
+#include "bits/H5Node_traits_misc.hpp"
 
 #endif  // H5FILE_HPP
-

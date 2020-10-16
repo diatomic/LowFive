@@ -11,23 +11,31 @@
 
 #include <vector>
 
+#include "H5DataSpace.hpp"
+#include "H5DataType.hpp"
 #include "H5Object.hpp"
+#include "bits/H5_definitions.hpp"
 #include "bits/H5Annotate_traits.hpp"
 #include "bits/H5Slice_traits.hpp"
+#include "bits/H5_definitions.hpp"
 
 namespace HighFive {
 
-template <typename Derivate>
-class NodeTraits;
-template <typename Derivate>
-class SliceTraits;
-class DataType;
-class DataSpace;
-
+///
+/// \brief Class representing a dataset.
+///
 class DataSet : public Object,
                 public SliceTraits<DataSet>,
                 public AnnotateTraits<DataSet> {
   public:
+
+    const static ObjectType type = ObjectType::Dataset;
+
+    ///
+    /// \brief return the path to the current dataset
+    /// \return the path to the dataset
+    std::string getPath() const;
+
     ///
     /// \brief getStorageSize
     /// \return returns the amount of storage allocated for a dataset.
@@ -85,14 +93,16 @@ class DataSet : public Object,
         return getSpace().getElementCount();
     }
 
-  private:
-    DataSet();
-    template <typename Derivate>
-    friend class ::HighFive::NodeTraits;
+  protected:
+    using Object::Object;
+
+    inline DataSet(Object&& o) noexcept : Object(std::move(o)) {}
+
+    friend class Reference;
+    template <typename Derivate> friend class NodeTraits;
+
 };
 
 }  // namespace HighFive
-
-#include "bits/H5DataSet_misc.hpp"
 
 #endif // H5DATASET_HPP

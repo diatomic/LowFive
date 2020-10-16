@@ -9,13 +9,18 @@
 #ifndef H5PROPERTY_LIST_HPP
 #define H5PROPERTY_LIST_HPP
 
-#include "H5Object.hpp"
+#include <vector>
 
 #include <H5Ppublic.h>
 
+#include "H5Exception.hpp"
+#include "H5Object.hpp"
+
 namespace HighFive {
 
-
+///
+/// \brief Types of property lists
+///
 enum class PropertyType : int {
     OBJECT_CREATE,
     FILE_CREATE,
@@ -42,18 +47,18 @@ class PropertyList {
   public:
     ~PropertyList();
 
-#ifdef H5_USE_CXX11
-    PropertyList(PropertyList&& other);
-    PropertyList& operator=(PropertyList&& other);
-#endif
+    PropertyList(const PropertyList<T>&) = delete;
+    PropertyList& operator=(const PropertyList<T>&) = delete;
+    PropertyList(PropertyList&& other) noexcept;
+    PropertyList& operator=(PropertyList&& other) noexcept;
     constexpr PropertyType getType() const { return T; }
 
     hid_t getId() const { return _hid; }
 
-    PropertyList();
+    PropertyList() noexcept;
 
     template <typename P>
-    PropertyList(std::initializer_list<P>);
+    PropertyList(const std::initializer_list<P>&);
 
     ///
     /// Add a property to this property list.
@@ -67,15 +72,6 @@ class PropertyList {
     void _initializeIfNeeded();
 
     hid_t _hid;
-
-  private:
-#ifdef H5_USE_CXX11
-    PropertyList(const PropertyList<T>&) = delete;
-    PropertyList& operator=(const PropertyList<T>&) = delete;
-#else
-    PropertyList(const PropertyList<T>&);
-    PropertyList& operator=(const PropertyList<T>&);
-#endif
 };
 
 typedef PropertyList<PropertyType::FILE_CREATE> FileCreateProps;
@@ -98,17 +94,19 @@ class RawPropertyList : public PropertyList<T> {
 
 class Chunking {
   public:
-    Chunking(const std::vector<hsize_t>& dims)
+    explicit Chunking(const std::vector<hsize_t>& dims)
         : _dims(dims) {}
 
-    Chunking(std::initializer_list<hsize_t> items)
+    Chunking(const std::initializer_list<hsize_t>& items)
         : Chunking(std::vector<hsize_t>{items}) {}
 
     template <typename... Args>
-    Chunking(hsize_t item, Args... args)
+    explicit Chunking(hsize_t item, Args... args)
         : Chunking(std::vector<hsize_t>{item, static_cast<hsize_t>(args)...}) {}
 
-    const std::vector<hsize_t>& getDimensions() const { return _dims; }
+    const std::vector<hsize_t>& getDimensions() const noexcept {
+        return _dims;
+    }
 
   private:
     friend DataSetCreateProps;
@@ -118,7 +116,7 @@ class Chunking {
 
 class Deflate {
   public:
-    Deflate(unsigned level)
+    explicit Deflate(unsigned level)
         : _level(level) {}
 
   private:
@@ -129,7 +127,7 @@ class Deflate {
 
 class Shuffle {
   public:
-    Shuffle() {}
+    Shuffle() = default;
 
   private:
     friend DataSetCreateProps;

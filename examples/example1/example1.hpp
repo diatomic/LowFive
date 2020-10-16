@@ -34,7 +34,7 @@ struct VOLProperty
     {
         H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered("our-vol-plugin") == 0);
+        assert(H5VLis_connector_registered_by_name("our-vol-plugin") == 0);
     }
 
     void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &vol_plugin.info); }
@@ -126,9 +126,9 @@ struct PointBlock
         // open file for parallel read/write
         Vol vol_plugin { /* version = */ 0, /* value = */ 510, /* name = */ "our-vol-plugin" };
         VOLProperty<Vol> vol_prop(vol_plugin);
-        printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered("our-vol-plugin"));
+        printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name("our-vol-plugin"));
 
-        MPIOFileDriver file_driver(cp.master()->communicator(), MPI_INFO_NULL);
+        MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
         file_driver.add(vol_prop);
 
         File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);

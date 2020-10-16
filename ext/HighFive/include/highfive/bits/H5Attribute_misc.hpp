@@ -22,16 +22,16 @@
 #include <H5Apublic.h>
 #include <H5Ppublic.h>
 
-#include "../H5Attribute.hpp"
-#include "../H5DataSpace.hpp"
-#include "../H5DataType.hpp"
-
 #include "H5Converter_misc.hpp"
 #include "H5Utils.hpp"
 
 namespace HighFive {
 
-inline Attribute::Attribute() {}
+inline std::string Attribute::getName() const {
+    return details::get_name([&](char *buffer, hsize_t length) {
+        return H5Aget_name(_hid, length, buffer);
+    });
+}
 
 inline size_t Attribute::getStorageSize() const {
     return static_cast<size_t>(H5Aget_storage_size(_hid));
@@ -56,11 +56,10 @@ inline DataSpace Attribute::getMemSpace() const { return getSpace(); }
 
 template <typename T>
 inline void Attribute::read(T& array) const {
-    typedef typename std::remove_const<T>::type type_no_const;
-
-    type_no_const& nocv_array = const_cast<type_no_const&>(array);
-
-    const size_t dim_array = details::array_dims<type_no_const>::value;
+    static_assert(!std::is_const<typename std::remove_reference<T>::type>::value,
+                  "read() requires a non-const array to read into");
+    using element_type = typename details::inspector<T>::base_type;
+    const size_t dim_array = details::inspector<T>::recursive_number_dimensions;
     DataSpace space = getSpace();
     DataSpace mem_space = getMemSpace();
 
@@ -72,30 +71,38 @@ inline void Attribute::read(T& array) const {
         throw DataSpaceException(ss.str());
     }
 
-    // Create mem datatype
-    const AtomicType<typename details::type_of_array<type_no_const>::type>
-        array_datatype;
+    const DataType mem_datatype = create_and_check_datatype<element_type>();
 
-    // Apply pre read convertions
-    details::data_converter<type_no_const> converter(nocv_array, mem_space);
+    // Apply pre read conversions
+    details::data_converter<T> converter(mem_space);
 
-    if (H5Aread(getId(), array_datatype.getId(),
-                static_cast<void*>(converter.transform_read(nocv_array))) < 0) {
+    if (H5Aread(getId(), mem_datatype.getId(),
+                static_cast<void*>(converter.transform_read(array))) < 0) {
         HDF5ErrMapper::ToException<AttributeException>(
             "Error during HDF5 Read: ");
     }
 
     // re-arrange results
-    converter.process_result(nocv_array);
+    converter.process_result(array);
+}
+
+template <typename T>
+inline void Attribute::read(T* array, const DataType& dtype) const {
+    static_assert(!std::is_const<T>::value,
+                  "read() requires a non-const structure to read data into");
+    const auto& mem_datatype = dtype.empty() ? create_and_check_datatype<T>() : dtype;
+
+    if (H5Aread(getId(), mem_datatype.getId(),
+                static_cast<void*>(array)) < 0) {
+        HDF5ErrMapper::ToException<AttributeException>(
+            "Error during HDF5 Read: ");
+    }
 }
 
 template <typename T>
 inline void Attribute::write(const T& buffer) {
-    typedef typename std::remove_const<T>::type type_no_const;
-
-    type_no_const& nocv_buffer = const_cast<type_no_const&>(buffer);
-
-    const size_t dim_buffer = details::array_dims<type_no_const>::value;
+    using element_type = typename details::inspector<T>::base_type;
+    const size_t dim_buffer = details::inspector<T>::recursive_number_dimensions;
     DataSpace space = getSpace();
     DataSpace mem_space = getMemSpace();
 
@@ -107,19 +114,26 @@ inline void Attribute::write(const T& buffer) {
         throw DataSpaceException(ss.str());
     }
 
-    const AtomicType<typename details::type_of_array<type_no_const>::type>
-        array_datatype;
+    const DataType mem_datatype = create_and_check_datatype<element_type>();
+    details::data_converter<T> converter(mem_space);
 
-    // Apply pre write convertions
-    details::data_converter<type_no_const> converter(nocv_buffer, mem_space);
-
-    if (H5Awrite(getId(), array_datatype.getId(),
-                 static_cast<const void*>(
-                     converter.transform_write(nocv_buffer))) < 0) {
+    if (H5Awrite(getId(), mem_datatype.getId(),
+                 static_cast<const void*>(converter.transform_write(buffer))) < 0) {
         HDF5ErrMapper::ToException<DataSetException>(
             "Error during HDF5 Write: ");
     }
 }
+
+template <typename T>
+inline void Attribute::write_raw(const T* buffer, const DataType& dtype) {
+    const DataType mem_datatype = dtype.empty() ? create_and_check_datatype<T>() : dtype;
+
+    if (H5Awrite(getId(), mem_datatype.getId(), buffer) < 0) {
+        HDF5ErrMapper::ToException<DataSetException>(
+            "Error during HDF5 Write: ");
+    }
 }
+
+}  // namespace HighFive
 
 #endif // H5ATTRIBUTE_MISC_HPP

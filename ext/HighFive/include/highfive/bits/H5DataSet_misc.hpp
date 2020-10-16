@@ -22,25 +22,22 @@
 #include <H5Dpublic.h>
 #include <H5Ppublic.h>
 
-#include "../H5DataSet.hpp"
-#include "../H5DataSpace.hpp"
-#include "../H5DataType.hpp"
-
-#include "H5Slice_traits_misc.hpp"
 #include "H5Utils.hpp"
 
 namespace HighFive {
 
-inline DataSet::DataSet() {}
+inline std::string DataSet::getPath() const {
+    return details::get_name([&](char *buffer, hsize_t length) {
+        return H5Iget_name(_hid, buffer, length);
+    });
+}
 
 inline uint64_t DataSet::getStorageSize() const {
     return H5Dget_storage_size(_hid);
 }
 
 inline DataType DataSet::getDataType() const {
-    DataType res;
-    res._hid = H5Dget_type(_hid);
-    return res;
+    return DataType(H5Dget_type(_hid));
 }
 
 inline DataSpace DataSet::getSpace() const {

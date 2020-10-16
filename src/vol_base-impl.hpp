@@ -88,6 +88,10 @@ VOLBase(unsigned version_, int value_, std::string name_):
             NULL, // OUR_pass_through_object_specific,          /* specific */
             NULL  // OUR_pass_through_object_optional,          /* optional */
         },
+        {                                           /* introspect_cls */
+            NULL, // OUR_pass_through_introspect_get_conn_cls,  /* get_conn_cls */
+            NULL, // OUR_pass_through_introspect_opt_query,     /* opt_query */
+        },
         {                                           /* request_cls */
             NULL, // OUR_pass_through_request_wait,             /* wait */
             NULL, // OUR_pass_through_request_notify,           /* notify */
@@ -96,7 +100,18 @@ VOLBase(unsigned version_, int value_, std::string name_):
             NULL, // OUR_pass_through_request_optional,         /* optional */
             NULL  // OUR_pass_through_request_free              /* free */
         },
-        NULL                                        /* optional */
+        {                                           /* blob_cls */
+            NULL, // OUR_pass_through_blob_put,                 /* put */
+            NULL, // OUR_pass_through_blob_get,                 /* get */
+            NULL, // OUR_pass_through_blob_specific,            /* specific */
+            NULL, // OUR_pass_through_blob_optional             /* optional */
+        },
+        {                                           /* token_cls */
+            NULL, // OUR_pass_through_token_cmp,                /* cmp */
+            NULL, // OUR_pass_through_token_to_str,             /* to_str */
+            NULL, // OUR_pass_through_token_from_str              /* from_str */
+        },
+        NULL // OUR_pass_through_optional                  /* optional */
     };
     info.vol = static_cast<Derived*>(this);
 }
