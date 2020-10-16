@@ -60,7 +60,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
         {                                           /* file_cls */
             &_file_create,                               /* create */
             &_file_open,                                 /* open */
-            NULL, // OUR_pass_through_file_get,                 /* get */
+            &_file_get,                                  /* get */
             NULL, // OUR_pass_through_file_specific,            /* specific */
             NULL, // OUR_pass_through_file_optional,            /* optional */
             &_file_close                                 /* close */
@@ -541,6 +541,38 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
 } /* end file_open() */
 
 /*-------------------------------------------------------------------------
+ * Function:    file_get
+ *
+ * Purpose:     Get info about a file
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
+    void **req, va_list arguments)
+{
+    pass_through_t *o = (pass_through_t *)file;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL FILE Get\n");
+#endif
+
+    ret_value = H5VLfile_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end file_get() */
+
+/*-------------------------------------------------------------------------
  * Function:    file_close
  *
  * Purpose:     Closes a file.
@@ -654,4 +686,69 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
 
     return ret_value;
 } /* end group_close() */
+
+/*-------------------------------------------------------------------------
+ * Function:    introspect_get_conn_clss
+ *
+ * Purpose:     Query the connector class.
+ *
+ * Return:      SUCCEED / FAIL
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
+{
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL INTROSPECT GetConnCls\n");
+#endif
+
+    /* Check for querying this connector's class */
+    if(H5VL_GET_CONN_LVL_CURR == lvl) {
+//         *conn_cls = &pass_through_g;
+//         TODO: How to get equivalent of &pass_through_g? Following does not work because function is static
+//         *conn_cls = this;
+//         *conn_cls = connector;
+        ret_value = 0;
+    } /* end if */
+    else
+        ret_value = H5VLintrospect_get_conn_cls(o->under_object, o->under_vol_id,
+            lvl, conn_cls);
+
+    return ret_value;
+} /* end introspect_get_conn_cls() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    introspect_opt_query
+ *
+ * Purpose:     Query if an optional operation is supported by this connector
+ *
+ * Return:      SUCCEED / FAIL
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
+{
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL INTROSPECT OptQuery\n");
+#endif
+
+    ret_value = H5VLintrospect_opt_query(o->under_object, o->under_vol_id, cls,
+        opt_type, supported);
+
+    return ret_value;
+} /* end introspect_opt_query() */
+
 

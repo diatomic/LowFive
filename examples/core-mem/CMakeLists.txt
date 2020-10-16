@@ -1,4 +1,4 @@
-set                         (targets    example1)
+set                         (targets    core-mem)
 
 foreach                     (t ${targets})
   add_executable            (${t} ${t}.cpp)
@@ -6,7 +6,7 @@ foreach                     (t ${targets})
   target_compile_definitions(${t} PRIVATE ENABLE_PASSTHRU_LOGGING)
 
   install                   (TARGETS ${t}
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/example1
+                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/core-mem
                             PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                             GROUP_READ GROUP_WRITE GROUP_EXECUTE
                             WORLD_READ WORLD_WRITE WORLD_EXECUTE)

@@ -1,3 +1,5 @@
+// Using native passthru VOL (not our Vol wrapper)
+
 #include <cmath>
 
 #include <diy/master.hpp>
@@ -7,7 +9,7 @@
 #include <diy/assigner.hpp>
 #include <diy/../../examples/opts.h>
 
-#include "point.hpp"
+#include "native-passthru.hpp"
 
 typedef     diy::ContinuousBounds       Bounds;
 typedef     diy::RegularContinuousLink  RCLink;

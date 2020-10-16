@@ -1,3 +1,5 @@
+// using our Vol wrapper to write data to core memory
+
 #include    <cmath>
 
 #include    <diy/master.hpp>
@@ -7,8 +9,8 @@
 #include    <diy/assigner.hpp>
 #include    <diy/../../examples/opts.h>
 
-#include    "example1.hpp"
-#include    "example1_vol.hpp"
+#include    "core-mem.hpp"
+#include    "core-mem_vol.hpp"
 
 typedef     diy::ContinuousBounds       Bounds;
 typedef     diy::RegularContinuousLink  RCLink;
@@ -89,6 +91,9 @@ int main(int argc, char* argv[])
     // decompose the domain into blocks
     diy::RegularDecomposer<Bounds> decomposer(dim, domain, nblocks);
     decomposer.decompose(world.rank(), assigner, create);
+
+    // test writing an HDF5 file in parallel using native HDF5
+//     master.foreach(&Block::write_block_hdf5);
 
     // test writing an HDF5 file in parallel using HighFive API
     master.foreach(&Block::write_block_highfive);

@@ -55,16 +55,16 @@ struct VOLBase
     hid_t                   register_plugin();
 
     static herr_t           _init(hid_t vipl_id);
-    static herr_t           init(hid_t vipl_id)             { return 0; }
+    static herr_t           init(hid_t vipl_id)                                                                                     { return 0; }
     static herr_t           _term();
-    static herr_t           term()                          { return 0; }
+    static herr_t           term()                                                                                                  { return 0; }
 
     // info
     static void*           _info_copy(const void *_info);
-    void*                   info_copy(const void *_info)    { return 0; }
+    void*                   info_copy(const void *_info)                                                                            { return 0; }
     //void info_cmp()                 {}
     static herr_t          _info_free(void *_info);
-    herr_t                  info_free(void *_info)          { return 0; }
+    herr_t                  info_free(void *_info)                                                                                  { return 0; }
     //void info_to_str()              {}
     //void str_to_info()              {}
 
@@ -113,11 +113,13 @@ struct VOLBase
     void*                   file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)  { return 0; }
     static void*           _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
     void*                   file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)                   { return 0; }
+    static herr_t          _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    herr_t                  file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)            { return 0; }
     //void file_get()                 {}
     //void file_specific()            {}
     //void file_optional()            {}
     static herr_t          _file_close(void *file, hid_t dxpl_id, void **req);
-    herr_t                  file_close(void *file, hid_t dxpl_id, void **req)           { return 0; }
+    herr_t                  file_close(void *file, hid_t dxpl_id, void **req)                                                       { return 0; }
 
     //// group
     static void*           _group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
@@ -127,7 +129,7 @@ struct VOLBase
     //void group_specific()           {}
     //void group_optional()           {}
     static herr_t          _group_close(void *grp, hid_t dxpl_id, void **req);
-    herr_t                  group_close(void *grp, hid_t dxpl_id, void **req)           { return 0; }
+    herr_t                  group_close(void *grp, hid_t dxpl_id, void **req)                                                       { return 0; }
 
     //// link
     //void link_create()              {}
@@ -143,6 +145,12 @@ struct VOLBase
     //void obj_get()                  {}
     //void obj_specific()             {}
     //void obj_optional()             {}
+
+    //// Container/connector introspection
+    static herr_t          _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls);
+    herr_t                  introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)              { return 0; }
+    static herr_t          _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
+    herr_t                  introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)                  { return 0; }
 
     //// request
     //void req_wait()                 {}

@@ -1,5 +1,4 @@
-#ifndef DIY_EXAMPLES_POINT_H
-#define DIY_EXAMPLES_POINT_H
+#pragma once
 
 #include    <vector>
 #include    <cassert>
@@ -8,13 +7,12 @@
 #include    <diy/log.hpp>
 
 #include    "hdf5.h"
-#include    "H5FDcore.h"
 
 #include    <highfive/H5DataSet.hpp>
 #include    <highfive/H5DataSpace.hpp>
 #include    <highfive/H5File.hpp>
 
-#include    "example2_vol.hpp"
+#include    "mpi-io_vol.hpp"
 
 using namespace HighFive;
 using namespace std;
@@ -119,55 +117,6 @@ struct PointBlock
             fmt::print("[{}] Points: {}\n", cp.gid(), points.size());
     }
 
-    // write the block in parallel to an HDF5 file using native HDF5 API
-    void write_block_hdf5(const diy::Master::ProxyWithLink& cp) // communication proxy
-    {
-        fmt::print("Writing in native HDF5 API...\n");
-
-        hid_t       file_id, dataset_id, dataspace_id, plist_id;  // identifiers
-        hsize_t     dims[2];
-        herr_t      status;
-
-        // Set up file access property list with in-core file driver
-        plist_id = H5Pcreate(H5P_FILE_ACCESS);
-        H5Pset_fapl_core(plist_id, 1024 /* grow memory by this incremenet */, 0 /* bool backing_store (actual file) */);
-
-        // Create a new file using default properties
-        file_id = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
-
-        // Create the data space for the dataset
-        dims[0] = points.size();
-        dims[1] = DIM;
-        dataspace_id = H5Screate_simple(2, dims, NULL);
-
-        // Create the dataset
-        dataset_id = H5Dcreate2(file_id, "/dset", H5T_IEEE_F32LE, dataspace_id,
-                H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-        // Write the dataset
-        status = H5Dwrite(dataset_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &points[0]);
-
-        // Read back the dataset as a test
-        vector<Point> read_points(points.size());
-        status = H5Dread(dataset_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &read_points[0]);
-        for (size_t i = 0; i < points.size(); ++i)
-        {
-            if (points[i] != read_points[i])
-            {
-                fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
-                exit(0);
-            }
-        }
-
-        // clean up
-        status = H5Dclose(dataset_id);
-        status = H5Sclose(dataspace_id);
-        status = H5Pclose(plist_id);
-        status = H5Fclose(file_id);
-
-        fmt::print("HDF5 success.\n");
-    }
-
     // write the block in parallel to an HDF5 file using HighFive API
     void write_block_highfive(const diy::Master::ProxyWithLink& cp) // communication proxy
     {
@@ -178,7 +127,7 @@ struct PointBlock
         VOLProperty<Vol> vol_prop(vol_plugin);
         printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name("our-vol-plugin"));
 
-        CoreFileDriver file_driver(1024);
+        MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
         file_driver.add(vol_prop);
 
         File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
@@ -258,4 +207,3 @@ struct AddPointBlock
     size_t        num_points;
 };
 
-#endif
