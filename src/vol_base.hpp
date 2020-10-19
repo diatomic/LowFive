@@ -117,7 +117,8 @@ struct VOLBase
     herr_t                  file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)            { return 0; }
     //void file_get()                 {}
     //void file_specific()            {}
-    //void file_optional()            {}
+    static herr_t          _file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    herr_t file_optional()                                                                                                          { return 0; }
     static herr_t          _file_close(void *file, hid_t dxpl_id, void **req);
     herr_t                  file_close(void *file, hid_t dxpl_id, void **req)                                                       { return 0; }
 

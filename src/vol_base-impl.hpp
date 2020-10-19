@@ -62,7 +62,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
             &_file_open,                                 /* open */
             &_file_get,                                  /* get */
             NULL, // OUR_pass_through_file_specific,            /* specific */
-            NULL, // OUR_pass_through_file_optional,            /* optional */
+            &_file_optional,                             /* optional */
             &_file_close                                 /* close */
         },
         {                                           /* group_cls */
@@ -90,7 +90,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
         },
         {                                           /* introspect_cls */
             NULL, // OUR_pass_through_introspect_get_conn_cls,  /* get_conn_cls */
-            NULL, // OUR_pass_through_introspect_opt_query,     /* opt_query */
+            &_introspect_opt_query,                             /* opt_query */
         },
         {                                           /* request_cls */
             NULL, // OUR_pass_through_request_wait,             /* wait */
@@ -571,6 +571,38 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
 
     return ret_value;
 } /* end file_get() */
+
+/*-------------------------------------------------------------------------
+ * Function:    file_optional
+ *
+ * Purpose:     Perform a connector-specific operation on a file
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+template<class Derived>
+herr_t
+VOLBase<Derived>::
+_file_optional(void *file, H5VL_file_optional_t opt_type,
+    hid_t dxpl_id, void **req, va_list arguments)
+{
+    pass_through_t *o = (pass_through_t *)file;
+    herr_t ret_value;
+
+#ifdef ENABLE_PASSTHRU_LOGGING 
+    printf("------- PASS THROUGH VOL File Optional\n");
+#endif
+
+    ret_value = H5VLfile_optional(o->under_object, o->under_vol_id, opt_type, dxpl_id, req, arguments);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end file_optional() */
 
 /*-------------------------------------------------------------------------
  * Function:    file_close
