@@ -1,5 +1,4 @@
-#ifndef DIY_EXAMPLES_POINT_H
-#define DIY_EXAMPLES_POINT_H
+#pragma once
 
 #include    <vector>
 #include    <cassert>
@@ -401,4 +400,3 @@ struct AddPointBlock
     size_t        num_points;
 };
 
-#endif
