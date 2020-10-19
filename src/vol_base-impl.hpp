@@ -742,10 +742,7 @@ _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t 
 
     /* Check for querying this connector's class */
     if(H5VL_GET_CONN_LVL_CURR == lvl) {
-//         *conn_cls = &pass_through_g;
-//         TODO: How to get equivalent of &pass_through_g? Following does not work because function is static
-//         *conn_cls = this;
-//         *conn_cls = connector;
+        *conn_cls = o->vol->connector;
         ret_value = 0;
     } /* end if */
     else
