@@ -1,4 +1,4 @@
-// using our Vol wrapper to write data to a file using MPI-IO
+// using our Vol wrapper
 
 #include    <cmath>
 
@@ -9,8 +9,8 @@
 #include    <diy/assigner.hpp>
 #include    <diy/../../examples/opts.h>
 
-#include    "mpi-io.hpp"
-#include    "mpi-io_vol.hpp"
+#include    "vol-wrapper.hpp"
+#include    "vol-wrapper_vol.hpp"
 
 typedef     diy::ContinuousBounds       Bounds;
 typedef     diy::RegularContinuousLink  RCLink;
@@ -32,6 +32,7 @@ int main(int argc, char* argv[])
     int                       threads     = -1;             // no multithreading
     int                       k           = 2;              // radix for k-ary reduction
     std::string               prefix      = "./DIY.XXXXXX"; // for saving block files out of core
+    bool                      core        = false;          // in-core or MPI-IO file driver
 
     // set some global data bounds (defaults set before option parsing)
     Bounds domain { dim };
@@ -47,6 +48,7 @@ int main(int argc, char* argv[])
         >> Option('b', "blocks",  nblocks,        "number of blocks")
         >> Option('t', "thread",  threads,        "number of threads")
         >> Option('m', "memory",  mem_blocks,     "number of blocks to keep in memory")
+        >> Option('c', "core",    core,           "whether use in-core file driver or MPI-IO")
         >> Option(     "prefix",  prefix,         "prefix for external storage")
         ;
     ops
@@ -93,5 +95,6 @@ int main(int argc, char* argv[])
     decomposer.decompose(world.rank(), assigner, create);
 
     // test writing an HDF5 file in parallel using HighFive API
-    master.foreach(&Block::write_block_highfive);
+    master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+            { b->write_block_highfive(cp, core); });
 }

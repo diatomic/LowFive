@@ -119,7 +119,9 @@ struct PointBlock
     }
 
     // write the block in parallel to an HDF5 file using native HDF5 API
-    void write_block_hdf5(const diy::Master::ProxyWithLink& cp) // communication proxy
+    void write_block_hdf5(
+            const diy::Master::ProxyWithLink& cp,     // communication proxy
+            bool                              core)   // whether to use core or MPI-IO file driver
     {
         fmt::print("Writing in native HDF5 API...\n");
 
@@ -127,9 +129,18 @@ struct PointBlock
         hsize_t     dims[2];
         herr_t      status;
 
-        // Set up file access property list with in-core driver
+        // Set up file access property list with mpi-io file driver
         plist_id = H5Pcreate(H5P_FILE_ACCESS);
-        H5Pset_fapl_mpio(plist_id, cp.master()->communicator(), MPI_INFO_NULL);
+        if (core)
+        {
+            fmt::print("Using in-core file driver\n");
+            H5Pset_fapl_core(plist_id, 1024 /* grow memory by this incremenet */, 0 /* bool backing_store (actual file) */);
+        }
+        else
+        {
+            fmt::print("Using mpi-io file driver\n");
+            H5Pset_fapl_mpio(plist_id, cp.master()->communicator(), MPI_INFO_NULL);
+        }
 
         // Create a new file using default properties
         file_id = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
@@ -144,8 +155,11 @@ struct PointBlock
                 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
         // set the data transfer mode to use collective I/O
-        plist_id = H5Pcreate(H5P_DATASET_XFER);
-        H5Pset_dxpl_mpio (plist_id, H5FD_MPIO_COLLECTIVE);
+        if (!core)
+        {
+            plist_id = H5Pcreate(H5P_DATASET_XFER);
+            H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+        }
 
         // Write the dataset
         status = H5Dwrite(dataset_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &points[0]);
@@ -173,35 +187,61 @@ struct PointBlock
     }
 
     // write the block in parallel to an HDF5 file using HighFive API
-    void write_block_highfive(const diy::Master::ProxyWithLink& cp) // communication proxy
+    void write_block_highfive(
+            const diy::Master::ProxyWithLink& cp,       // communication proxy
+            bool                              core)     // whether to use core or MPI-IO file driver
     {
         fmt::print("Writing in HighFive API...\n");
+
+        // dataset size
+        vector<size_t> dims(2);
+        dims[0] = size_t(cp.master()->communicator().size());   // number of mpi ranks
+        dims[1] = points.size() * DIM;                          // local size
+        vector<Point> read_points(points.size());               // for reading back
 
         // open file for parallel read/write
         VOLProperty vol_prop;
         printf("our_pass_through registered: %d\n", H5VLis_connector_registered_by_name("our_pass_through"));
 
-        MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
-        file_driver.add(vol_prop);
+        // write and read back
+        if (core)
+        {
+            fmt::print("Using in-core file driver\n");
+            CoreFileDriver file_driver(1024);
+            file_driver.add(vol_prop);
+            File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
-        File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
+            // create the dataset
+            DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
 
-        // dataset size
-        vector<size_t> dims(2);
-        dims[0] = size_t(cp.master()->communicator().size());  // number of mpi ranks
-        dims[1] = points.size() * DIM;                              // local size
+            // write
+            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                write((float*)(&points[0]));
 
-        // create the dataset
-        DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
+            // read back
+            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                read((float*)(&read_points[0]));
+        }
+        else
+        {
+            fmt::print("Using mpi-io file driver\n");
+            MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
+            file_driver.add(vol_prop);
+            File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
-        // write
-        dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-            write((float*)(&points[0]));
+            // create the dataset
+            DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
 
-        // read back
-        vector<Point> read_points(points.size());
-        dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-            read((float*)(&read_points[0]));
+            // write
+            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                write((float*)(&points[0]));
+
+            // read back
+            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                read((float*)(&read_points[0]));
+        }
+
+        // debug: check that the written and read points match
         for (size_t i = 0; i < points.size(); ++i)
         {
             if (points[i] != read_points[i])
@@ -209,7 +249,7 @@ struct PointBlock
                 fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
                 exit(0);
             }
-            fmt::print("  {} == {}\n", points[i], read_points[i]);
+//             fmt::print("  {} == {}\n", points[i], read_points[i]);
         }
 
         fmt::print("HighFive success.\n");

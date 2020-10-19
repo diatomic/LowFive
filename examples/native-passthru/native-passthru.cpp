@@ -31,6 +31,7 @@ int main(int argc, char* argv[])
     int                       threads     = -1;             // no multithreading
     int                       k           = 2;              // radix for k-ary reduction
     std::string               prefix      = "./DIY.XXXXXX"; // for saving block files out of core
+    bool                      core        = false;          // in-core or MPI-IO file driver
 
     // set some global data bounds (defaults set before option parsing)
     Bounds domain { dim };
@@ -46,6 +47,7 @@ int main(int argc, char* argv[])
         >> Option('b', "blocks",  nblocks,        "number of blocks")
         >> Option('t', "thread",  threads,        "number of threads")
         >> Option('m', "memory",  mem_blocks,     "number of blocks to keep in memory")
+        >> Option('c', "core",    core,           "whether use in-core file driver or MPI-IO")
         >> Option(     "prefix",  prefix,         "prefix for external storage")
         ;
     ops
@@ -97,10 +99,12 @@ int main(int argc, char* argv[])
 //             { b->print_block(cp, verbose); });
 
     // test writing an HDF5 file in parallel using HDF5 API
-//     master.foreach(&Block::write_block_hdf5);
+//     master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+//             { b->write_block_hdf5(cp, core); });
 
     // test writing an HDF5 file in parallel using HighFive API
-    master.foreach(&Block::write_block_highfive);
+    master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+            { b->write_block_highfive(cp, core); });
 
     // test VOL printf plugin using HDF5 API
 //     master.foreach(&Block::test_plugin_hdf5);
