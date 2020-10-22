@@ -388,6 +388,9 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
     printf("------- PASS THROUGH VOL DATASET Get\n");
 #endif
 
+    ret_value = o->vol->dataset_get(dset, get_type, dxpl_id, req, arguments);
+    // TODO: need a mechanism to skip the following code, depending on the result
+
     ret_value = H5VLdataset_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
 
     /* Check for async request */
