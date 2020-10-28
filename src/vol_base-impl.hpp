@@ -357,6 +357,9 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
     printf("------- PASS THROUGH VOL DATASET Write\n");
 #endif
 
+    ret_value = o->vol->dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    // TODO: need a mechanism to skip the following code, depending on the result
+
     ret_value = H5VLdataset_write(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     /* Check for async request */

@@ -181,7 +181,7 @@ struct PointBlock
                 fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
                 exit(0);
             }
-            fmt::print("  {} == {}\n", points[i], read_points[i]);
+            //fmt::print("  {} == {}\n", points[i], read_points[i]);
         }
 
         fmt::print("HighFive success.\n");
