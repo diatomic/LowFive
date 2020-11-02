@@ -210,6 +210,8 @@ _info_copy(const void *_info)
     // XXX: this is currently pointless; think of a situation, where this could be useful
     info->vol->info_copy(_info);
 
+    new_info->vol = info->vol;
+
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_info->under_vol_id = info->under_vol_id;
     H5Iinc_ref(new_info->under_vol_id);
