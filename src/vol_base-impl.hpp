@@ -523,6 +523,10 @@ void*
 VOLBase::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    // create our file metadata
+    std::string name_(name);
+    metadata = new FileMetadata(name_);
+
     return H5VLfile_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
 }
 

@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "metadata.hpp"
+
 #include "hdf5.h"
 
 // TODO: namespace LowFive
@@ -46,6 +48,8 @@ struct VOLBase
         void*               under_vol_info  = NULL;             // VOL info for under VOL
         VOLBase*            vol;                                // pointer to this
     } info;
+
+    FileMetadata*           metadata;                           // our file metadata
 
     unsigned                version;
     int                     value;

@@ -39,6 +39,10 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     auto class_string = h5::type_class_string(h5::convert_type_class(H5Tget_class(type_id)));
     fmt::print("data type = {}{}\n", class_string, 8 * H5Tget_size(type_id));
 
+    // add the dataset to our file metadata
+    string name_(name);
+    metadata->add_node((size_t)obj, NULL, new H5Object((ObjectType)type_id, name_));
+
     return VOLBase::dataset_create(obj, loc_params, name,
                     lcpl_id,  type_id,
                     space_id, dcpl_id,
@@ -102,6 +106,18 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
     std::vector<hsize_t> f_start(f_ndim), f_end(f_ndim);
     H5Sget_select_bounds(file_space_id, f_start.data(), f_end.data());
     fmt::print("f_start = [{}], f_end = [{}]\n", fmt::join(f_start, ","), fmt::join(f_end, ","));
+
+    // save our metadata
+    // NB: using the memory, not the file dimensionality (should be the same?)
+    // TODO: need a key for the dataset to locate in our metadata 
+    // dset is not the same as obj, when dataset was created, meaning the following fails to find the dataset
+//     TreeNode<H5Object>* node        = metadata->node((size_t)(dset));
+//     node->node_data->dataspace.dim  = m_ndim;
+//     for (auto i = 0; i < m_ndim; i++)
+//     {
+//         node->node_data->dataspace.min[i] = m_start[i];
+//         node->node_data->dataspace.max[i] = m_end[i];
+//     }
 
     return VOLBase::dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
