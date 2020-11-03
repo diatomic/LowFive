@@ -7,19 +7,23 @@
 // custom VOL object
 // only need to specialize those functions that are custom
 
-struct Vol: public VOLBase<Vol>
+struct Vol: public VOLBase
 {
-    using VOLBase<Vol>::VOLBase;
+    using VOLBase::VOLBase;
 
-    static herr_t   init(hid_t vipl_id)             { fmt::print(stderr, "Hello Vol\n"); return 0; }
-    static herr_t   term()                          { fmt::print(stderr, "Goodbye Vol\n"); return 0; }
-
-    void*           info_copy(const void *_info)    { fmt::print(stderr, "Copy Info\n"); return 0; }
+    void*           info_copy(const void *_info);
     void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
     void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
 };
+
+void*
+Vol::info_copy(const void *_info)
+{
+    fmt::print(stderr, "Copy Info\n");
+    return VOLBase::info_copy(_info);
+}
 
 void*
 Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
@@ -35,14 +39,17 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     auto class_string = h5::type_class_string(h5::convert_type_class(H5Tget_class(type_id)));
     fmt::print("data type = {}{}\n", class_string, 8 * H5Tget_size(type_id));
 
-    return 0;
+    return VOLBase::dataset_create(obj, loc_params, name,
+                    lcpl_id,  type_id,
+                    space_id, dcpl_id,
+                    dapl_id,  dxpl_id, req);
 }
 
 herr_t
 Vol::dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset), get_type, fmt::ptr(req));
-    return 0;
+    return VOLBase::dataset_get(dset, get_type, dxpl_id, req, arguments);
 }
 
 herr_t
@@ -64,7 +71,7 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
     H5Sget_select_bounds(file_space_id, f_start.data(), f_end.data());
     fmt::print("f_start = [{}], f_end = [{}]\n", fmt::join(f_start, ","), fmt::join(f_end, ","));
 
-    return 0;
+    return VOLBase::dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 void*
@@ -72,7 +79,7 @@ Vol::group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
 {
     fmt::print(stderr, "Group Create\n");
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
-    return 0;
+    return VOLBase::group_create(obj, loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
 }
 
 #endif

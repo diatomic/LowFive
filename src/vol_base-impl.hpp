@@ -1,8 +1,6 @@
-template<class Derived>
-hid_t VOLBase<Derived>::connector_id = -1;
+hid_t VOLBase::connector_id = -1;
 
-template<class Derived>
-VOLBase<Derived>::
+VOLBase::
 VOLBase(unsigned version_, int value_, std::string name_):
     version(version_), value(value_), name(name_)
 {
@@ -113,12 +111,11 @@ VOLBase(unsigned version_, int value_, std::string name_):
         },
         NULL // OUR_pass_through_optional                  /* optional */
     };
-    info.vol = static_cast<Derived*>(this);
+    info.vol = this;
 }
 
-template<class Derived>
 hid_t
-VOLBase<Derived>::
+VOLBase::
 register_plugin()
 {
     // Singleton register the pass-through VOL connector ID
@@ -140,16 +137,15 @@ register_plugin()
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _init(hid_t vipl_id)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL INIT\n");
 #endif
 
-    return Derived::init(vipl_id);
+    return 0;
 }
 
 /*---------------------------------------------------------------------------
@@ -165,16 +161,15 @@ _init(hid_t vipl_id)
  *
  *---------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _term(void)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL TERM\n");
 #endif
 
-    herr_t result = Derived::term();
+    herr_t result = 0;
 
     // Reset VOL ID
     connector_id = H5I_INVALID_HID;     // NB: this is the only reason connector_id is static
@@ -192,10 +187,17 @@ _term(void)
  *
  *---------------------------------------------------------------------------
  */
-template<class Derived>
 void *
-VOLBase<Derived>::
+VOLBase::
 _info_copy(const void *_info)
+{
+    const info_t *info = (const info_t *)_info;
+    return info->vol->info_copy(_info);
+}
+
+void *
+VOLBase::
+info_copy(const void *_info)
 {
     const info_t *info = (const info_t *)_info;
     info_t *new_info;
@@ -206,10 +208,6 @@ _info_copy(const void *_info)
 
     /* Allocate new VOL info struct for the pass through connector */
     new_info = (info_t *)calloc(1, sizeof(info_t));
-
-    // XXX: this is currently pointless; think of a situation, where this could be useful
-    info->vol->info_copy(_info);
-
     new_info->vol = info->vol;
 
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
@@ -234,10 +232,17 @@ _info_copy(const void *_info)
  *
  *---------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _info_free(void *_info)
+{
+    info_t *info = (info_t *)_info;
+    return info->vol->info_free(_info);
+}
+
+herr_t
+VOLBase::
+info_free(void *_info)
 {
     info_t *info = (info_t *)_info;
     hid_t err_id;
@@ -271,9 +276,8 @@ _info_free(void *_info)
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 void*
-VOLBase<Derived>::
+VOLBase::
 _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -286,10 +290,8 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL DATASET Create\n");
 #endif
 
-    void* result = o->vol->dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
-    // TODO: need a mechanism to skip the following code, depending on the result
+    under = o->vol->dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
 
-    under = H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
     if(under) {
         dset = o->create(under);
 
@@ -303,8 +305,18 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     return (void *)dset;
 } /* end dataset_create() */
 
+void*
+VOLBase::
+dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
+    hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)obj;
+    return H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
- * Function:    OUR_pass_through_dataset_read
+ * Function:    dataset_read
  *
  * Purpose:     Reads data elements from a dataset into a buffer.
  *
@@ -313,9 +325,8 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -326,9 +337,6 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 #endif
 
     ret_value = o->vol->dataset_read(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
-    // TODO: need a mechanism to skip the following code, depending on the result
-
-    ret_value = H5VLdataset_read(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     /* Check for async request */
     if(req && *req)
@@ -337,8 +345,16 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     return ret_value;
 } /* end dataset_read() */
 
+herr_t
+VOLBase::
+dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    return H5VLdataset_read(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+}
+
 /*-------------------------------------------------------------------------
- * Function:    OUR_pass_through_dataset_write
+ * Function:    dataset_write
  *
  * Purpose:     Writes data elements from a buffer into a dataset.
  *
@@ -347,9 +363,8 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -360,9 +375,6 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
 #endif
 
     ret_value = o->vol->dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
-    // TODO: need a mechanism to skip the following code, depending on the result
-
-    ret_value = H5VLdataset_write(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     /* Check for async request */
     if(req && *req)
@@ -370,6 +382,14 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
 
     return ret_value;
 } /* end dataset_write() */
+
+herr_t
+VOLBase::
+dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    return H5VLdataset_write(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+}
 
 /*-------------------------------------------------------------------------
  * Function:    dataset_get
@@ -381,9 +401,8 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -394,9 +413,6 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
 #endif
 
     ret_value = o->vol->dataset_get(dset, get_type, dxpl_id, req, arguments);
-    // TODO: need a mechanism to skip the following code, depending on the result
-
-    ret_value = H5VLdataset_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -404,6 +420,14 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
 
     return ret_value;
 } /* end pass_through_dataset_get() */
+
+herr_t
+VOLBase::
+dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    return H5VLdataset_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+}
 
 /*-------------------------------------------------------------------------
  * Function:    dataset_close
@@ -415,9 +439,8 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -427,7 +450,7 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
     printf("------- PASS THROUGH VOL DATASET Close\n");
 #endif
 
-    ret_value = H5VLdataset_close(o->under_object, o->under_vol_id, dxpl_id, req);
+    ret_value = o->vol->dataset_close(dset, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -440,6 +463,14 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
     return ret_value;
 } /* end dataset_close() */
 
+herr_t
+VOLBase::
+dataset_close(void *dset, hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)dset;
+    return H5VLdataset_close(o->under_object, o->under_vol_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
  * Function:    file_create
  *
@@ -450,9 +481,8 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 void*
-VOLBase<Derived>::
+VOLBase::
 _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     info_t *info;
@@ -474,7 +504,7 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
 
     /* Open the file with the underlying VOL connector */
-    under = H5VLfile_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
+    under = info->vol->file_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
     if(under) {
         file = new pass_through_t(under, info->under_vol_id, info->vol);
 
@@ -494,6 +524,13 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     return (void *)file;
 } /* end file_create() */
 
+void*
+VOLBase::
+file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
+{
+    return H5VLfile_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
  * Function:    file_open
  *
@@ -504,9 +541,8 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 void*
-VOLBase<Derived>::
+VOLBase::
 _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     info_t *info;
@@ -528,7 +564,7 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
 
     /* Open the file with the underlying VOL connector */
-    under = H5VLfile_open(name, flags, under_fapl_id, dxpl_id, req);
+    under = info->vol->file_open(name, flags, under_fapl_id, dxpl_id, req);
     if(under) {
         file = new pass_through_t(under, info->under_vol_id, info->vol);
 
@@ -548,6 +584,13 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     return (void *)file;
 } /* end file_open() */
 
+void*
+VOLBase::
+file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
+{
+    return H5VLfile_open(name, flags, fapl_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
  * Function:    file_get
  *
@@ -558,9 +601,8 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
@@ -571,7 +613,7 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     printf("------- PASS THROUGH VOL FILE Get\n");
 #endif
 
-    ret_value = H5VLfile_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->file_get(file, get_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -579,6 +621,15 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
 
     return ret_value;
 } /* end file_get() */
+
+herr_t
+VOLBase::
+file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
+    void **req, va_list arguments)
+{
+    pass_through_t *o = (pass_through_t *)file;
+    return H5VLfile_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+}
 
 /*-------------------------------------------------------------------------
  * Function:    file_optional
@@ -590,9 +641,8 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
@@ -603,7 +653,7 @@ _file_optional(void *file, H5VL_file_optional_t opt_type,
     printf("------- PASS THROUGH VOL File Optional\n");
 #endif
 
-    ret_value = H5VLfile_optional(o->under_object, o->under_vol_id, opt_type, dxpl_id, req, arguments);
+    ret_value = o->vol->file_optional(file, opt_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -611,6 +661,15 @@ _file_optional(void *file, H5VL_file_optional_t opt_type,
 
     return ret_value;
 } /* end file_optional() */
+
+herr_t
+VOLBase::
+file_optional(void *file, H5VL_file_optional_t opt_type,
+    hid_t dxpl_id, void **req, va_list arguments)
+{
+    pass_through_t *o = (pass_through_t *)file;
+    return H5VLfile_optional(o->under_object, o->under_vol_id, opt_type, dxpl_id, req, arguments);
+}
 
 /*-------------------------------------------------------------------------
  * Function:    file_close
@@ -622,9 +681,8 @@ _file_optional(void *file, H5VL_file_optional_t opt_type,
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _file_close(void *file, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)file;
@@ -634,7 +692,7 @@ _file_close(void *file, hid_t dxpl_id, void **req)
     printf("------- PASS THROUGH VOL FILE Close\n");
 #endif
 
-    ret_value = H5VLfile_close(o->under_object, o->under_vol_id, dxpl_id, req);
+    ret_value = o->vol->file_close(file, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -647,6 +705,14 @@ _file_close(void *file, hid_t dxpl_id, void **req)
     return ret_value;
 } /* end file_close() */
 
+herr_t
+VOLBase::
+file_close(void *file, hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)file;
+    return H5VLfile_close(o->under_object, o->under_vol_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
  * Function:    group_create
  *
@@ -657,9 +723,8 @@ _file_close(void *file, hid_t dxpl_id, void **req)
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 void*
-VOLBase<Derived>::
+VOLBase::
 _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
@@ -672,10 +737,7 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL GROUP Create\n");
 #endif
 
-    void* result = o->vol->group_create(obj, loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
-    // TODO: do something with the result
-
-    under = H5VLgroup_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
+    under = o->vol->group_create(obj, loc_params, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
     if(under) {
         group = o->create(under);
 
@@ -689,6 +751,16 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     return (void *)group;
 } /* end group_create() */
 
+void*
+VOLBase::
+group_create(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
+    hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)obj;
+    return H5VLgroup_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
  * Function:    group_close
  *
@@ -699,9 +771,8 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _group_close(void *grp, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)grp;
@@ -712,9 +783,6 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
 #endif
 
     ret_value = o->vol->group_close(grp, dxpl_id, req);
-    // TODO: do something with ret_value
-
-    ret_value = H5VLgroup_close(o->under_object, o->under_vol_id, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -727,6 +795,14 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
     return ret_value;
 } /* end group_close() */
 
+herr_t
+VOLBase::
+group_close(void *grp, hid_t dxpl_id, void **req)
+{
+    pass_through_t *o = (pass_through_t *)grp;
+    return H5VLgroup_close(o->under_object, o->under_vol_id, dxpl_id, req);
+}
+
 /*-------------------------------------------------------------------------
  * Function:    introspect_get_conn_clss
  *
@@ -736,9 +812,8 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
 {
     pass_through_t *o = (pass_through_t *)obj;
@@ -750,17 +825,24 @@ _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t 
 
     /* Check for querying this connector's class */
     if(H5VL_GET_CONN_LVL_CURR == lvl) {
-        *conn_cls = o->vol->connector;
+        *conn_cls = &(o->vol->connector);
         ret_value = 0;
     } /* end if */
     else
-        ret_value = H5VLintrospect_get_conn_cls(o->under_object, o->under_vol_id,
-            lvl, conn_cls);
+        ret_value = o->vol->introspect_get_conn_cls(obj, lvl, conn_cls);
 
     return ret_value;
 } /* end introspect_get_conn_cls() */
 
-
+herr_t
+VOLBase::
+introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
+{
+    pass_through_t *o = (pass_through_t *)obj;
+    return H5VLintrospect_get_conn_cls(o->under_object, o->under_vol_id, lvl, conn_cls);
+}
+
+
 /*-------------------------------------------------------------------------
  * Function:    introspect_opt_query
  *
@@ -770,9 +852,8 @@ _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t 
  *
  *-------------------------------------------------------------------------
  */
-template<class Derived>
 herr_t
-VOLBase<Derived>::
+VOLBase::
 _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
 {
     pass_through_t *o = (pass_through_t *)obj;
@@ -782,10 +863,15 @@ _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *sup
     printf("------- PASS THROUGH VOL INTROSPECT OptQuery\n");
 #endif
 
-    ret_value = H5VLintrospect_opt_query(o->under_object, o->under_vol_id, cls,
-        opt_type, supported);
+    ret_value = o->vol->introspect_opt_query(obj, cls, opt_type, supported);
 
     return ret_value;
 } /* end introspect_opt_query() */
 
-
+herr_t
+VOLBase::
+introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
+{
+    pass_through_t *o = (pass_through_t *)obj;
+    return H5VLintrospect_opt_query(o->under_object, o->under_vol_id, cls, opt_type, supported);
+}
