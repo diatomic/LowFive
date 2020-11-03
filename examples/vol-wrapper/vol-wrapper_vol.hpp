@@ -48,16 +48,48 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 herr_t
 Vol::dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    va_list args;
+    va_copy(args,arguments);
+
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset), get_type, fmt::ptr(req));
-    return VOLBase::dataset_get(dset, get_type, dxpl_id, req, arguments);
+    herr_t result = VOLBase::dataset_get(dset, get_type, dxpl_id, req, arguments);
+    fmt::print("result = {}\n", result);
+
+    if (get_type == H5VL_DATASET_GET_SPACE)
+    {
+        fmt::print("GET_SPACE\n");
+        hid_t *ret = va_arg(args, hid_t*);
+        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+
+        hid_t space_id = *ret;
+        int ndim = H5Sget_simple_extent_ndims(space_id);
+        fmt::print("ndim = {}\n", ndim);
+
+        // NB: this works only for simple spaces
+        std::vector<hsize_t> start(ndim), end(ndim);
+        H5Sget_select_bounds(space_id, start.data(), end.data());
+        fmt::print("start = [{}], end = [{}]\n", fmt::join(start, ","), fmt::join(end, ","));
+    } else if (get_type == H5VL_DATASET_GET_TYPE)
+    {
+        fmt::print("GET_TYPE\n");
+        hid_t *ret = va_arg(args, hid_t*);
+        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+
+        hid_t type_id = *ret;
+        namespace h5 = HighFive;
+        auto class_string = h5::type_class_string(h5::convert_type_class(H5Tget_class(type_id)));
+        fmt::print("data type = {}{}\n", class_string, 8 * H5Tget_size(type_id));
+    }
+
+    return result;
 }
 
 herr_t
 Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
-    fmt::print("write: dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset), mem_space_id, file_space_id);
+    fmt::print("write: dset = {}, mem_space_id = {}, file_space_id = {}, req = {}\n", fmt::ptr(dset), mem_space_id, file_space_id, fmt::ptr(req));
 
-    int m_ndim  = H5Sget_simple_extent_ndims(mem_space_id);
+    int m_ndim = H5Sget_simple_extent_ndims(mem_space_id);
     int f_ndim = H5Sget_simple_extent_ndims(file_space_id);
 
     fmt::print("m_ndim = {}, f_ndim = {}\n", m_ndim, f_ndim);

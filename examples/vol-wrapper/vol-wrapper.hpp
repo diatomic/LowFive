@@ -165,16 +165,16 @@ struct PointBlock
             DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
 
             // write
-            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+            dataset.select({size_t(cp.master()->communicator().rank()), dims[1]/2}, {1, dims[1] - dims[1]/2}).
                 write((float*)(&points[0]));
 
             // read back
-            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+            dataset.select({size_t(cp.master()->communicator().rank()), dims[1]/2}, {1, dims[1] - dims[1]/2}).
                 read((float*)(&read_points[0]));
         }
 
         // debug: check that the written and read points match
-        for (size_t i = 0; i < points.size(); ++i)
+        for (size_t i = 0; i < points.size() / 2; ++i)
         {
             if (points[i] != read_points[i])
             {
