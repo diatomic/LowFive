@@ -72,19 +72,18 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 herr_t
 Vol::dataset_get(void *dset_, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    ObjectPointers* obj_ptrs = (ObjectPointers*)(((pass_through_t*)dset_)->under_object);
+    void* dset = ((pass_through_t*)dset_)->under_object;
+    ObjectPointers* obj_ptrs = (ObjectPointers*)dset;
 
     // debug
     fmt::print(stderr, "dataset_get: dset_ = {}\n", fmt::ptr(dset_));
     fmt::print(stderr, "dataset_get: obj_ptrs = {}\n", fmt::ptr(obj_ptrs));
 
-    void* dset = obj_ptrs->h5_obj;
-
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset), get_type, fmt::ptr(req));
-    herr_t result = VOLBase::dataset_get(dset, get_type, dxpl_id, req, arguments);
+    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(obj_ptrs->h5_obj), get_type, fmt::ptr(req));
+    herr_t result = VOLBase::dataset_get(obj_ptrs->h5_obj, get_type, dxpl_id, req, arguments);
     fmt::print("result = {}\n", result);
 
     if (get_type == H5VL_DATASET_GET_SPACE)
