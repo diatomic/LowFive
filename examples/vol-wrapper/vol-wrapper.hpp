@@ -128,7 +128,10 @@ struct PointBlock
         vector<size_t> dims(2);
         dims[0] = size_t(cp.master()->communicator().size());   // number of mpi ranks
         dims[1] = points.size() * DIM;                          // local size
-        vector<Point> read_points(points.size());               // for reading back
+
+        // debug: read-back data
+        vector<Point> read_points(points.size());
+        Bounds read_bounds(DIM);
 
         // open file for parallel read/write
         Vol vol_plugin { /* version = */ 0, /* value = */ 510, /* name = */ "our-vol-plugin" };
@@ -136,42 +139,76 @@ struct PointBlock
         printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name("our-vol-plugin"));
 
         // write and read back
-        if (core)
+        if (core)               // in-core memory driver
         {
             fmt::print("Using in-core file driver\n");
             CoreFileDriver file_driver(1024);
             file_driver.add(vol_prop);
             File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
-            // create the dataset
-            DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
+            // create the dataset for the points
+            DataSet dataset = file.createDataSet<float>("points", DataSpace(dims));
 
-            // write
+            // write points
             dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
                 write((float*)(&points[0]));
 
-            // read back
+            // debug: read back points
             dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
                 read((float*)(&read_points[0]));
-        }
-        else
+
+            // create the dataset for the bounds
+            dims[1] = DIM;
+            DataSet dataset1 = file.createDataSet<float>("bounds_min", DataSpace(dims));
+            DataSet dataset2 = file.createDataSet<float>("bounds_max", DataSpace(dims));
+
+            // write bounds
+            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                write((float*)(&bounds.min[0]));
+            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                write((float*)(&bounds.max[0]));
+
+            // debug: read back bounds
+            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                read((float*)(&read_bounds.min[0]));
+            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                read((float*)(&read_bounds.max[0]));
+        }                       // in-core memory
+        else                    // file driver
         {
             fmt::print("Using mpi-io file driver\n");
             MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
             file_driver.add(vol_prop);
             File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
-            // create the dataset
-            DataSet dataset = file.createDataSet<float>("/dset", DataSpace(dims));
+            // create the dataset for the points
+            DataSet dataset = file.createDataSet<float>("points", DataSpace(dims));
 
-            // write
-            dataset.select({size_t(cp.master()->communicator().rank()), dims[1]/2}, {1, dims[1] - dims[1]/2}).
+            // write points
+            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
                 write((float*)(&points[0]));
 
-            // read back
-            dataset.select({size_t(cp.master()->communicator().rank()), dims[1]/2}, {1, dims[1] - dims[1]/2}).
+            // debug: read back points
+            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
                 read((float*)(&read_points[0]));
-        }
+
+            // create the dataset for the bounds
+            dims[1] = DIM;
+            DataSet dataset1 = file.createDataSet<float>("bounds_min", DataSpace(dims));
+            DataSet dataset2 = file.createDataSet<float>("bounds_max", DataSpace(dims));
+
+            // write bounds
+            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                write((float*)(&bounds.min[0]));
+            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                write((float*)(&bounds.max[0]));
+
+            // debug: read back bounds
+            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                read((float*)(&read_bounds.min[0]));
+            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
+                read((float*)(&read_bounds.max[0]));
+        }                       // file driver
 
         // debug: check that the written and read points match
         for (size_t i = 0; i < points.size() / 2; ++i)
@@ -182,6 +219,21 @@ struct PointBlock
                 exit(0);
             }
             //fmt::print("  {} == {}\n", points[i], read_points[i]);
+        }
+
+        // debug: check that written and read bounds match
+        for (auto i = 0; i < DIM; i++)
+        {
+            if (bounds.min[i] != read_bounds.min[i])
+            {
+                fmt::print("Error: bounds.min[{}] = {} but does not match read_bounds.min[{}] = {}\n", i, bounds.min[i], i, read_bounds.min[i]);
+                exit(0);
+            }
+            if (bounds.max[i] != read_bounds.max[i])
+            {
+                fmt::print("Error: bounds.max[{}] = {} but does not match read_bounds.max[{}] = {}\n", i, bounds.max[i], i, read_bounds.max[i]);
+                exit(0);
+            }
         }
 
         fmt::print("HighFive success.\n");
