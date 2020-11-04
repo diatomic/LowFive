@@ -13,7 +13,7 @@ struct Vol: public VOLBase
 
     void*           info_copy(const void *_info);
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
-    ObjectPointers  dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
+    void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
     void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
@@ -36,7 +36,7 @@ Vol::file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     return VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
 }
 
-ObjectPointers
+void*
 Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
                     const char *name,
                     hid_t lcpl_id,  hid_t type_id,
@@ -50,27 +50,36 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     auto class_string = h5::type_class_string(h5::convert_type_class(H5Tget_class(type_id)));
     fmt::print("data type = {}{}\n", class_string, 8 * H5Tget_size(type_id));
 
-    ObjectPointers obj_ptrs;
+    ObjectPointers* obj_ptrs = new ObjectPointers;
 
-    obj_ptrs = VOLBase::dataset_create(obj, loc_params, name,
+    obj_ptrs->h5_obj = VOLBase::dataset_create(obj, loc_params, name,
             lcpl_id,  type_id,
             space_id, dcpl_id,
             dapl_id,  dxpl_id, req);
 
     // add the dataset to our file metadata
-    // NB: call after VOLBase::dataset_create, not before, otherwise mdata_obj would be overwritten
     string name_(name);
-    obj_ptrs.mdata_obj = metadata->add_node(NULL, new Object((ObjectType)type_id, name_));
+    obj_ptrs->mdata_obj = metadata->add_node(NULL, new Object((ObjectType)type_id, name_));
 
     // debug
-    fmt::print(stderr, "dataset_create: adding node at {}\n", fmt::ptr(obj_ptrs.mdata_obj));
+    fmt::print(stderr, "dataset_create: obj_ptrs = {}\n", fmt::ptr(obj_ptrs));
+    fmt::print(stderr, "dataset_create: mdata_obj = {}\n", fmt::ptr(obj_ptrs->mdata_obj));
+    fmt::print(stderr, "dataset_create: h5_obj = {}\n", fmt::ptr(obj_ptrs->h5_obj));
 
-    return obj_ptrs;
+    return (void*)obj_ptrs;
 }
 
 herr_t
-Vol::dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+Vol::dataset_get(void *dset_, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    ObjectPointers* obj_ptrs = (ObjectPointers*)(((pass_through_t*)dset_)->under_object);
+
+    // debug
+    fmt::print(stderr, "dataset_get: dset_ = {}\n", fmt::ptr(dset_));
+    fmt::print(stderr, "dataset_get: obj_ptrs = {}\n", fmt::ptr(obj_ptrs));
+
+    void* dset = obj_ptrs->h5_obj;
+
     va_list args;
     va_copy(args,arguments);
 
@@ -111,6 +120,8 @@ herr_t
 Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
     void* dset_ = ((pass_through_t*)dset)->under_object;
+    ObjectPointers* obj_ptrs = (ObjectPointers*)dset_;
+
     fmt::print("write: dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset), mem_space_id, file_space_id);
 
     int m_ndim = H5Sget_simple_extent_ndims(mem_space_id);
@@ -128,10 +139,10 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
     fmt::print("f_start = [{}], f_end = [{}]\n", fmt::join(f_start, ","), fmt::join(f_end, ","));
 
     // debug
-    fmt::print(stderr, "dataset_write: dset_ = {}\n", fmt::ptr(dset_));
+    fmt::print(stderr, "dataset_write: mdata_obj = {}\n", fmt::ptr(obj_ptrs->mdata_obj));
 
     // save our metadata
-    TreeNode<Object>* node = static_cast<TreeNode<Object>*>(dset_);
+    TreeNode<Object>* node = static_cast<TreeNode<Object>*>(obj_ptrs->mdata_obj);
     Dataspace m_dataspace, f_dataspace;
     m_dataspace.dim     = m_ndim;
     m_dataspace.min.resize(m_ndim);
