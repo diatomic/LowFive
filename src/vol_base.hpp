@@ -9,13 +9,6 @@
 
 // TODO: namespace LowFive
 
-// TODO: move inside VOLBase?
-struct ObjectPointers
-{
-    void*           h5_obj;             // HDF5 object (e.g., dset)
-    void*           mdata_obj;          // metadata object (tree node)
-};
-
 // base class for VOL object
 struct VOLBase
 {

@@ -7,6 +7,13 @@
 // custom VOL object
 // only need to specialize those functions that are custom
 
+// TODO: move inside Vol?
+struct ObjectPointers
+{
+    void*           h5_obj;             // HDF5 object (e.g., dset)
+    void*           mdata_obj;          // metadata object (tree node)
+};
+
 struct Vol: public VOLBase
 {
     using VOLBase::VOLBase;
