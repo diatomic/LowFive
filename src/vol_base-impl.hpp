@@ -290,7 +290,7 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL DATASET Create\n");
 #endif
 
-    under = o->vol->dataset_create(obj, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
+    under = o->vol->dataset_create(o->under_object, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
 
     if(under) {
         dset = o->create(under);
@@ -311,8 +311,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    pass_through_t *o = (pass_through_t *)obj;
-    return H5VLdataset_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
+    return H5VLdataset_create(obj, loc_params, info.under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -336,7 +335,7 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     printf("------- PASS THROUGH VOL DATASET Read\n");
 #endif
 
-    ret_value = o->vol->dataset_read(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    ret_value = o->vol->dataset_read(o->under_object, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     /* Check for async request */
     if(req && *req)
@@ -349,8 +348,7 @@ herr_t
 VOLBase::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
-    pass_through_t *o = (pass_through_t *)dset;
-    return H5VLdataset_read(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    return H5VLdataset_read(dset, info.under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -374,7 +372,7 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
     printf("------- PASS THROUGH VOL DATASET Write\n");
 #endif
 
-    ret_value = o->vol->dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    ret_value = o->vol->dataset_write(o->under_object, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     /* Check for async request */
     if(req && *req)
@@ -387,8 +385,7 @@ herr_t
 VOLBase::
 dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
-    pass_through_t *o = (pass_through_t *)dset;
-    return H5VLdataset_write(o->under_object, o->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    return H5VLdataset_write(dset, info.under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -412,7 +409,7 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
     printf("------- PASS THROUGH VOL DATASET Get\n");
 #endif
 
-    ret_value = o->vol->dataset_get(dset, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->dataset_get(o->under_object, get_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -425,8 +422,7 @@ herr_t
 VOLBase::
 dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    pass_through_t *o = (pass_through_t *)dset;
-    return H5VLdataset_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLdataset_get(dset, info.under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -450,7 +446,7 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
     printf("------- PASS THROUGH VOL DATASET Close\n");
 #endif
 
-    ret_value = o->vol->dataset_close(dset, dxpl_id, req);
+    ret_value = o->vol->dataset_close(o->under_object, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -467,8 +463,7 @@ herr_t
 VOLBase::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
-    pass_through_t *o = (pass_through_t *)dset;
-    return H5VLdataset_close(o->under_object, o->under_vol_id, dxpl_id, req);
+    return H5VLdataset_close(dset, info.under_vol_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -613,7 +608,7 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     printf("------- PASS THROUGH VOL FILE Get\n");
 #endif
 
-    ret_value = o->vol->file_get(file, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->file_get(o->under_object, get_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -627,8 +622,7 @@ VOLBase::
 file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    pass_through_t *o = (pass_through_t *)file;
-    return H5VLfile_get(o->under_object, o->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLfile_get(file, info.under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -653,7 +647,7 @@ _file_optional(void *file, H5VL_file_optional_t opt_type,
     printf("------- PASS THROUGH VOL File Optional\n");
 #endif
 
-    ret_value = o->vol->file_optional(file, opt_type, dxpl_id, req, arguments);
+    ret_value = o->vol->file_optional(o->under_object, opt_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -667,8 +661,7 @@ VOLBase::
 file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    pass_through_t *o = (pass_through_t *)file;
-    return H5VLfile_optional(o->under_object, o->under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLfile_optional(file, info.under_vol_id, opt_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -692,7 +685,7 @@ _file_close(void *file, hid_t dxpl_id, void **req)
     printf("------- PASS THROUGH VOL FILE Close\n");
 #endif
 
-    ret_value = o->vol->file_close(file, dxpl_id, req);
+    ret_value = o->vol->file_close(o->under_object, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -709,8 +702,7 @@ herr_t
 VOLBase::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
-    pass_through_t *o = (pass_through_t *)file;
-    return H5VLfile_close(o->under_object, o->under_vol_id, dxpl_id, req);
+    return H5VLfile_close(file, info.under_vol_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -737,7 +729,7 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL GROUP Create\n");
 #endif
 
-    under = o->vol->group_create(obj, loc_params, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
+    under = o->vol->group_create(o->under_object, loc_params, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
     if(under) {
         group = o->create(under);
 
@@ -757,8 +749,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
 {
-    pass_through_t *o = (pass_through_t *)obj;
-    return H5VLgroup_create(o->under_object, loc_params, o->under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
+    return H5VLgroup_create(obj, loc_params, info.under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -782,7 +773,7 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
     printf("------- PASS THROUGH VOL H5Gclose\n");
 #endif
 
-    ret_value = o->vol->group_close(grp, dxpl_id, req);
+    ret_value = o->vol->group_close(o->under_object, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -799,8 +790,7 @@ herr_t
 VOLBase::
 group_close(void *grp, hid_t dxpl_id, void **req)
 {
-    pass_through_t *o = (pass_through_t *)grp;
-    return H5VLgroup_close(o->under_object, o->under_vol_id, dxpl_id, req);
+    return H5VLgroup_close(grp, info.under_vol_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -829,7 +819,7 @@ _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t 
         ret_value = 0;
     } /* end if */
     else
-        ret_value = o->vol->introspect_get_conn_cls(obj, lvl, conn_cls);
+        ret_value = o->vol->introspect_get_conn_cls(o->under_object, lvl, conn_cls);
 
     return ret_value;
 } /* end introspect_get_conn_cls() */
@@ -838,8 +828,7 @@ herr_t
 VOLBase::
 introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
 {
-    pass_through_t *o = (pass_through_t *)obj;
-    return H5VLintrospect_get_conn_cls(o->under_object, o->under_vol_id, lvl, conn_cls);
+    return H5VLintrospect_get_conn_cls(obj, info.under_vol_id, lvl, conn_cls);
 }
 
 
@@ -863,7 +852,7 @@ _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *sup
     printf("------- PASS THROUGH VOL INTROSPECT OptQuery\n");
 #endif
 
-    ret_value = o->vol->introspect_opt_query(obj, cls, opt_type, supported);
+    ret_value = o->vol->introspect_opt_query(o->under_object, cls, opt_type, supported);
 
     return ret_value;
 } /* end introspect_opt_query() */
@@ -872,6 +861,5 @@ herr_t
 VOLBase::
 introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
 {
-    pass_through_t *o = (pass_through_t *)obj;
-    return H5VLintrospect_opt_query(o->under_object, o->under_vol_id, cls, opt_type, supported);
+    return H5VLintrospect_opt_query(obj, info.under_vol_id, cls, opt_type, supported);
 }

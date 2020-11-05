@@ -20,15 +20,21 @@ struct VOLBase
                 ~UnderObject()                  { hid_t err_id; err_id = H5Eget_current_stack(); H5Idec_ref(under_vol_id); H5Eset_current_stack(err_id); }
     };
 
-    // The pass through VOL info object
-    struct pass_through_t: public UnderObject
+    // The pass through VOL info object;
+    // it increments the reference count for the under_vold_id on creation and decrements on destruction
+    struct pass_through_t
     {
-        using UnderObject::UnderObject;
                             pass_through_t(void* under_object_, hid_t under_vol_id_, VOLBase* vol_):
-                                UnderObject(under_vol_id_), under_object(under_object_), vol(vol_)      {}
+                                under_object(under_object_), vol(vol_)      { H5Iinc_ref(under_vol_id_); }
 
-        pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, this->under_vol_id, vol); return x; }
-        static void         destroy(pass_through_t* x)          { delete x; }       // TODO: do we really need this?
+        pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, this->vol->info.under_vol_id, vol); return x; }
+        static void         destroy(pass_through_t* x)
+        {
+            hid_t err_id = H5Eget_current_stack();
+            H5Idec_ref(x->vol->info.under_vol_id);
+            H5Eset_current_stack(err_id);
+            delete x;
+        }
 
         void*               under_object;                       // Info object for underlying VOL connector
         VOLBase*            vol;                                // pointer to this
