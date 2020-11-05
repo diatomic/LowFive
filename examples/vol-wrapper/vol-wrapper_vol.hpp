@@ -24,6 +24,8 @@ struct Vol: public VOLBase
     void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
+    herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req);
+    herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req);
 };
 
 void*
@@ -68,11 +70,6 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     string name_(name);
     obj_ptrs->mdata_obj = metadata->add_node(NULL, new Object((ObjectType)type_id, name_));
 
-    // debug
-    fmt::print(stderr, "dataset_create: obj_ptrs = {}\n", fmt::ptr(obj_ptrs));
-    fmt::print(stderr, "dataset_create: mdata_obj = {}\n", fmt::ptr(obj_ptrs->mdata_obj));
-    fmt::print(stderr, "dataset_create: h5_obj = {}\n", fmt::ptr(obj_ptrs->h5_obj));
-
     return (void*)obj_ptrs;
 }
 
@@ -82,15 +79,14 @@ Vol::dataset_get(void *dset_, H5VL_dataset_get_t get_type, hid_t dxpl_id, void *
     void* dset = ((pass_through_t*)dset_)->under_object;
     ObjectPointers* obj_ptrs = (ObjectPointers*)dset;
 
-    // debug
-    fmt::print(stderr, "dataset_get: dset_ = {}\n", fmt::ptr(dset_));
-    fmt::print(stderr, "dataset_get: obj_ptrs = {}\n", fmt::ptr(obj_ptrs));
-
     va_list args;
     va_copy(args,arguments);
 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(obj_ptrs->h5_obj), get_type, fmt::ptr(req));
-    herr_t result = VOLBase::dataset_get(obj_ptrs->h5_obj, get_type, dxpl_id, req, arguments);
+
+    // TODO: temporary fix that leaks memory, creating a pass_through_t object from an h5_obj
+    herr_t result = VOLBase::dataset_get(((pass_through_t*)dset_)->create(obj_ptrs->h5_obj), get_type, dxpl_id, req, arguments);
+
     fmt::print("result = {}\n", result);
 
     if (get_type == H5VL_DATASET_GET_SPACE)
@@ -123,12 +119,24 @@ Vol::dataset_get(void *dset_, H5VL_dataset_get_t get_type, hid_t dxpl_id, void *
 }
 
 herr_t
-Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
+Vol::dataset_read(void *dset_, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
-    void* dset_ = ((pass_through_t*)dset)->under_object;
-    ObjectPointers* obj_ptrs = (ObjectPointers*)dset_;
+    void* dset = ((pass_through_t*)dset_)->under_object;
+    ObjectPointers* obj_ptrs = (ObjectPointers*)dset;
 
-    fmt::print("write: dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset), mem_space_id, file_space_id);
+    fmt::print("read: dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(obj_ptrs->h5_obj), mem_space_id, file_space_id);
+
+    // TODO: temporary fix that leaks memory, creating a pass_through_t object from an h5_obj
+    return VOLBase::dataset_read(((pass_through_t*)dset_)->create(obj_ptrs->h5_obj), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+}
+
+herr_t
+Vol::dataset_write(void *dset_, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
+{
+    void* dset = ((pass_through_t*)dset_)->under_object;
+    ObjectPointers* obj_ptrs = (ObjectPointers*)dset;
+
+    fmt::print("write: dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(obj_ptrs->h5_obj), mem_space_id, file_space_id);
 
     int m_ndim = H5Sget_simple_extent_ndims(mem_space_id);
     int f_ndim = H5Sget_simple_extent_ndims(file_space_id);
@@ -143,9 +151,6 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
     std::vector<hsize_t> f_start(f_ndim), f_end(f_ndim);
     H5Sget_select_bounds(file_space_id, f_start.data(), f_end.data());
     fmt::print("f_start = [{}], f_end = [{}]\n", fmt::join(f_start, ","), fmt::join(f_end, ","));
-
-    // debug
-    fmt::print(stderr, "dataset_write: mdata_obj = {}\n", fmt::ptr(obj_ptrs->mdata_obj));
 
     // save our metadata
     TreeNode<Object>* node = static_cast<TreeNode<Object>*>(obj_ptrs->mdata_obj);
@@ -166,11 +171,26 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
         f_dataspace.min[i] = f_start[i];
         f_dataspace.max[i] = f_end[i];
     }
-    // TODO: following still broken (value of dset_ is wrong)
-//     node->node_data->m_dataspaces.push_back(m_dataspace);
-//     node->node_data->f_dataspaces.push_back(f_dataspace);
+    node->node_data->m_dataspaces.push_back(m_dataspace);
+    node->node_data->f_dataspaces.push_back(f_dataspace);
 
-    return VOLBase::dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    // TODO: temporary fix that leaks memory, creating a pass_through_t object from an h5_obj
+    return VOLBase::dataset_write(((pass_through_t*)dset_)->create(obj_ptrs->h5_obj), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+}
+
+herr_t
+Vol::dataset_close(void *dset_, hid_t dxpl_id, void **req)
+{
+    void* dset = ((pass_through_t*)dset_)->under_object;
+    ObjectPointers* obj_ptrs = (ObjectPointers*)dset;
+
+    fmt::print("close: dset = {}, dxpl_id = {}\n", fmt::ptr(obj_ptrs->h5_obj), dxpl_id);
+
+    // TODO: temporary fix that leaks memory, creating a pass_through_t object from an h5_obj
+    herr_t retval = VOLBase::dataset_close(((pass_through_t*)dset_)->create(obj_ptrs->h5_obj), dxpl_id, req);
+
+    delete obj_ptrs;
+    return retval;
 }
 
 void*
