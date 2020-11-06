@@ -3,6 +3,7 @@
 
 #include    <diy/log.hpp>
 #include    "../../src/vol_base.hpp"
+#include    "../../src/metadata.hpp"
 
 // custom VOL object
 // only need to specialize those functions that are custom
@@ -17,6 +18,8 @@ struct ObjectPointers
 struct Vol: public VOLBase
 {
     using VOLBase::VOLBase;
+
+    FileMetadata*   metadata;                           // our file metadata
 
     void*           info_copy(const void *_info);
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
