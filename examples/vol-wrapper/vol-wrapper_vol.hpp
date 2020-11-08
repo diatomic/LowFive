@@ -70,7 +70,7 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     // add the dataset to our file metadata
     string name_(name);
-    obj_ptrs->mdata_obj = metadata->add_node(NULL, new Object((ObjectType)type_id, name_));
+    obj_ptrs->mdata_obj = metadata->add_node(NULL, new Dataset(name_));
 
     return (void*)obj_ptrs;
 }
@@ -149,26 +149,9 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
     fmt::print("f_start = [{}], f_end = [{}]\n", fmt::join(f_start, ","), fmt::join(f_end, ","));
 
     // save our metadata
-    TreeNode<Object>* node = static_cast<TreeNode<Object>*>(obj_ptrs->mdata_obj);
-    Dataspace m_dataspace, f_dataspace;
-    m_dataspace.dim     = m_ndim;
-    m_dataspace.min.resize(m_ndim);
-    m_dataspace.max.resize(m_ndim);
-    f_dataspace.dim     = f_ndim;
-    f_dataspace.min.resize(f_ndim);
-    f_dataspace.max.resize(f_ndim);
-    for (auto i = 0; i < m_ndim; i++)
-    {
-        m_dataspace.min[i] = m_start[i];
-        m_dataspace.max[i] = m_end[i];
-    }
-    for (auto i = 0; i < f_ndim; i++)
-    {
-        f_dataspace.min[i] = f_start[i];
-        f_dataspace.max[i] = f_end[i];
-    }
-    node->node_data->m_dataspaces.push_back(m_dataspace);
-    node->node_data->f_dataspaces.push_back(f_dataspace);
+    TreeNode<Dataset>* node = static_cast<TreeNode<Dataset>*>(obj_ptrs->mdata_obj);
+    node->object->add_dataspace(true, m_ndim, m_start, m_end);
+    node->object->add_dataspace(false, f_ndim, f_start, f_end);
 
     return VOLBase::dataset_write(obj_ptrs->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }

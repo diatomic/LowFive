@@ -237,6 +237,7 @@ struct PointBlock
         }
 
         fmt::print("HighFive success.\n");
+        vol_plugin.metadata->print_tree();
     }
 
     // block data
