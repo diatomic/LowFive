@@ -70,7 +70,7 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     // add the dataset to our file metadata
     string name_(name);
-    obj_ptrs->mdata_obj = metadata->add_node(NULL, new Dataset(name_));
+    obj_ptrs->mdata_obj = metadata->add_node(NULL, new Dataset(name_, type_id));
 
     return (void*)obj_ptrs;
 }
@@ -152,6 +152,7 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
     TreeNode<Dataset>* node = static_cast<TreeNode<Dataset>*>(obj_ptrs->mdata_obj);
     node->object->add_dataspace(true, m_ndim, m_start, m_end);
     node->object->add_dataspace(false, f_ndim, f_start, f_end);
+    node->object->set_data(buf);
 
     return VOLBase::dataset_write(obj_ptrs->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }

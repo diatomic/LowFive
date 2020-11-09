@@ -11,24 +11,6 @@ enum class ObjectType
     NamedDtype
 };
 
-enum AtomicDtype
-{
-    Time,
-    Bitfield,
-    String,
-    Opaque,
-    Integer,
-    Float
-};
-
-enum CompositeDtype
-{
-    Array,
-    Enum,
-    VarLength,
-    Compound
-};
-
 struct Dataspace
 {
     int                             dim;
@@ -53,15 +35,9 @@ struct Dataspace
 
 struct Datatype
 {
-    bool                            atomic;
-    AtomicDtype                     a_type;
-    CompositeDtype                  c_type;
-
-    void print()
-    {
-        fmt::print(stderr, "datatype: ");
-        fmt::print(stderr, "atomic = {} a_type = {} c_type = {}\n", atomic, a_type, c_type);
-    }
+    HighFive::DataTypeClass         dtype_class;
+    size_t                          dtype_size;         // in bits
+    hid_t                           dtype_id;
 };
 
 struct Attribute
@@ -83,7 +59,7 @@ struct Object
 
     virtual void print()
     {
-        fmt::print(stderr, "type = {} name = {}\n", type, name);
+        fmt::print(stderr, "object type = {} name = {}\n", type, name);
         // TODO: print attributes and properties
     }
 };
@@ -123,9 +99,16 @@ struct Dataset : public Object
     vector<Dataspace>               m_dataspaces;       // memory dataspaces
     vector<Dataspace>               f_dataspaces;       // file dataspaces
     Datatype                        datatype;
+    const void*                     data;
 
-    Dataset(string name) :
-        Object(ObjectType::Dataset, name)               {}
+    Dataset(string name, hid_t dtype_id) :
+        Object(ObjectType::Dataset, name),
+        data(NULL)
+    {
+        datatype.dtype_id       = dtype_id;
+        datatype.dtype_class    = HighFive::convert_type_class(H5Tget_class(dtype_id));
+        datatype.dtype_size     = 8 * H5Tget_size(dtype_id);
+    }
 
     void add_dataspace(bool memory,                     // memory or file dataspace
             int             ndim,                       // number of dims
@@ -147,11 +130,14 @@ struct Dataset : public Object
             f_dataspaces.push_back(dataspace);
     }
 
+    void set_data(const void* data_)                    { data = data_; }
+
     void print()
     {
         fmt::print(stderr, "---- Dataset ---\n");
         Object::print();
-        datatype.print();
+        auto class_string = HighFive::type_class_string(datatype.dtype_class);
+        fmt::print(stderr, "datatype = {}{}\n", class_string, datatype.dtype_size);
         for (auto i = 0; i < m_dataspaces.size(); i++)
         {
             fmt::print(stderr, "m_dataspaces[{}]: ", i);
