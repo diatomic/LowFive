@@ -197,26 +197,9 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
 
     fmt::print("dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset_->h5_obj), mem_space_id, file_space_id);
 
-    int m_ndim = H5Sget_simple_extent_ndims(mem_space_id);
-    int f_ndim = H5Sget_simple_extent_ndims(file_space_id);
-
-    fmt::print("m_ndim = {}, f_ndim = {}\n", m_ndim, f_ndim);
-
-    // NB: this works only for simple spaces
-    std::vector<hsize_t> m_start(m_ndim), m_end(m_ndim);
-    H5Sget_select_bounds(mem_space_id, m_start.data(), m_end.data());
-    fmt::print("m_start = [{}], m_end = [{}]\n", fmt::join(m_start, ","), fmt::join(m_end, ","));
-
-    std::vector<hsize_t> f_start(f_ndim), f_end(f_ndim);
-    H5Sget_select_bounds(file_space_id, f_start.data(), f_end.data());
-    fmt::print("f_start = [{}], f_end = [{}]\n", fmt::join(f_start, ","), fmt::join(f_end, ","));
-
     // save our metadata
     Dataset* ds = (Dataset*) dset_->mdata_obj;
-    // FIXME: convert this to triples
-    ds->add_dataspace(true, m_ndim, m_start, m_end);
-    ds->add_dataspace(false, f_ndim, f_start, f_end);
-    ds->set_data(buf);
+    ds->write(Dataspace(mem_space_id), Dataspace(file_space_id), buf);
 
     return VOLBase::dataset_write(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }

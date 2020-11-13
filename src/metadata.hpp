@@ -18,19 +18,28 @@ struct Dataspace
     vector<size_t>                  min;
     vector<size_t>                  max;
 
-    void print()
+            Dataspace(hid_t space_id)
     {
-        fmt::print(stderr, "dim = {} ", dim);
+        dim = H5Sget_simple_extent_ndims(space_id);
+        min.resize(dim);
+        max.resize(dim);
 
-        fmt::print(stderr, "min = [ ");
-        for (auto i = 0; i < min.size(); i++)
-            fmt::print(stderr, "{} ", min[i]);
-        fmt::print(stderr, "] ");
+        // TODO: add a check that the dataspace is simple
 
-        fmt::print(stderr, "max = [ ");
-        for (auto i = 0; i < max.size(); i++)
-            fmt::print(stderr, "{} ", max[i]);
-        fmt::print(stderr, "]\n");
+        std::vector<hsize_t> min_(dim), max_(dim);
+        H5Sget_select_bounds(space_id, min_.data(), max_.data());
+
+        for (size_t i = 0; i < dim; ++i)
+        {
+            min[i] = min_[i];
+            max[i] = max_[i];
+        }
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const Dataspace& ds)
+    {
+        fmt::print(out, "(min = [{}], max = [{}])", fmt::join(ds.min, ","), fmt::join(ds.max, ","));
+        return out;
     }
 };
 
@@ -127,41 +136,29 @@ struct NamedDtype : public Object
 
 struct Dataset : public Object
 {
-    vector<Dataspace>               m_dataspaces;       // memory dataspaces
-    vector<Dataspace>               f_dataspaces;       // file dataspaces
+    struct DataTriple
+    {
+        Dataspace memory;
+        Dataspace file;
+        const void* data;
+    };
+
     Datatype                        datatype;
-    const void*                     data;
+    std::vector<DataTriple>         data;
+
 
     Dataset(string name, hid_t dtype_id) :
-        Object(ObjectType::Dataset, name),
-        data(NULL)
+        Object(ObjectType::Dataset, name)
     {
         datatype.dtype_id       = dtype_id;
         datatype.dtype_class    = HighFive::convert_type_class(H5Tget_class(dtype_id));
         datatype.dtype_size     = 8 * H5Tget_size(dtype_id);
     }
 
-    void add_dataspace(bool memory,                     // memory or file dataspace
-            int             ndim,                       // number of dims
-            vector<hsize_t> start,                      // starting dims
-            vector<hsize_t> end)                        // ending dims
+    void write(Dataspace memory, Dataspace file, const void* buf)
     {
-        Dataspace dataspace;
-        dataspace.dim     = ndim;
-        dataspace.min.resize(ndim);
-        dataspace.max.resize(ndim);
-        for (auto i = 0; i < ndim; i++)
-        {
-            dataspace.min[i] = start[i];
-            dataspace.max[i] = end[i];
-        }
-        if (memory)
-            m_dataspaces.push_back(dataspace);
-        else
-            f_dataspaces.push_back(dataspace);
+        data.emplace_back(DataTriple { memory, file, buf });
     }
-
-    void set_data(const void* data_)                    { data = data_; }
 
     void print() override
     {
@@ -169,16 +166,8 @@ struct Dataset : public Object
         Object::print();
         auto class_string = HighFive::type_class_string(datatype.dtype_class);
         fmt::print(stderr, "datatype = {}{}\n", class_string, datatype.dtype_size);
-        for (auto i = 0; i < m_dataspaces.size(); i++)
-        {
-            fmt::print(stderr, "m_dataspaces[{}]: ", i);
-            m_dataspaces[i].print();
-        }
-        for (auto i = 0; i < f_dataspaces.size(); i++)
-        {
-            fmt::print(stderr, "f_dataspaces[{}]: ", i);
-            f_dataspaces[i].print();
-        }
+        for (auto& d : data)
+            fmt::print("memory = {}, file = {}, data = {}\n", d.memory, d.file, fmt::ptr(d.data));
     }
 };
 
