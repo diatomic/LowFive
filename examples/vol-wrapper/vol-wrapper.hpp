@@ -141,6 +141,8 @@ struct PointBlock
         // write and read back
         if (core)               // in-core memory driver
         {
+            using HighFive::File;
+
             fmt::print("Using in-core file driver\n");
             CoreFileDriver file_driver(1024);
             file_driver.add(vol_prop);
@@ -173,9 +175,13 @@ struct PointBlock
                 read((float*)(&read_bounds.min[0]));
             dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
                 read((float*)(&read_bounds.max[0]));
+
+            vol_plugin.print_files();   // print out metadata before the file closes
         }                       // in-core memory
         else                    // file driver
         {
+            using HighFive::File;
+
             fmt::print("Using mpi-io file driver\n");
             MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
             file_driver.add(vol_prop);
@@ -208,6 +214,8 @@ struct PointBlock
                 read((float*)(&read_bounds.min[0]));
             dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
                 read((float*)(&read_bounds.max[0]));
+
+            vol_plugin.print_files();   // print out metadata before the file closes
         }                       // file driver
 
         // debug: check that the written and read points match
@@ -237,7 +245,6 @@ struct PointBlock
         }
 
         fmt::print("HighFive success.\n");
-        vol_plugin.metadata->print_tree();
     }
 
     // block data

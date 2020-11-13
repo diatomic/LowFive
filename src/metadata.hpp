@@ -6,6 +6,7 @@ using namespace std;
 
 enum class ObjectType
 {
+    File,
     Group,
     Dataset,
     NamedDtype
@@ -49,29 +50,59 @@ struct Attribute
 
 struct Object
 {
+    Object*                         parent;
+    vector<Object*>                 children;
+
     ObjectType                      type;
     string                          name;
     map<string, Attribute>          attributes;
     map<string, Attribute>          properties;
 
     Object(ObjectType type_, string name_) :
+        parent(nullptr),
         type(type_), name(name_)                        {}
+
+    virtual ~Object()
+    {
+        // this assumes that there are no cycles, might not be possible, if we implement HDF5 links
+        // might want to switch to shared_ptr<Object> instead
+        for (auto* child : children)
+            delete child;
+    }
 
     virtual void print()
     {
         fmt::print(stderr, "object type = {} name = {}\n", type, name);
         // TODO: print attributes and properties
+
+        for (auto* child : children)
+            child->print();
+    }
+
+    Object* add_child(Object* object)
+    {
+        children.push_back(object);
+        object->parent = this;
+        return object;
+
+        // debug
+        fmt::print(stderr, "Added metadata node: name {} type {}\n", object->name, object->type);
+    }
+
+    // remove this from parent's children
+    void remove()
+    {
+        if (parent)
+            parent->children.erase(std::find(parent->children.begin(), parent->children.end(), this));
     }
 };
 
 struct Group : public Object
 {
-    vector<Object*>                 objects;
-
     Group(string name) :
         Object(ObjectType::Group, name)                 {}
 
-    void print()
+    void print() override
     {
         fmt::print(stderr, "---- Group ----\n");
         Object::print();
@@ -86,7 +117,7 @@ struct NamedDtype : public Object
     NamedDtype(string name) :
         Object(ObjectType::NamedDtype, name)            {}
 
-    void print()
+    void print() override
     {
         fmt::print(stderr, "-- NamedDtype --\n");
         Object::print();
@@ -132,7 +163,7 @@ struct Dataset : public Object
 
     void set_data(const void* data_)                    { data = data_; }
 
-    void print()
+    void print() override
     {
         fmt::print(stderr, "---- Dataset ---\n");
         Object::print();
@@ -151,59 +182,23 @@ struct Dataset : public Object
     }
 };
 
-// a node of the HDF5 "file" tree, templated on the object being stored
-template<class T>
-struct TreeNode
-{
-    TreeNode<T>*                    parent;
-    vector<TreeNode<T>*>            children;
-    T*                              object;             // pointer to the object being stored
-
-    TreeNode(TreeNode<T>* parent_, T* object_) :
-        parent(parent_), object(object_)                {}
-
-    // preorder depth-first traversal
-    void print()
-    {
-        object->print();
-        for (auto i = 0; i < children.size(); i++)
-            children[i]->print();
-    }
-};
-
 // (root of) the tree of metadata for one HDF5 "file"
-struct FileMetadata
+struct File: public Object
 {
-    string                          filename;
-    vector<TreeNode<Object>*>       children;
-
-    FileMetadata(string filename_) :
-        filename(filename_)
+    File(string filename_):
+        Object(ObjectType::File, filename_)
     {
         // debug
-        fmt::print(stderr, "Creating metadata for {}\n", filename);
+        fmt::print(stderr, "Creating metadata for {}\n", filename_);
     }
 
-    TreeNode<Object>* add_node(TreeNode<Object>* parent, Object* object)
-    {
-        TreeNode<Object>* tree_node = new TreeNode<Object>(parent, object);
-        if (parent == NULL)
-            children.push_back(tree_node);
-        else
-            parent->children.push_back(tree_node);
-        return tree_node;
-
-        // debug
-        fmt::print(stderr, "Added metadata node: name {} type {}\n", object->name, object->type);
-    }
+    // TODO: add find(name), add(name, object)
 
     // preorder depth-first traversal
     void print_tree()
     {
-        fmt::print(stderr, "\nPrinting metadata tree for {}\n", filename);
-        for (auto i = 0; i < children.size(); i++)
-            children[i]->print();
-        fmt::print(stderr, "\n");
+        fmt::print(stderr, "Printing metadata tree for {}\n", name);
+        Object::print();
     }
 };
 
