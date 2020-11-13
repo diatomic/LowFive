@@ -243,7 +243,7 @@ Vol::group_close(void *grp, hid_t dxpl_id, void **req)
 
     fmt::print(stderr, "Group Close\n");
 
-    herr_t retval = group_close(grp_->h5_obj, dxpl_id, req);
+    herr_t retval = VOLBase::group_close(grp_->h5_obj, dxpl_id, req);
 
     Group* g = (Group*) grp_->mdata_obj;
     g->remove();

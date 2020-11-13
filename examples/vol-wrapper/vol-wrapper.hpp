@@ -142,14 +142,17 @@ struct PointBlock
         if (core)               // in-core memory driver
         {
             using HighFive::File;
+            using HighFive::Group;
 
             fmt::print("Using in-core file driver\n");
             CoreFileDriver file_driver(1024);
             file_driver.add(vol_prop);
             File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
+            Group group = file.createGroup("group1");
+
             // create the dataset for the points
-            DataSet dataset = file.createDataSet<float>("points", DataSpace(dims));
+            DataSet dataset = group.createDataSet<float>("points", DataSpace(dims));
 
             // write points
             dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
@@ -181,14 +184,17 @@ struct PointBlock
         else                    // file driver
         {
             using HighFive::File;
+            using HighFive::Group;
 
             fmt::print("Using mpi-io file driver\n");
             MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
             file_driver.add(vol_prop);
             File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
+            Group group = file.createGroup("group1");
+
             // create the dataset for the points
-            DataSet dataset = file.createDataSet<float>("points", DataSpace(dims));
+            DataSet dataset = group.createDataSet<float>("points", DataSpace(dims));
 
             // write points
             dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
@@ -219,7 +225,7 @@ struct PointBlock
         }                       // file driver
 
         // debug: check that the written and read points match
-        for (size_t i = 0; i < points.size() / 2; ++i)
+        for (size_t i = 0; i < points.size(); ++i)
         {
             if (points[i] != read_points[i])
             {
