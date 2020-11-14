@@ -76,6 +76,9 @@ Vol::file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, voi
     ObjectPointers* file_ = (ObjectPointers*) file;
     File* f = (File*) file_->mdata_obj;
 
+    fmt::print(stderr, "file_optional: opt_type = {}\n", opt_type);
+    // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
+
     // FIXME: need to handle this internally, without passthrough
     herr_t res = VOLBase::file_optional(file_->h5_obj, opt_type, dxpl_id, req, arguments);
 
@@ -141,6 +144,7 @@ Vol::dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **
     va_copy(args,arguments);
 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
+    // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // FIXME: need to handle this internally, without passthrough
     herr_t result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
