@@ -12,6 +12,7 @@
 #include    <highfive/H5DataSet.hpp>
 #include    <highfive/H5DataSpace.hpp>
 #include    <highfive/H5File.hpp>
+#include    <core_file_driver.hpp>
 
 #include    "core-mem_vol.hpp"
 
