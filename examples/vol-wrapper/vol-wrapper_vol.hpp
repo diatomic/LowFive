@@ -1,9 +1,9 @@
 #ifndef EXAMPLE1_VOL_HPP
 #define EXAMPLE1_VOL_HPP
 
-#include    <diy/log.hpp>
-#include    "../../src/vol_base.hpp"
-#include    "../../src/metadata.hpp"
+#include    <fmt/core.h>
+#include    <lowfive/vol_base.hpp>
+#include    <lowfive/metadata.hpp>
 
 // custom VOL object
 // only need to specialize those functions that are custom
@@ -15,13 +15,21 @@ struct ObjectPointers
     void*           mdata_obj;          // metadata object (tree node)
 };
 
-struct Vol: public VOLBase
+struct Vol: public LowFive::VOLBase
 {
     using VOLBase::VOLBase;
 
-    std::map<std::string, File*>    files;
+    using File      = LowFive::File;
+    using Object    = LowFive::Object;
+    using Dataset   = LowFive::Dataset;
+    using Dataspace = LowFive::Dataspace;
+    using Group     = LowFive::Group;
 
-    void print_files()
+    using Files     = std::map<std::string, File*>;
+
+    Files           files;
+
+    void            print_files()
     {
         for (auto& f : files)
         {
@@ -129,7 +137,7 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
             dapl_id,  dxpl_id, req);
 
     // add the dataset to our file metadata
-    string name_(name);
+    std::string name_(name);
     result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id));
 
     return (void*)result;

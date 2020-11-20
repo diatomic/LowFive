@@ -1,6 +1,8 @@
-hid_t VOLBase::connector_id = -1;
+#include <lowfive/vol_base.hpp>
 
-VOLBase::
+hid_t LowFive::VOLBase::connector_id = -1;
+
+LowFive::VOLBase::
 VOLBase(unsigned version_, int value_, std::string name_):
     version(version_), value(value_), name(name_)
 {
@@ -115,7 +117,7 @@ VOLBase(unsigned version_, int value_, std::string name_):
 }
 
 hid_t
-VOLBase::
+LowFive::VOLBase::
 register_plugin()
 {
     // Singleton register the pass-through VOL connector ID
@@ -138,7 +140,7 @@ register_plugin()
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _init(hid_t vipl_id)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
@@ -162,7 +164,7 @@ _init(hid_t vipl_id)
  *---------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _term(void)
 {
 #ifdef ENABLE_PASSTHRU_LOGGING
@@ -188,7 +190,7 @@ _term(void)
  *---------------------------------------------------------------------------
  */
 void *
-VOLBase::
+LowFive::VOLBase::
 _info_copy(const void *_info)
 {
     const info_t *info = (const info_t *)_info;
@@ -196,7 +198,7 @@ _info_copy(const void *_info)
 }
 
 void *
-VOLBase::
+LowFive::VOLBase::
 info_copy(const void *_info)
 {
     const info_t *info = (const info_t *)_info;
@@ -233,7 +235,7 @@ info_copy(const void *_info)
  *---------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _info_free(void *_info)
 {
     info_t *info = (info_t *)_info;
@@ -241,7 +243,7 @@ _info_free(void *_info)
 }
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 info_free(void *_info)
 {
     info_t *info = (info_t *)_info;
@@ -277,7 +279,7 @@ info_free(void *_info)
  *-------------------------------------------------------------------------
  */
 void*
-VOLBase::
+LowFive::VOLBase::
 _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -306,7 +308,7 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 } /* end dataset_create() */
 
 void*
-VOLBase::
+LowFive::VOLBase::
 dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -325,7 +327,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -345,7 +347,7 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 } /* end dataset_read() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     return H5VLdataset_read(dset, info.under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -362,7 +364,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -382,7 +384,7 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
 } /* end dataset_write() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
     return H5VLdataset_write(dset, info.under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -399,7 +401,7 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -419,7 +421,7 @@ _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req,
 } /* end pass_through_dataset_get() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     return H5VLdataset_get(dset, info.under_vol_id, get_type, dxpl_id, req, arguments);
@@ -436,7 +438,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)dset;
@@ -460,7 +462,7 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
 } /* end dataset_close() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     return H5VLdataset_close(dset, info.under_vol_id, dxpl_id, req);
@@ -477,7 +479,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 void*
-VOLBase::
+LowFive::VOLBase::
 _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     info_t *info;
@@ -520,7 +522,7 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
 } /* end file_create() */
 
 void*
-VOLBase::
+LowFive::VOLBase::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     return H5VLfile_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
@@ -537,7 +539,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
  *-------------------------------------------------------------------------
  */
 void*
-VOLBase::
+LowFive::VOLBase::
 _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     info_t *info;
@@ -580,7 +582,7 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
 } /* end file_open() */
 
 void*
-VOLBase::
+LowFive::VOLBase::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     return H5VLfile_open(name, flags, fapl_id, dxpl_id, req);
@@ -597,7 +599,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
@@ -618,7 +620,7 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
 } /* end file_get() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
@@ -636,7 +638,7 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
@@ -657,7 +659,7 @@ _file_optional(void *file, H5VL_file_optional_t opt_type,
 } /* end file_optional() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
@@ -675,7 +677,7 @@ file_optional(void *file, H5VL_file_optional_t opt_type,
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _file_close(void *file, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)file;
@@ -699,7 +701,7 @@ _file_close(void *file, hid_t dxpl_id, void **req)
 } /* end file_close() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     return H5VLfile_close(file, info.under_vol_id, dxpl_id, req);
@@ -716,7 +718,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 void*
-VOLBase::
+LowFive::VOLBase::
 _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
@@ -744,7 +746,7 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
 } /* end group_create() */
 
 void*
-VOLBase::
+LowFive::VOLBase::
 group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
@@ -763,7 +765,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params,
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _group_close(void *grp, hid_t dxpl_id, void **req)
 {
     pass_through_t *o = (pass_through_t *)grp;
@@ -787,7 +789,7 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
 } /* end group_close() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 group_close(void *grp, hid_t dxpl_id, void **req)
 {
     return H5VLgroup_close(grp, info.under_vol_id, dxpl_id, req);
@@ -803,7 +805,7 @@ group_close(void *grp, hid_t dxpl_id, void **req)
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
 {
     pass_through_t *o = (pass_through_t *)obj;
@@ -825,7 +827,7 @@ _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t 
 } /* end introspect_get_conn_cls() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
 {
     return H5VLintrospect_get_conn_cls(obj, info.under_vol_id, lvl, conn_cls);
@@ -842,7 +844,7 @@ introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t *
  *-------------------------------------------------------------------------
  */
 herr_t
-VOLBase::
+LowFive::VOLBase::
 _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
 {
     pass_through_t *o = (pass_through_t *)obj;
@@ -858,7 +860,7 @@ _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *sup
 } /* end introspect_opt_query() */
 
 herr_t
-VOLBase::
+LowFive::VOLBase::
 introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
 {
     return H5VLintrospect_opt_query(obj, info.under_vol_id, cls, opt_type, supported);

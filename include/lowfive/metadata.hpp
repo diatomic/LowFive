@@ -1,8 +1,10 @@
 #pragma once
 
-using namespace std;
+#include <fmt/core.h>
+#include <hdf5.h>
 
-#define MAX_DIM 32                                      // this is HDF5's limit
+namespace LowFive
+{
 
 enum class ObjectType
 {
@@ -15,8 +17,8 @@ enum class ObjectType
 struct Dataspace
 {
     int                             dim;
-    vector<size_t>                  min;
-    vector<size_t>                  max;
+    std::vector<size_t>             min;
+    std::vector<size_t>             max;
 
             Dataspace(hid_t space_id)
     {
@@ -59,15 +61,18 @@ struct Attribute
 
 struct Object
 {
+    using Attributes = std::map<std::string, Attribute>;
+    using Properties = std::map<std::string, Attribute>;
+
     Object*                         parent;
-    vector<Object*>                 children;
+    std::vector<Object*>            children;
 
     ObjectType                      type;
-    string                          name;
-    map<string, Attribute>          attributes;
-    map<string, Attribute>          properties;
+    std::string                     name;
+    Attributes                      attributes;
+    Properties                      properties;
 
-    Object(ObjectType type_, string name_) :
+    Object(ObjectType type_, std::string name_) :
         parent(nullptr),
         type(type_), name(name_)                        {}
 
@@ -108,7 +113,7 @@ struct Object
 
 struct Group : public Object
 {
-    Group(string name) :
+    Group(std::string name) :
         Object(ObjectType::Group, name)                 {}
 
     void print() override
@@ -123,7 +128,7 @@ struct NamedDtype : public Object
 {
     Datatype                        datatype;
 
-    NamedDtype(string name) :
+    NamedDtype(std::string name) :
         Object(ObjectType::NamedDtype, name)            {}
 
     void print() override
@@ -147,7 +152,7 @@ struct Dataset : public Object
     std::vector<DataTriple>         data;
 
 
-    Dataset(string name, hid_t dtype_id) :
+    Dataset(std::string name, hid_t dtype_id) :
         Object(ObjectType::Dataset, name)
     {
         datatype.dtype_id       = dtype_id;
@@ -174,7 +179,7 @@ struct Dataset : public Object
 // (root of) the tree of metadata for one HDF5 "file"
 struct File: public Object
 {
-    File(string filename_):
+    File(std::string filename_):
         Object(ObjectType::File, filename_)
     {
         // debug
@@ -191,3 +196,4 @@ struct File: public Object
     }
 };
 
+}

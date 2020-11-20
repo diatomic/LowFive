@@ -1,11 +1,12 @@
-#ifndef VOL_BASE_HPP
-#define VOL_BASE_HPP
+#ifndef LOWFIVE_VOL_BASE_HPP
+#define LOWFIVE_VOL_BASE_HPP
 
 #include <string>
 
-#include "hdf5.h"
+#include <hdf5.h>
 
-// TODO: namespace LowFive
+namespace LowFive
+{
 
 // base class for VOL object
 struct VOLBase
@@ -163,6 +164,6 @@ struct VOLBase
     //void req_free()                 {}
 };
 
-#include "vol_base-impl.hpp"
+}
 
 #endif
