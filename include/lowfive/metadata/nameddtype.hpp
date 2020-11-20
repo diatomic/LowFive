@@ -5,7 +5,8 @@ namespace LowFive
 
 struct NamedDtype : public Object
 {
-    Datatype                        datatype;
+    // TODO: need to initialize this properly first
+    // Datatype datatype;
 
     NamedDtype(std::string name) :
         Object(ObjectType::NamedDtype, name)            {}

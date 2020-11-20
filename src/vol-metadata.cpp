@@ -73,9 +73,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 {
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
-    namespace h5 = HighFive;
-    auto class_string = h5::type_class_string(h5::convert_type_class(H5Tget_class(type_id)));
-    fmt::print("data type = {}{}\n", class_string, 8 * H5Tget_size(type_id));
+    fmt::print("data type = {}\n", Datatype(type_id).description());
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = new ObjectPointers;
@@ -130,9 +128,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
 
         hid_t type_id = *ret;
-        namespace h5 = HighFive;
-        auto class_string = h5::type_class_string(h5::convert_type_class(H5Tget_class(type_id)));
-        fmt::print("data type = {}{}\n", class_string, 8 * H5Tget_size(type_id));
+        fmt::print("data type = {}\n", Datatype(type_id).description());
     } else
     {
         fmt::print(stderr, "Warning, unknown get_type == {} in dataset_get()", get_type);
