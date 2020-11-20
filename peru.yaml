@@ -1,0 +1,9 @@
+imports:
+    HighFive: ./ext/HighFive
+    fmt: ./ext/fmt
+
+git module HighFive:
+    url: gh:BlueBrain/HighFive
+
+git module fmt:
+    url: gh:fmtlib/fmt
