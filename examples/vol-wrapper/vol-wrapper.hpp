@@ -13,6 +13,9 @@
 #include    <highfive/H5File.hpp>
 #include    <core_file_driver.hpp>
 
+#include    <lowfive/H5VOLProperty.hpp>
+namespace l5 = LowFive;
+
 #include    "vol-wrapper_vol.hpp"
 
 using namespace HighFive;
@@ -21,27 +24,6 @@ using namespace std;
 // D-dimensional point
 template<unsigned D>
 using SimplePoint = diy::Point<float, D>;
-
-template <typename V>
-struct VOLProperty
-{
-            VOLProperty(V& vol_plugin_):
-                vol_plugin(vol_plugin_)
-    {
-        vol_id = vol_plugin.register_plugin();
-    }
-            ~VOLProperty()
-    {
-        H5VLterminate(vol_id);
-        H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered_by_name("our-vol-plugin") == 0);
-    }
-
-    void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &vol_plugin.info); }
-
-    hid_t   vol_id;
-    V&      vol_plugin;
-};
 
 // block structure
 // the contents of a block are completely user-defined
@@ -136,8 +118,8 @@ struct PointBlock
 
         // open file for parallel read/write
         Vol vol_plugin { /* version = */ 0, /* value = */ 510, /* name = */ "our-vol-plugin" };
-        VOLProperty<Vol> vol_prop(vol_plugin);
-        printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name("our-vol-plugin"));
+        l5::H5VOLProperty vol_prop(vol_plugin);
+        printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name(vol_plugin.name.c_str()));
 
         // write and read back
         if (core)               // in-core memory driver
