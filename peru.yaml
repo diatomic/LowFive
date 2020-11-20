@@ -4,6 +4,8 @@ imports:
 
 git module HighFive:
     url: gh:BlueBrain/HighFive
+    rev: e582076fb5b4dd654738c24c2d40517d11512ca6
 
 git module fmt:
     url: gh:fmtlib/fmt
+    rev: 38c7def47ad641054a6551f0b3625ebb28e3864f
