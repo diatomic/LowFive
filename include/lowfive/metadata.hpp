@@ -1,6 +1,17 @@
 #pragma once
 
+#include <vector>
+#include <string>
+#include <map>
+
 #include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+
+// TODO: need to get rid of the dependence on HighFive
+#include <HighFive/H5DataSpace.hpp>
+#include <HighFive/H5DataType.hpp>
+
 #include <hdf5.h>
 
 namespace LowFive

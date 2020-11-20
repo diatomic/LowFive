@@ -10,7 +10,6 @@
 #include    <diy/../../examples/opts.h>
 
 #include    "vol-wrapper.hpp"
-#include    "vol-wrapper_vol.hpp"
 
 typedef     diy::ContinuousBounds       Bounds;
 typedef     diy::RegularContinuousLink  RCLink;

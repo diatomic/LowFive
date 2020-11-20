@@ -1,70 +1,16 @@
-#ifndef EXAMPLE1_VOL_HPP
-#define EXAMPLE1_VOL_HPP
-
-#include    <fmt/core.h>
-#include    <lowfive/vol_base.hpp>
-#include    <lowfive/metadata.hpp>
-
-// custom VOL object
-// only need to specialize those functions that are custom
-
-// TODO: move inside Vol?
-struct ObjectPointers
-{
-    void*           h5_obj;             // HDF5 object (e.g., dset)
-    void*           mdata_obj;          // metadata object (tree node)
-};
-
-struct Vol: public LowFive::VOLBase
-{
-    using VOLBase::VOLBase;
-
-    using File      = LowFive::File;
-    using Object    = LowFive::Object;
-    using Dataset   = LowFive::Dataset;
-    using Dataspace = LowFive::Dataspace;
-    using Group     = LowFive::Group;
-
-    using Files     = std::map<std::string, File*>;
-
-    Files           files;
-
-    void            print_files()
-    {
-        for (auto& f : files)
-        {
-            fmt::print("--------------------------------------------------------------------------------\n");
-            fmt::print("File {}\n", f.first);
-            f.second->print_tree();
-            fmt::print("--------------------------------------------------------------------------------\n");
-        }
-    }
-
-    void*           info_copy(const void *_info) override;
-
-    void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;
-
-    void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req) override;
-    herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
-    herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
-
-    void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          group_close(void *grp, hid_t dxpl_id, void **req) override;
-};
+#include <lowfive/vol-metadata.hpp>
 
 void*
-Vol::info_copy(const void *_info)
+LowFive::MetadataVOL::
+info_copy(const void *_info)
 {
     fmt::print(stderr, "Copy Info\n");
     return VOLBase::info_copy(_info);
 }
 
 void*
-Vol::file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
+LowFive::MetadataVOL::
+file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     // create our file metadata
     std::string name_(name);
@@ -79,7 +25,8 @@ Vol::file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
 }
 
 herr_t
-Vol::file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
+LowFive::MetadataVOL::
+file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
     File* f = (File*) file_->mdata_obj;
@@ -94,7 +41,8 @@ Vol::file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, voi
 }
 
 herr_t
-Vol::file_close(void *file, hid_t dxpl_id, void **req)
+LowFive::MetadataVOL::
+file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
     File* f = (File*) file_->mdata_obj;
@@ -116,11 +64,12 @@ Vol::file_close(void *file, hid_t dxpl_id, void **req)
 
 
 void*
-Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
-                    const char *name,
-                    hid_t lcpl_id,  hid_t type_id,
-                    hid_t space_id, hid_t dcpl_id,
-                    hid_t dapl_id,  hid_t dxpl_id, void **req)
+LowFive::MetadataVOL::
+dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
+               const char *name,
+               hid_t lcpl_id,  hid_t type_id,
+               hid_t space_id, hid_t dcpl_id,
+               hid_t dapl_id,  hid_t dxpl_id, void **req)
 {
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
@@ -144,7 +93,8 @@ Vol::dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 }
 
 herr_t
-Vol::dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+LowFive::MetadataVOL::
+dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
@@ -192,7 +142,8 @@ Vol::dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **
 }
 
 herr_t
-Vol::dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
+LowFive::MetadataVOL::
+dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     fmt::print("dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset_->h5_obj), mem_space_id, file_space_id);
@@ -203,7 +154,8 @@ Vol::dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_
 }
 
 herr_t
-Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
+LowFive::MetadataVOL::
+dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
@@ -217,7 +169,8 @@ Vol::dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file
 }
 
 herr_t
-Vol::dataset_close(void *dset, hid_t dxpl_id, void **req)
+LowFive::MetadataVOL::
+dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     fmt::print("close: dset = {}, dxpl_id = {}\n", fmt::ptr(dset_->h5_obj), dxpl_id);
@@ -234,7 +187,8 @@ Vol::dataset_close(void *dset, hid_t dxpl_id, void **req)
 }
 
 void*
-Vol::group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
+LowFive::MetadataVOL::
+group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
@@ -249,7 +203,8 @@ Vol::group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
 }
 
 herr_t
-Vol::group_close(void *grp, hid_t dxpl_id, void **req)
+LowFive::MetadataVOL::
+group_close(void *grp, hid_t dxpl_id, void **req)
 {
     ObjectPointers* grp_ = (ObjectPointers*) grp;
 
@@ -266,4 +221,3 @@ Vol::group_close(void *grp, hid_t dxpl_id, void **req)
     return retval;
 }
 
-#endif

@@ -14,9 +14,8 @@
 #include    <core_file_driver.hpp>
 
 #include    <lowfive/H5VOLProperty.hpp>
+#include    <lowfive/vol-metadata.hpp>
 namespace l5 = LowFive;
-
-#include    "vol-wrapper_vol.hpp"
 
 using namespace HighFive;
 using namespace std;
@@ -117,7 +116,7 @@ struct PointBlock
         Bounds read_bounds(DIM);
 
         // open file for parallel read/write
-        Vol vol_plugin { /* version = */ 0, /* value = */ 510, /* name = */ "our-vol-plugin" };
+        l5::MetadataVOL vol_plugin;
         l5::H5VOLProperty vol_prop(vol_plugin);
         printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name(vol_plugin.name.c_str()));
 
