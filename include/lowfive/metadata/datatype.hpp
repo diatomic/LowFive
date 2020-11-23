@@ -9,29 +9,21 @@ enum class      DatatypeClass;
 DatatypeClass   convert_type_class(const H5T_class_t& tclass);
 std::string     type_class_string(DatatypeClass tclass);
 
-struct Datatype
+struct Datatype: Hid
 {
-    hid_t                   dtype_id;
     DatatypeClass           dtype_class;
     size_t                  dtype_size;         // in bits
 
             Datatype(hid_t dtype_id_):
-                dtype_id(dtype_id_)
+                Hid(dtype_id_)
     {
-        H5Iinc_ref(dtype_id_);
-        dtype_class    = convert_type_class(H5Tget_class(dtype_id));
-        dtype_size     = 8 * H5Tget_size(dtype_id);
-    }
-            ~Datatype()
-    {
-        hid_t err_id = H5Eget_current_stack();
-        H5Idec_ref(dtype_id);
-        H5Eset_current_stack(err_id);
+        dtype_class    = convert_type_class(H5Tget_class(id));
+        dtype_size     = 8 * H5Tget_size(id);
     }
 
     hid_t   copy() const
     {
-        return H5Tcopy(dtype_id);
+        return H5Tcopy(id);
     }
 
     std::string class_string() const

@@ -102,25 +102,27 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
+    //herr_t result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
+    //fmt::print("result = {}\n", result);
+
     if (get_type == H5VL_DATASET_GET_SPACE)
     {
-        // FIXME: need to handle this internally, without passthrough
-        herr_t result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
-        fmt::print("result = {}\n", result);
-
         fmt::print("GET_SPACE\n");
-        hid_t *ret = va_arg(args, hid_t*);
-        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+        auto& dataspace = static_cast<Dataset*>(dset_->mdata_obj)->space;
 
-        hid_t space_id = *ret;
-        fmt::print("space = {}\n", Dataspace(space_id));
+        hid_t space_id = dataspace.copy();
+        fmt::print("copied space id = {}, space = {}\n", space_id, Dataspace(space_id));
+
+        hid_t *ret = va_arg(args, hid_t*);
+        *ret = space_id;
+        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
     } else if (get_type == H5VL_DATASET_GET_TYPE)
     {
         fmt::print("GET_TYPE\n");
         auto& datatype = static_cast<Dataset*>(dset_->mdata_obj)->type;
 
         fmt::print("dataset data type id = {}, datatype = {}\n",
-                    datatype.dtype_id, datatype);
+                    datatype.id, datatype);
 
         hid_t dtype_id = datatype.copy();
         fmt::print("copied data type id = {}, datatype = {}\n",
