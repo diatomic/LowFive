@@ -3,7 +3,6 @@ set                         (targets    vol-wrapper)
 foreach                     (t ${targets})
   add_executable            (${t} ${t}.cpp)
   target_link_libraries     (${t} ${libraries})
-  target_compile_definitions(${t} PRIVATE ENABLE_PASSTHRU_LOGGING)
 
   install                   (TARGETS ${t}
                             DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/vol-wrapper

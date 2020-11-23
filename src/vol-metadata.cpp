@@ -73,7 +73,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 {
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
-    fmt::print("data type = {}\n", Datatype(type_id).description());
+    fmt::print("data type = {}\n", Datatype(type_id));
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = new ObjectPointers;
@@ -85,7 +85,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     // add the dataset to our file metadata
     std::string name_(name);
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id));
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id));
 
     return (void*)result;
 }
@@ -102,39 +102,39 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
-    // FIXME: need to handle this internally, without passthrough
-    herr_t result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
-
-    fmt::print("result = {}\n", result);
-
     if (get_type == H5VL_DATASET_GET_SPACE)
     {
+        // FIXME: need to handle this internally, without passthrough
+        herr_t result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
+        fmt::print("result = {}\n", result);
+
         fmt::print("GET_SPACE\n");
         hid_t *ret = va_arg(args, hid_t*);
         fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
 
         hid_t space_id = *ret;
-        int ndim = H5Sget_simple_extent_ndims(space_id);
-        fmt::print("ndim = {}\n", ndim);
-
-        // NB: this works only for simple spaces
-        std::vector<hsize_t> start(ndim), end(ndim);
-        H5Sget_select_bounds(space_id, start.data(), end.data());
-        fmt::print("start = [{}], end = [{}]\n", fmt::join(start, ","), fmt::join(end, ","));
+        fmt::print("space = {}\n", Dataspace(space_id));
     } else if (get_type == H5VL_DATASET_GET_TYPE)
     {
         fmt::print("GET_TYPE\n");
-        hid_t *ret = va_arg(args, hid_t*);
-        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+        auto& datatype = static_cast<Dataset*>(dset_->mdata_obj)->type;
 
-        hid_t type_id = *ret;
-        fmt::print("data type = {}\n", Datatype(type_id).description());
+        fmt::print("dataset data type id = {}, datatype = {}\n",
+                    datatype.dtype_id, datatype);
+
+        hid_t dtype_id = datatype.copy();
+        fmt::print("copied data type id = {}, datatype = {}\n",
+                    dtype_id, Datatype(dtype_id));
+
+        hid_t *ret = va_arg(args, hid_t*);
+        *ret = dtype_id;
+        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
     } else
     {
         fmt::print(stderr, "Warning, unknown get_type == {} in dataset_get()", get_type);
     }
 
-    return result;
+    return 0;
 }
 
 herr_t

@@ -18,8 +18,20 @@ struct Datatype
             Datatype(hid_t dtype_id_):
                 dtype_id(dtype_id_)
     {
+        H5Iinc_ref(dtype_id_);
         dtype_class    = convert_type_class(H5Tget_class(dtype_id));
         dtype_size     = 8 * H5Tget_size(dtype_id);
+    }
+            ~Datatype()
+    {
+        hid_t err_id = H5Eget_current_stack();
+        H5Idec_ref(dtype_id);
+        H5Eset_current_stack(err_id);
+    }
+
+    hid_t   copy() const
+    {
+        return H5Tcopy(dtype_id);
     }
 
     std::string class_string() const
@@ -27,9 +39,10 @@ struct Datatype
         return type_class_string(dtype_class);
     }
 
-    std::string description() const
+    friend std::ostream& operator<<(std::ostream& out, const Datatype& dt)
     {
-        return fmt::format("{}{}", class_string(), dtype_size);
+        fmt::print(out, "{}{}", dt.class_string(), dt.dtype_size);
+        return out;
     }
 };
 
