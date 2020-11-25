@@ -35,6 +35,19 @@ struct MetadataVOL: public LowFive::VOLBase
                         VOLBase(/* version = */ 0, /* value = */ 510, /* name = */ "metadata-vol")
                     {}
 
+                    ~MetadataVOL()
+    {
+        for (auto& x : files)
+            delete x.second;
+    }
+
+    void            drop(std::string filename)
+    {
+        auto it = files.find(filename);
+        delete it->second;
+        files.erase(it);
+    }
+
     void            print_files()
     {
         for (auto& f : files)

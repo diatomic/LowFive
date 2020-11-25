@@ -16,7 +16,7 @@ struct File: public Object
     // TODO: add find(name), add(name, object)
 
     // preorder depth-first traversal
-    void print_tree()
+    void print_tree() const
     {
         fmt::print(stderr, "Printing metadata tree for {}\n", name);
         Object::print();

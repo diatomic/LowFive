@@ -8,7 +8,7 @@ struct Group : public Object
     Group(std::string name) :
         Object(ObjectType::Group, name)                 {}
 
-    void print() override
+    void print() const override
     {
         fmt::print(stderr, "---- Group ----\n");
         Object::print();

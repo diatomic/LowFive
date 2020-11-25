@@ -11,7 +11,7 @@ struct NamedDtype : public Object
     NamedDtype(std::string name) :
         Object(ObjectType::NamedDtype, name)            {}
 
-    void print() override
+    void print() const override
     {
         fmt::print(stderr, "-- NamedDtype --\n");
         Object::print();

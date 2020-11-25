@@ -26,7 +26,7 @@ struct Dataset : public Object
         data.emplace_back(DataTriple { memory, file, buf });
     }
 
-    void print() override
+    void print() const override
     {
         fmt::print(stderr, "---- Dataset ---\n");
         Object::print();

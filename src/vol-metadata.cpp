@@ -47,10 +47,6 @@ file_close(void *file, hid_t dxpl_id, void **req)
     ObjectPointers* file_ = (ObjectPointers*) file;
     File* f = (File*) file_->mdata_obj;
 
-    files.erase(f->name);
-    f->remove();        // redundant, since no parent
-    delete f;
-
     herr_t res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
 
     delete file_;
@@ -176,8 +172,6 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
     herr_t retval = VOLBase::dataset_close(dset_->h5_obj, dxpl_id, req);
 
     Dataset* ds = (Dataset*) dset_->mdata_obj;
-    ds->remove();
-    delete ds;
 
     delete dset_;
 
@@ -211,8 +205,6 @@ group_close(void *grp, hid_t dxpl_id, void **req)
     herr_t retval = VOLBase::group_close(grp_->h5_obj, dxpl_id, req);
 
     Group* g = (Group*) grp_->mdata_obj;
-    g->remove();
-    delete g;
 
     delete grp_;
 

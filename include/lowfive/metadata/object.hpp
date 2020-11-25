@@ -22,13 +22,18 @@ struct Object
 
     virtual ~Object()
     {
+        remove();
+
         // this assumes that there are no cycles, might not be possible, if we implement HDF5 links
         // might want to switch to shared_ptr<Object> instead
         for (auto* child : children)
+        {
+            child->parent = nullptr;    // to skip remove() in child
             delete child;
+        }
     }
 
-    virtual void print()
+    virtual void print() const
     {
         fmt::print(stderr, "object type = {} name = {}\n", type, name);
         // TODO: print attributes and properties
@@ -51,7 +56,10 @@ struct Object
     void remove()
     {
         if (parent)
+        {
             parent->children.erase(std::find(parent->children.begin(), parent->children.end(), this));
+            parent = nullptr;
+        }
     }
 };
 
