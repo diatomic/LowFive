@@ -10,6 +10,8 @@
 
 #include <hdf5.h>
 
+#include "metadata/error.hpp"
+
 #include "metadata/hid.hpp"
 #include "metadata/objecttype.hpp"
 #include "metadata/dataspace.hpp"
