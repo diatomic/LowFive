@@ -6,6 +6,8 @@ add_library             (lowfive
                             base/attr.cpp
                             base/group.cpp
                             base/introspect.cpp
-                            vol-metadata.cpp)
+                            vol-metadata.cpp
+                            metadata/save-h5.cpp
+                        )
 target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY})
 target_compile_definitions(lowfive PRIVATE LOWFIVE_ENABLE_PASSTHRU_LOGGING)

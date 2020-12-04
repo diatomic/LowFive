@@ -7,8 +7,9 @@ struct Dataset : public Object
 {
     struct DataTriple
     {
-        Dataspace memory;
-        Dataspace file;
+        Datatype    type;       // memory type
+        Dataspace   memory;
+        Dataspace   file;
         const void* data;
     };
 
@@ -21,9 +22,9 @@ struct Dataset : public Object
         Object(ObjectType::Dataset, name), type(dtype_id), space(space_id)
     {}
 
-    void write(Dataspace memory, Dataspace file, const void* buf)
+    void write(Datatype type, Dataspace memory, Dataspace file, const void* buf)
     {
-        data.emplace_back(DataTriple { memory, file, buf });
+        data.emplace_back(DataTriple { type, memory, file, buf });
     }
 
     void print() const override

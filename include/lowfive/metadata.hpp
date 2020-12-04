@@ -22,3 +22,5 @@
 #include "metadata/nameddtype.hpp"
 #include "metadata/dataset.hpp"
 #include "metadata/file.hpp"
+
+#include "metadata/save-h5.hpp"

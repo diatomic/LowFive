@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
         else
             file_driver.add(l5::H5VOLProperty(metadata_vol_plugin));
     }
-    h5::File file("outfile1.h5", h5::File::ReadWrite | h5::File::Create | h5::File::Truncate, file_driver);
+    h5::File file("variety1.h5", h5::File::ReadWrite | h5::File::Create | h5::File::Truncate, file_driver);
 
     h5::Group group = file.createGroup("group1");
 
@@ -88,4 +88,6 @@ int main(int argc, char* argv[])
     v.write(version);
 
     metadata_vol_plugin.print_files();   // print out metadata before the file closes
+
+    LowFive::save(*metadata_vol_plugin.files["variety1.h5"], "lowfive-variety1.h5");
 }
