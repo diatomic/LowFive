@@ -70,6 +70,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
     fmt::print("data type = {}\n", Datatype(type_id));
+    fmt::print("data space = {}\n", Dataspace(space_id));
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = new ObjectPointers;
