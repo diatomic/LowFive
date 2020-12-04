@@ -1,5 +1,7 @@
 #pragma once
 
+#include "util.hpp"
+
 #include    <vector>
 #include    <cassert>
 #include    <diy/types.hpp>
@@ -60,7 +62,8 @@ struct PointBlock
         diy::load(bb, b->box);
         diy::load(bb, b->points);
     }
-    // initialize block values
+
+    // initialize an unstructured set of points in a block
     void generate_points(const Bounds& domain, // overall data bounds
                          size_t n)             // number of points
     {
@@ -70,6 +73,35 @@ struct PointBlock
             for (unsigned j = 0; j < DIM; ++j)
                 points[i][j] = domain.min[j] + float(rand() % 1024)/1024 *
                     (domain.max[j] - domain.min[j]);
+    }
+
+    // initialize a regular grid of points in a block
+    // makes a little 3x4x5 grid in the lower left corner of the block
+    void generate_grid(const Bounds& bounds)        // local block bounds
+    {
+        vector<size_t> npts(DIM);
+        size_t tot_npts = 1;
+        for (auto i = 0; i < DIM; i++)
+        {
+            npts[i]             = bounds.min[i] + 3 + i;    // 3 x 4 x 5 x ... starting at min corner
+            tot_npts            *= npts[i];
+            grid_bounds.min[i]  = bounds.min[i];
+            grid_bounds.max[i]  = bounds.min[i] + npts[i] - 1;
+        }
+        grid.resize(tot_npts);
+        VolIterator vi(npts);
+        vector<size_t> ijk(DIM);
+        while (!vi.done())
+        {
+            vi.idx_ijk(vi.cur_iter(), ijk);
+            for (auto i = 0; i < DIM; i++)
+                grid[vi.cur_iter()][i] = bounds.min[i] + ijk[i];    // value same as index in global domain
+
+            // debug
+            fmt::print("{}\n", grid[vi.cur_iter()]);
+
+            vi.incr_iter();
+        }
     }
 
     // check that block values are in the block bounds (debug)
@@ -99,146 +131,136 @@ struct PointBlock
             fmt::print("[{}] Points: {}\n", cp.gid(), points.size());
     }
 
-    // write the block in parallel to an HDF5 file using HighFive API
-    void write_block_highfive(
-            const diy::Master::ProxyWithLink& cp,       // communication proxy
-            bool                              core)     // whether to use core or MPI-IO file driver
+    // write the block
+    template<typename FileDriver>
+    void write_(
+            const diy::Master::ProxyWithLink&   cp,
+            FileDriver&                         file_driver)
     {
         fmt::print("Writing in HighFive API...\n");
-
-        // dataset size
-        vector<size_t> dims(2);
-        dims[0] = size_t(cp.master()->communicator().size());   // number of mpi ranks
-        dims[1] = points.size() * DIM;                          // local size
-
-        // debug: read-back data
-        vector<Point> read_points(points.size());
-        Bounds read_bounds(DIM);
 
         // open file for parallel read/write
         l5::MetadataVOL vol_plugin;
         l5::H5VOLProperty vol_prop(vol_plugin);
         printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name(vol_plugin.name.c_str()));
+        file_driver.add(vol_prop);
+        File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
 
-        // write and read back
-        if (core)               // in-core memory driver
-        {
-            using HighFive::File;
-            using HighFive::Group;
+        // create top-level group
+        Group group = file.createGroup("group1");
 
-            fmt::print("Using in-core file driver\n");
-            CoreFileDriver file_driver(1024);
-            file_driver.add(vol_prop);
-            File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
+        // create and write the dataset for the points
+        // 2d: dim[0] = number of ranks, dim[1] = number of point values (DIM per point)
+        vector<size_t> pt_dims{ size_t(cp.master()->communicator().size()), points.size() * DIM };
+        DataSet dataset = group.createDataSet<float>("points", DataSpace(pt_dims));
+        vector<size_t> pt_ofst{ size_t(cp.master()->communicator().rank()), 0 };
+        vector<size_t> pt_cnts{ 1, pt_dims[1] };
+        dataset.select(pt_ofst, pt_cnts).write((float*)(&points[0]));
 
-            Group group = file.createGroup("group1");
+        // create and write the dataset for the bounds
+        // 2d: dim[0] = number of ranks, dim[1] = number of bound values (DIM)
+        vector<size_t> bound_dims{ size_t(cp.master()->communicator().size()), DIM };                          // local size
+        DataSet dataset1 = group.createDataSet<float>("bounds_min", DataSpace(bound_dims));
+        DataSet dataset2 = group.createDataSet<float>("bounds_max", DataSpace(bound_dims));
+        vector<size_t> bound_ofst{ size_t(cp.master()->communicator().rank()), 0 };
+        vector<size_t> bound_cnts{ 1, bound_dims[1] };
+        dataset1.select(bound_ofst, bound_cnts).write((float*)(&bounds.min[0]));
+        dataset2.select(bound_ofst, bound_cnts).write((float*)(&bounds.max[0]));
 
-            // create the dataset for the points
-            DataSet dataset = group.createDataSet<float>("points", DataSpace(dims));
+        // create the dataset for the grid
+        // 4d: dim[0] = number of ranks, dim[1] - dim[3] number of point values in DIM-dimensional grid, (DIM per point)
+        vector<size_t>  grid_dims(DIM + 1);
+        grid_dims[0] = cp.master()->communicator().size();
+        for (auto i = 0; i < DIM; i++)
+            grid_dims[i + 1] = (grid_bounds.max[i] - grid_bounds.min[i] + 1) * DIM;
+        DataSet dataset3 = group.createDataSet<float>("grid", DataSpace(grid_dims));
 
-            // write points
-            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                write((float*)(&points[0]));
-
-            // debug: read back points
-            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                read((float*)(&read_points[0]));
-
-            // create the dataset for the bounds
-            dims[1] = DIM;
-            DataSet dataset1 = file.createDataSet<float>("bounds_min", DataSpace(dims));
-            DataSet dataset2 = file.createDataSet<float>("bounds_max", DataSpace(dims));
-
-            // write bounds
-            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                write((float*)(&bounds.min[0]));
-            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                write((float*)(&bounds.max[0]));
-
-            // debug: read back bounds
-            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                read((float*)(&read_bounds.min[0]));
-            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                read((float*)(&read_bounds.max[0]));
-
-            vol_plugin.print_files();   // print out metadata before the file closes
-        }                       // in-core memory
-        else                    // file driver
-        {
-            using HighFive::File;
-            using HighFive::Group;
-
-            fmt::print("Using mpi-io file driver\n");
-            MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
-            file_driver.add(vol_prop);
-            File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
-
-            Group group = file.createGroup("group1");
-
-            // create the dataset for the points
-            DataSet dataset = group.createDataSet<float>("points", DataSpace(dims));
-
-            // write points
-            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                write((float*)(&points[0]));
-
-            // debug: read back points
-            dataset.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                read((float*)(&read_points[0]));
-
-            // create the dataset for the bounds
-            dims[1] = DIM;
-            DataSet dataset1 = file.createDataSet<float>("bounds_min", DataSpace(dims));
-            DataSet dataset2 = file.createDataSet<float>("bounds_max", DataSpace(dims));
-
-            // write bounds
-            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                write((float*)(&bounds.min[0]));
-            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                write((float*)(&bounds.max[0]));
-
-            // debug: read back bounds
-            dataset1.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                read((float*)(&read_bounds.min[0]));
-            dataset2.select({size_t(cp.master()->communicator().rank()), 0}, {1, dims[1]}).
-                read((float*)(&read_bounds.max[0]));
-
-            vol_plugin.print_files();   // print out metadata before the file closes
-        }                       // file driver
-
-        // debug: check that the written and read points match
-        for (size_t i = 0; i < points.size(); ++i)
-        {
-            if (points[i] != read_points[i])
-            {
-                fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
-                exit(0);
-            }
-            //fmt::print("  {} == {}\n", points[i], read_points[i]);
-        }
-
-        // debug: check that written and read bounds match
+        // select all the grid points and write grid
+        vector<size_t> grid_ofst(DIM + 1);
+        vector<size_t> grid_cnts(DIM + 1);
+        grid_ofst[0]    = cp.master()->communicator().rank();
+        grid_cnts[0]    = 1;
         for (auto i = 0; i < DIM; i++)
         {
-            if (bounds.min[i] != read_bounds.min[i])
-            {
-                fmt::print("Error: bounds.min[{}] = {} but does not match read_bounds.min[{}] = {}\n", i, bounds.min[i], i, read_bounds.min[i]);
-                exit(0);
-            }
-            if (bounds.max[i] != read_bounds.max[i])
-            {
-                fmt::print("Error: bounds.max[{}] = {} but does not match read_bounds.max[{}] = {}\n", i, bounds.max[i], i, read_bounds.max[i]);
-                exit(0);
-            }
+            grid_ofst[i + 1]    = 0;
+            grid_cnts[i + 1]    = grid_dims[i + 1];
         }
+        // TODO: following is hard-coded for DIM=3, hence the triple dereference
+        // no way to tell HighFive to not check the dimensions of the data against the selection dims
+        dataset3.select(grid_ofst, grid_cnts).write((float***)(&grid[0]));
 
+//         // debug: read back points and check that the written and read points match
+//         vector<Point> read_points(points.size());
+//         dataset.select(pt_ofst, pt_cnts).read((float*)(&read_points[0]));
+//         for (size_t i = 0; i < points.size(); ++i)
+//         {
+//             if (points[i] != read_points[i])
+//             {
+//                 fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
+//                 exit(0);
+//             }
+//         }
+
+//         // debug: read back bounds and check that written and read bounds match
+//         Bounds read_bounds(DIM);
+//         dataset1.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.min[0]));
+//         dataset2.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.max[0]));
+//         for (auto i = 0; i < DIM; i++)
+//         {
+//             if (bounds.min[i] != read_bounds.min[i])
+//             {
+//                 fmt::print("Error: bounds.min[{}] = {} but does not match read_bounds.min[{}] = {}\n", i, bounds.min[i], i, read_bounds.min[i]);
+//                 exit(0);
+//             }
+//             if (bounds.max[i] != read_bounds.max[i])
+//             {
+//                 fmt::print("Error: bounds.max[{}] = {} but does not match read_bounds.max[{}] = {}\n", i, bounds.max[i], i, read_bounds.max[i]);
+//                 exit(0);
+//             }
+//         }
+
+        // debug: read back grid
+        vector<Point> read_grid(grid.size());
+        // TODO: following is hard-coded for DIM=3, hence the triple dereference
+        // no way to tell HighFive to not check the dimensions of the data against the selection dims
+        // TODO: following seg-faults if the read is passed through, and I don't know why
+        dataset3.select(grid_ofst, grid_cnts).read((float***)(&read_grid[0]));
+//         for (size_t i = 0; i < grid.size(); ++i)
+//         {
+//             if (grid[i] != read_grid[i])
+//             {
+//                 fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
+//                 exit(0);
+//             }
+//         }
+
+        vol_plugin.print_files();   // print out metadata before the file closes
         fmt::print("HighFive success.\n");
     }
 
+    // write the block in parallel to an HDF5 file using HighFive API
+    void write_block_highfive(
+            const diy::Master::ProxyWithLink& cp,       // communication proxy
+            bool                              core)     // whether to use core or MPI-IO file driver
+    {
+        if (core)
+        {
+            CoreFileDriver file_driver(1024);
+            write_<CoreFileDriver>(cp, file_driver);
+        }
+        else
+        {
+            MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
+            write_<MPIOFileDriver>(cp, file_driver);
+        }
+    }
+
     // block data
-    Bounds              bounds { DIM };
-    Bounds              box    { DIM };
-    vector<Point>       points;
+    Bounds              bounds      { DIM };        // local block bounds
+    Bounds              box         { DIM };        // global domain bounds
+    Bounds              grid_bounds { DIM };        // local grid bounds
+    vector<Point>       points;                     // unstructured set of points
+    vector<Point>       grid;                       // points linearized from a structured grid
 
 private:
     PointBlock()                                  {}
@@ -273,7 +295,9 @@ struct AddPointBlock
 
             m.add(gid, b, l); // add block to the master (mandatory)
 
-            b->generate_points(domain, num_points); // initialize block data (typical)
+            // initialize the block with a set of points and a regular grid (e.g.)
+            b->generate_points(domain, num_points);
+            b->generate_grid(bounds);
         }
 
     diy::Master&  master;

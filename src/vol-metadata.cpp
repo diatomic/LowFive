@@ -143,9 +143,55 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     fmt::print("dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset_->h5_obj), mem_space_id, file_space_id);
 
-    // FIXME: need to handle this internally
+    // get dataset from our metadata and dataspace being read
+    Dataset*    ds = (Dataset*) dset_->mdata_obj;
+    Dataspace   rs(file_space_id);
 
-    return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    // sanity check that the datatype and dimensionality being read matches the metadata
+    if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
+            ds->type.dtype_size != 8 * H5Tget_size(mem_type_id))
+    {
+        fmt::print(stderr, "Error: dataset_read(): type mismatch\n");
+        abort();
+    }
+    if (rs.dim != ds->space.dim)
+    {
+        fmt::print(stderr, "Error: dataset_read(): dim mismatch\n");
+        abort();
+    }
+
+    // check if the metadata dataspaces contain the selection being read
+    for (auto& dt : ds->data)                   // for all the data triples in the metadata dataset
+    {
+        // TODO: assume it's the file dataspace that we want?
+        Dataspace& fs = dt.file;
+
+        // for now assume selection type needs to match
+        if (rs.selection != fs.selection)
+            continue;
+        size_t i;
+        for (i = 0; i < rs.dim; i++)
+            if (rs.dims !=  fs.dims                         ||      // assume the dims need to match
+                rs.min[i] <   fs.min[i]                     ||
+                rs.max[i] >   fs.max[i]                     ||
+                rs.start[i] <   fs.start[i]                 ||
+                rs.start[i] + rs.count[i] > fs.max[i] + 1   ||
+                rs.stride[i] !=  fs.stride[i]               ||      // assume the stride needs to match
+                rs.block[i] !=  fs.block[i])                        // assume the block size needs to match
+                break;
+        if (i == rs.dim)
+        {
+            fmt::print(stderr, "Found matching dataspace in dataset type = {}, space = {}\n", ds->type, ds->space);
+            break;
+        }
+    }
+
+    // TODO: Trying to pass through the reading of my regular grid crashes
+    // which is why I'm returning 0 and commenting out the pass through
+
+    return 0;
+
+//     return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 herr_t
