@@ -204,6 +204,8 @@ struct PointBlock
                 read((float*)(&read_bounds.max[0]));
 
             vol_plugin.print_files();   // print out metadata before the file closes
+
+            LowFive::save(*vol_plugin.files["outfile1.h5"], "lowfive-outfile1.h5");
         }                       // file driver
 
         // debug: check that the written and read points match

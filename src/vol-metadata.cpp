@@ -158,7 +158,7 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 
     // save our metadata
     Dataset* ds = (Dataset*) dset_->mdata_obj;
-    ds->write(Dataspace(mem_space_id), Dataspace(file_space_id), buf);
+    ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
 
     return VOLBase::dataset_write(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
