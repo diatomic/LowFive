@@ -26,6 +26,12 @@ using namespace std;
 template<unsigned D>
 using SimplePoint = diy::Point<float, D>;
 
+// using discrete bounds so that grid points are not duplicated on block boundaries
+typedef     diy::DiscreteBounds         Bounds;
+typedef     diy::RegularGridLink        Link;
+// typedef     diy::ContinuousBounds       Bounds;
+// typedef     diy::RegularContinuousLink  Link;
+
 // block structure
 // the contents of a block are completely user-defined
 // however, a block must have functions defined to create, destroy, save, and load it
@@ -37,7 +43,6 @@ template<unsigned DIM>
 struct PointBlock
 {
     typedef SimplePoint<DIM>                            Point;
-    typedef diy::ContinuousBounds                       Bounds;
 
     PointBlock(const Bounds& bounds_):
         bounds(bounds_)                 {}
@@ -76,30 +81,26 @@ struct PointBlock
     }
 
     // initialize a regular grid of points in a block
-    // makes a little 3x4x5 grid in the lower left corner of the block
     void generate_grid(const Bounds& bounds)        // local block bounds
     {
-        vector<size_t> npts(DIM);
-        size_t tot_npts = 1;
+        // set up volume iterator for the block grid
+        vector<size_t> block_npts(DIM), block_starts(DIM), dom_npts(DIM);
+        size_t grid_npts = 1;                       // total number of grid points in the block
         for (auto i = 0; i < DIM; i++)
         {
-            npts[i]             = bounds.min[i] + 3 + i;    // 3 x 4 x 5 x ... starting at min corner
-            tot_npts            *= npts[i];
-            grid_bounds.min[i]  = bounds.min[i];
-            grid_bounds.max[i]  = bounds.min[i] + npts[i] - 1;
+            block_npts[i]   = bounds.max[i] - bounds.min[i] + 1;
+            block_starts[i] = bounds.min[i];
+            dom_npts[i]     = box.max[i] - box.min[i] + 1;
+            grid_npts       *= block_npts[i];
         }
-        grid.resize(tot_npts);
-        VolIterator vi(npts);
-        vector<size_t> ijk(DIM);
+        VolIterator vi(block_npts, block_starts, dom_npts);
+
+        // assign globally unique values to the grid scalars, equal to global linear idx of the grid point
+        grid.resize(grid_npts);
         while (!vi.done())
         {
-            vi.idx_ijk(vi.cur_iter(), ijk);
-            for (auto i = 0; i < DIM; i++)
-                grid[vi.cur_iter()][i] = bounds.min[i] + ijk[i];    // value same as index in global domain
-
-            // debug
-            fmt::print("{}\n", grid[vi.cur_iter()]);
-
+            grid[vi.cur_iter()] = vi.sub_full_idx(vi.cur_iter());   // value = index in global domain
+//             fmt::print(stderr, "{}\n", grid[vi.cur_iter()]);
             vi.incr_iter();
         }
     }
@@ -168,71 +169,67 @@ struct PointBlock
         dataset2.select(bound_ofst, bound_cnts).write((float*)(&bounds.max[0]));
 
         // create the dataset for the grid
-        // 4d: dim[0] = number of ranks, dim[1] - dim[3] number of point values in DIM-dimensional grid, (DIM per point)
-        vector<size_t>  grid_dims(DIM + 1);
-        grid_dims[0] = cp.master()->communicator().size();
+        vector<size_t>  grid_dims(DIM);             // global for entire domain
         for (auto i = 0; i < DIM; i++)
-            grid_dims[i + 1] = (grid_bounds.max[i] - grid_bounds.min[i] + 1) * DIM;
+            grid_dims[i] = box.max[i] - box.min[i] + 1;
         DataSet dataset3 = group.createDataSet<float>("grid", DataSpace(grid_dims));
 
         // select all the grid points and write grid
-        vector<size_t> grid_ofst(DIM + 1);
-        vector<size_t> grid_cnts(DIM + 1);
-        grid_ofst[0]    = cp.master()->communicator().rank();
-        grid_cnts[0]    = 1;
+        vector<size_t> grid_ofst(DIM), grid_cnts(DIM);
         for (auto i = 0; i < DIM; i++)
         {
-            grid_ofst[i + 1]    = 0;
-            grid_cnts[i + 1]    = grid_dims[i + 1];
+            grid_ofst[i] = bounds.min[i];
+            grid_cnts[i] = bounds.max[i] - bounds.min[i] + 1;
         }
         // TODO: following is hard-coded for DIM=3, hence the triple dereference
         // no way to tell HighFive to not check the dimensions of the data against the selection dims
+        // NB: select in HighFive refers to file space, not memory space
         dataset3.select(grid_ofst, grid_cnts).write((float***)(&grid[0]));
 
-//         // debug: read back points and check that the written and read points match
-//         vector<Point> read_points(points.size());
-//         dataset.select(pt_ofst, pt_cnts).read((float*)(&read_points[0]));
-//         for (size_t i = 0; i < points.size(); ++i)
-//         {
-//             if (points[i] != read_points[i])
-//             {
-//                 fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
-//                 exit(0);
-//             }
-//         }
+        // debug: read back points and check that the written and read points match
+        vector<Point> read_points(points.size());
+        dataset.select(pt_ofst, pt_cnts).read((float*)(&read_points[0]));
+        for (size_t i = 0; i < points.size(); ++i)
+        {
+            if (points[i] != read_points[i])
+            {
+                fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
+                exit(0);
+            }
+        }
 
-//         // debug: read back bounds and check that written and read bounds match
-//         Bounds read_bounds(DIM);
-//         dataset1.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.min[0]));
-//         dataset2.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.max[0]));
-//         for (auto i = 0; i < DIM; i++)
-//         {
-//             if (bounds.min[i] != read_bounds.min[i])
-//             {
-//                 fmt::print("Error: bounds.min[{}] = {} but does not match read_bounds.min[{}] = {}\n", i, bounds.min[i], i, read_bounds.min[i]);
-//                 exit(0);
-//             }
-//             if (bounds.max[i] != read_bounds.max[i])
-//             {
-//                 fmt::print("Error: bounds.max[{}] = {} but does not match read_bounds.max[{}] = {}\n", i, bounds.max[i], i, read_bounds.max[i]);
-//                 exit(0);
-//             }
-//         }
+        // debug: read back bounds and check that written and read bounds match
+        Bounds read_bounds(DIM);
+        dataset1.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.min[0]));
+        dataset2.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.max[0]));
+        for (auto i = 0; i < DIM; i++)
+        {
+            if (bounds.min[i] != read_bounds.min[i])
+            {
+                fmt::print("Error: bounds.min[{}] = {} but does not match read_bounds.min[{}] = {}\n", i, bounds.min[i], i, read_bounds.min[i]);
+                exit(0);
+            }
+            if (bounds.max[i] != read_bounds.max[i])
+            {
+                fmt::print("Error: bounds.max[{}] = {} but does not match read_bounds.max[{}] = {}\n", i, bounds.max[i], i, read_bounds.max[i]);
+                exit(0);
+            }
+        }
 
         // debug: read back grid
-        vector<Point> read_grid(grid.size());
+        vector<float> read_grid(grid.size());
         // TODO: following is hard-coded for DIM=3, hence the triple dereference
         // no way to tell HighFive to not check the dimensions of the data against the selection dims
-        // TODO: following seg-faults if the read is passed through, and I don't know why
+        // NB: select in HighFive refers to file space, not memory space
         dataset3.select(grid_ofst, grid_cnts).read((float***)(&read_grid[0]));
-//         for (size_t i = 0; i < grid.size(); ++i)
-//         {
-//             if (grid[i] != read_grid[i])
-//             {
-//                 fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
-//                 exit(0);
-//             }
-//         }
+        for (size_t i = 0; i < grid.size(); ++i)
+        {
+            if (grid[i] != read_grid[i])
+            {
+                fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
+                exit(0);
+            }
+        }
 
         vol_plugin.print_files();   // print out metadata before the file closes
         fmt::print("HighFive success.\n");
@@ -258,9 +255,8 @@ struct PointBlock
     // block data
     Bounds              bounds      { DIM };        // local block bounds
     Bounds              box         { DIM };        // global domain bounds
-    Bounds              grid_bounds { DIM };        // local grid bounds
     vector<Point>       points;                     // unstructured set of points
-    vector<Point>       grid;                       // points linearized from a structured grid
+    vector<float>       grid;                       // scalars linearized from a structured grid
 
 private:
     PointBlock()                                  {}
@@ -273,8 +269,6 @@ template<unsigned DIM>
 struct AddPointBlock
 {
     typedef   PointBlock<DIM>                                     Block;
-    typedef   diy::ContinuousBounds                               Bounds;
-    typedef   diy::RegularContinuousLink                          RCLink;
 
     AddPointBlock(diy::Master& master_, size_t num_points_):
         master(master_),
@@ -286,11 +280,11 @@ struct AddPointBlock
                      const Bounds& core,     // block bounds without any ghost added
                      const Bounds& bounds,   // block bounds including any ghost region added
                      const Bounds& domain,   // global data bounds
-                     const RCLink& link)     // neighborhood
+                     const Link& link)       // neighborhood
         const
         {
             Block*          b   = new Block(core);
-            RCLink*         l   = new RCLink(link);
+            Link*           l   = new Link(link);
             diy::Master&    m   = const_cast<diy::Master&>(master);
 
             m.add(gid, b, l); // add block to the master (mandatory)

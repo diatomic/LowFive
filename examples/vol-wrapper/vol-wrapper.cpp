@@ -11,9 +11,6 @@
 
 #include    "vol-wrapper.hpp"
 
-typedef     diy::ContinuousBounds       Bounds;
-typedef     diy::RegularContinuousLink  RCLink;
-
 static const unsigned DIM = 3;
 typedef     PointBlock<DIM>             Block;
 typedef     AddPointBlock<DIM>          AddBlock;

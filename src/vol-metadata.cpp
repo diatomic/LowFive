@@ -159,39 +159,43 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         fmt::print(stderr, "Error: dataset_read(): dim mismatch\n");
         abort();
     }
+    if (rs.selection != Dataspace::SelectionType::hyperslabs)
+        fmt::print(stderr, "Warning: dataset_read(): skipping selections that are not hyperslabs\n");
 
     // check if the metadata dataspaces contain the selection being read
-    for (auto& dt : ds->data)                   // for all the data triples in the metadata dataset
+    if (rs.selection == Dataspace::SelectionType::hyperslabs)   // only handling hyperslab selections for now
     {
-        // TODO: assume it's the file dataspace that we want?
-        Dataspace& fs = dt.file;
-
-        // for now assume selection type needs to match
-        if (rs.selection != fs.selection)
-            continue;
-        size_t i;
-        for (i = 0; i < rs.dim; i++)
-            if (rs.dims !=  fs.dims                         ||      // assume the dims need to match
-                rs.min[i] <   fs.min[i]                     ||
-                rs.max[i] >   fs.max[i]                     ||
-                rs.start[i] <   fs.start[i]                 ||
-                rs.start[i] + rs.count[i] > fs.max[i] + 1   ||
-                rs.stride[i] !=  fs.stride[i]               ||      // assume the stride needs to match
-                rs.block[i] !=  fs.block[i])                        // assume the block size needs to match
-                break;
-        if (i == rs.dim)
+        for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
         {
-            fmt::print(stderr, "Found matching dataspace in dataset type = {}, space = {}\n", ds->type, ds->space);
-            break;
-        }
-    }
+            // TODO: assume it's the file dataspace that we want?
+            Dataspace& fs = dt.file;
 
-    // TODO: Trying to pass through the reading of my regular grid crashes
-    // which is why I'm returning 0 and commenting out the pass through
+            // for now assume selection type needs to match
+            if (rs.selection != fs.selection)
+                continue;
+            size_t i;
+            for (i = 0; i < rs.dim; i++)
+                if (rs.dims !=  fs.dims                         ||      // assume the dims need to match
+                        // TODO: not checking bounds for now, not clear whether we should
+//                         rs.min[i] <   fs.min[i]                     ||
+//                         rs.max[i] >   fs.max[i]                     ||
+                        rs.start[i] <   fs.start[i]                 ||
+                        rs.start[i] + rs.count[i] > fs.start[i] + fs.count[i]   ||
+                        rs.stride[i] !=  fs.stride[i]               ||      // TODO: assume the stride needs to match for now
+                        rs.block[i] !=  fs.block[i])                        // TODO: assume the block size needs to match for now
+                    break;
+            if (i == rs.dim)
+            {
+                fmt::print(stderr, "Found matching dataspace in dataset type = {}, space = {}\n", ds->type, fs);
+                break;
+            }
+        }   // for all data triples
+    }   // hyperslab selection
 
-    return 0;
+    // TODO: eventually return here and don't pass through below
+//     return 0;
 
-//     return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 herr_t
