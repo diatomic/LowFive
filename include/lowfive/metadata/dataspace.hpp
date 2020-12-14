@@ -19,6 +19,9 @@ struct Dataspace: Hid
             Dataspace(hid_t space_id):
                 Hid(space_id)
     {
+        if (id == 0)
+            return;
+
         dim = H5Sget_simple_extent_ndims(id);
         min.resize(dim);
         max.resize(dim);
