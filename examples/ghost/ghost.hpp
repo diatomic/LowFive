@@ -27,10 +27,12 @@ template<unsigned D>
 using SimplePoint = diy::Point<float, D>;
 
 // using discrete bounds so that grid points are not duplicated on block boundaries
-typedef     diy::DiscreteBounds         Bounds;
-typedef     diy::RegularGridLink        Link;
-// typedef     diy::ContinuousBounds       Bounds;
-// typedef     diy::RegularContinuousLink  Link;
+typedef     diy::DiscreteBounds                                 Bounds;
+typedef     diy::RegularGridLink                                Link;
+// typedef     diy::ContinuousBounds                               Bounds;
+// typedef     diy::RegularContinuousLink                          Link;
+typedef     diy::RegularDecomposer<Bounds>::BoolVector          BoolVector;
+typedef     diy::RegularDecomposer<Bounds>::CoordinateVector    CoordinateVector;
 
 // block structure
 // the contents of a block are completely user-defined
@@ -44,7 +46,8 @@ struct PointBlock
 {
     typedef SimplePoint<DIM>                            Point;
 
-    PointBlock(const Bounds& bounds_):
+    PointBlock(const Bounds& core_, const Bounds& bounds_):
+        core(core_),
         bounds(bounds_)                 {}
 
     // allocate a new block
@@ -136,96 +139,107 @@ struct PointBlock
             fmt::print("[{}] Points: {}\n", cp.gid(), points.size());
     }
 
-    // write the block
-    template<typename FileDriver>
-    void write_(
-            const diy::Master::ProxyWithLink&   cp,
-            FileDriver&                         file_driver)
+    // write the block in parallel to an HDF5 file using native HDF5 API
+    void write_block_hdf5(
+            const diy::Master::ProxyWithLink& cp,           // communication proxy
+            bool                              core_driver)  // whether to use core or MPI-IO file driver
     {
-        fmt::print("Writing in HighFive API...\n");
+        fmt::print("Writing in native HDF5 API...\n");
 
-        // open file for parallel read/write
+        hid_t       file, dset, memspace, filespace, plist, group;      // identifiers
+        herr_t      status;
+
+        // Set up file access property list with core or mpi-io file driver
+        plist = H5Pcreate(H5P_FILE_ACCESS);
+        if (core_driver)
+        {
+            fmt::print("Using in-core file driver\n");
+            H5Pset_fapl_core(plist, 1024 /* grow memory by this incremenet */, 0 /* bool backing_store (actual file) */);
+        }
+        else
+        {
+            fmt::print("Using mpi-io file driver\n");
+            H5Pset_fapl_mpio(plist, cp.master()->communicator(), MPI_INFO_NULL);
+        }
+
+        // set up lowfive
         l5::MetadataVOL vol_plugin;
         l5::H5VOLProperty vol_prop(vol_plugin);
-        printf("our-vol-plugin registered: %d\n", H5VLis_connector_registered_by_name(vol_plugin.name.c_str()));
-        file_driver.add(vol_prop);
-        File file("outfile1.h5", File::ReadWrite | File::Create | File::Truncate, file_driver);
+        vol_prop.apply(plist);
 
-        // create top-level group
-        Group group = file.createGroup("group1");
+        // Create a new file using default properties
+        file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
 
-        // create and write the dataset for the points
-        // 2d: dim[0] = number of ranks, dim[1] = number of point values (DIM per point)
-        vector<size_t> pt_dims{ size_t(cp.master()->communicator().size()), points.size() * DIM };
-        DataSet dataset = group.createDataSet<float>("points", DataSpace(pt_dims));
-        vector<size_t> pt_ofst{ size_t(cp.master()->communicator().rank()), 0 };
-        vector<size_t> pt_cnts{ 1, pt_dims[1] };
-        dataset.select(pt_ofst, pt_cnts).write((float*)(&points[0]));
+        // TODO: following crashes when combined with our vol_prop.apply() above
+        // Do we need to specify collective I/O, if we're not using it anyway?
+        // everything seems to work fine if this is commented out (TODO: remove)
+        //
+        // set the data transfer mode to use collective I/O
+//         if (!core_driver)
+//         {
+//             plist= H5Pcreate(H5P_DATASET_XFER);
+//             H5Pset_dxpl_mpio(plist, H5FD_MPIO_COLLECTIVE);
+//         }
 
-        // create and write the dataset for the bounds
-        // 2d: dim[0] = number of ranks, dim[1] = number of bound values (DIM)
-        vector<size_t> bound_dims{ size_t(cp.master()->communicator().size()), DIM };                          // local size
-        DataSet dataset1 = group.createDataSet<float>("bounds_min", DataSpace(bound_dims));
-        DataSet dataset2 = group.createDataSet<float>("bounds_max", DataSpace(bound_dims));
-        vector<size_t> bound_ofst{ size_t(cp.master()->communicator().rank()), 0 };
-        vector<size_t> bound_cnts{ 1, bound_dims[1] };
-        dataset1.select(bound_ofst, bound_cnts).write((float*)(&bounds.min[0]));
-        dataset2.select(bound_ofst, bound_cnts).write((float*)(&bounds.max[0]));
+        // Create top-level group
+        group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-        // create the dataset for the grid
-        vector<size_t>  grid_dims(DIM);             // global for entire domain
-        for (auto i = 0; i < DIM; i++)
-            grid_dims[i] = box.max[i] - box.min[i] + 1;
-        DataSet dataset3 = group.createDataSet<float>("grid", DataSpace(grid_dims));
-
-        // select all the grid points and write grid
-        vector<size_t> grid_ofst(DIM), grid_cnts(DIM);
+        // number of grid points in core, bounds, domain
+        vector<hsize_t> core_cnts(DIM);
+        vector<hsize_t> bounds_cnts(DIM);
+        vector<hsize_t> domain_cnts(DIM);
         for (auto i = 0; i < DIM; i++)
         {
-            grid_ofst[i] = bounds.min[i];
-            grid_cnts[i] = bounds.max[i] - bounds.min[i] + 1;
-        }
-        // TODO: following is hard-coded for DIM=3, hence the triple dereference
-        // no way to tell HighFive to not check the dimensions of the data against the selection dims
-        // NB: select in HighFive refers to file space, not memory space
-        dataset3.select(grid_ofst, grid_cnts).write((float***)(&grid[0]));
-
-        // debug: read back points and check that the written and read points match
-        vector<Point> read_points(points.size());
-        dataset.select(pt_ofst, pt_cnts).read((float*)(&read_points[0]));
-        for (size_t i = 0; i < points.size(); ++i)
-        {
-            if (points[i] != read_points[i])
-            {
-                fmt::print("Error: points[{}] = {} but does not match read_points[{}] = {}\n", i, points[i], i, read_points[i]);
-                exit(0);
-            }
+            core_cnts[i]    = core.max[i]   - core.min[i]   + 1;
+            bounds_cnts[i]  = bounds.max[i] - bounds.min[i] + 1;
+            domain_cnts[i]  = box.max[i]    - box.min[i]    + 1;
+            fmt::print(stderr, "i {} core_cnts {} bounds_cnts {} domain_cnts {}\n", i, core_cnts[i], bounds_cnts[i], domain_cnts[i]);
         }
 
-        // debug: read back bounds and check that written and read bounds match
-        Bounds read_bounds(DIM);
-        dataset1.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.min[0]));
-        dataset2.select(bound_ofst, bound_cnts).read((float*)(&read_bounds.max[0]));
+        // Create the file data space for the global grid
+        filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
+
+        // Create the dataset
+        dset = H5Dcreate2(group, "/group1/grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+        // filespace = core selected out of global domain
+        vector<hsize_t> ofst(DIM);
         for (auto i = 0; i < DIM; i++)
         {
-            if (bounds.min[i] != read_bounds.min[i])
-            {
-                fmt::print("Error: bounds.min[{}] = {} but does not match read_bounds.min[{}] = {}\n", i, bounds.min[i], i, read_bounds.min[i]);
-                exit(0);
-            }
-            if (bounds.max[i] != read_bounds.max[i])
-            {
-                fmt::print("Error: bounds.max[{}] = {} but does not match read_bounds.max[{}] = {}\n", i, bounds.max[i], i, read_bounds.max[i]);
-                exit(0);
-            }
+            ofst[i] = core.min[i];
+//             fmt::print(stderr, "writing filespace i {} ofst {}\n", i, ofst[i]);
         }
+        status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
-        // debug: read back grid
+        // memspace = core selected out of bounds
+        memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
+        for (auto i = 0; i < DIM; i++)
+        {
+            ofst[i] = core.min[i] - bounds.min[i];
+//             fmt::print(stderr, "writing memspace i {} ofst {}\n", i, ofst[i]);
+        }
+        status = H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
+
+        // write the dataset
+        status = H5Dwrite(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &grid[0]);
+
+        // read back the grid as a test
+        // include the ghost in the read back, so that the read grid matches what is in the block bounds
         vector<float> read_grid(grid.size());
-        // TODO: following is hard-coded for DIM=3, hence the triple dereference
-        // no way to tell HighFive to not check the dimensions of the data against the selection dims
-        // NB: select in HighFive refers to file space, not memory space
-        dataset3.select(grid_ofst, grid_cnts).read((float***)(&read_grid[0]));
+
+        // filespace = bounds selected out of global domain
+        filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
+        for (auto i = 0; i < DIM; i++)
+        {
+            ofst[i] = bounds.min[i];
+//             fmt::print(stderr, "reading filespace i {} ofst {}\n", i, ofst[i]);
+        }
+        status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &bounds_cnts[0], NULL);
+        // memspace = simple count from bounds
+        memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
+        status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_grid[0]);
+
+        // check that the values match
         for (size_t i = 0; i < grid.size(); ++i)
         {
             if (grid[i] != read_grid[i])
@@ -233,31 +247,23 @@ struct PointBlock
                 fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
                 exit(0);
             }
+//             fmt::print("  {} {}\n", points[i], read_points[i]);
         }
 
-        vol_plugin.print_files();   // print out metadata before the file closes
-        fmt::print("HighFive success.\n");
-    }
+        // clean up
+        status = H5Dclose(dset);
+        status = H5Sclose(memspace);
+        status = H5Sclose(filespace);
+        status = H5Pclose(plist);
+        status = H5Gclose(group);
+        status = H5Fclose(file);
 
-    // write the block in parallel to an HDF5 file using HighFive API
-    void write_block_highfive(
-            const diy::Master::ProxyWithLink& cp,       // communication proxy
-            bool                              core)     // whether to use core or MPI-IO file driver
-    {
-        if (core)
-        {
-            CoreFileDriver file_driver(1024);
-            write_<CoreFileDriver>(cp, file_driver);
-        }
-        else
-        {
-            MPIOFileDriver file_driver((MPI_Comm)(cp.master()->communicator()), MPI_INFO_NULL);
-            write_<MPIOFileDriver>(cp, file_driver);
-        }
+        fmt::print("HDF5 success.\n");
     }
 
     // block data
-    Bounds              bounds      { DIM };        // local block bounds
+    Bounds              bounds      { DIM };        // local block bounds incl. ghost
+    Bounds              core        { DIM };        // local block bounds excl. ghost
     Bounds              box         { DIM };        // global domain bounds
     vector<Point>       points;                     // unstructured set of points
     vector<float>       grid;                       // scalars linearized from a structured grid
@@ -287,7 +293,7 @@ struct AddPointBlock
                      const Link& link)       // neighborhood
         const
         {
-            Block*          b   = new Block(core);
+            Block*          b   = new Block(core, bounds);
             Link*           l   = new Link(link);
             diy::Master&    m   = const_cast<diy::Master&>(master);
 

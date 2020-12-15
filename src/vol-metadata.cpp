@@ -187,6 +187,11 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
             if (i == rs.dim)
             {
                 fmt::print(stderr, "Found matching dataspace in dataset type = {}, space = {}\n", ds->type, fs);
+
+                // debug: print the first few values
+//                 for (auto j = 0; j < 10; j++)
+//                     fmt::print(stderr, "reading {}\n", ((float *)dt.data)[j]);
+
                 break;
             }
         }   // for all data triples
