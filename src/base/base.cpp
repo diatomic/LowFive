@@ -30,14 +30,14 @@ VOLBase(unsigned version_, int value_, std::string name_):
             NULL  // OUR_pass_through_free_wrap_ctx,            /* free_wrap_ctx */
         },
         {                                           /* attribute_cls */
-            NULL, // OUR_pass_through_attr_create,              /* create */
-            NULL, // OUR_pass_through_attr_open,                /* open */
-            NULL, // OUR_pass_through_attr_read,                /* read */
-            NULL, // OUR_pass_through_attr_write,               /* write */
-            NULL, // OUR_pass_through_attr_get,                 /* get */
-            NULL, // OUR_pass_through_attr_specific,            /* specific */
-            NULL, // OUR_pass_through_attr_optional,            /* optional */
-            NULL  // OUR_pass_through_attr_close                /* close */
+            &_attr_create,                              /* create */
+            &_attr_open,                                /* open */
+            &_attr_read,                                /* read */
+            &_attr_write,                               /* write */
+            &_attr_get,                                 /* get */
+            &_attr_specific,                            /* specific */
+            &_attr_optional,                            /* optional */
+            &_attr_close                                /* close */
         },
         {                                               /* dataset_cls */
             &_dataset_create,                            /* create */

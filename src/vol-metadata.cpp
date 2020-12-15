@@ -130,7 +130,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
     } else
     {
-        fmt::print(stderr, "Warning, unknown get_type == {} in dataset_get()", get_type);
+        throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
     }
 
     return 0;
@@ -212,3 +212,97 @@ group_close(void *grp, hid_t dxpl_id, void **req)
     return retval;
 }
 
+void*
+LowFive::MetadataVOL::
+attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+
+    fmt::print(stderr, "Attr Create\n");
+    fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
+
+    ObjectPointers* result = new ObjectPointers;
+    result->h5_obj = VOLBase::attr_create(obj_->h5_obj, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
+
+    return result;
+}
+
+herr_t
+LowFive::MetadataVOL::
+attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+
+    va_list args;
+    va_copy(args,arguments);
+
+    fmt::print("attr = {}, get_type = {}, req = {}\n", fmt::ptr(obj_->h5_obj), get_type, fmt::ptr(req));
+
+    fmt::print(stderr, "Attr Get\n");
+    fmt::print("get type = {}\n", get_type);
+
+    if (get_type == H5VL_ATTR_GET_SPACE)
+    {
+        fmt::print("GET_SPACE\n");
+        auto& dataspace = static_cast<Attribute*>(obj_->mdata_obj)->space;
+
+        hid_t space_id = dataspace.copy();
+        fmt::print("copied space id = {}, space = {}\n", space_id, Dataspace(space_id));
+
+        hid_t *ret = va_arg(args, hid_t*);
+        *ret = space_id;
+        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+    } else if (get_type == H5VL_ATTR_GET_TYPE)
+    {
+        fmt::print("GET_TYPE\n");
+        auto& datatype = static_cast<Attribute*>(obj_->mdata_obj)->type;
+
+        fmt::print("dataset data type id = {}, datatype = {}\n",
+                    datatype.id, datatype);
+
+        hid_t dtype_id = datatype.copy();
+        fmt::print("copied data type id = {}, datatype = {}\n",
+                    dtype_id, Datatype(dtype_id));
+
+        hid_t *ret = va_arg(args, hid_t*);
+        *ret = dtype_id;
+        fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+    } else
+    {
+        throw MetadataError(fmt::format("Warning, unknown get_type == {} in attr_get()", get_type));
+    }
+
+    return 0;
+}
+
+herr_t
+LowFive::MetadataVOL::
+attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* attr_ = (ObjectPointers*) attr;
+
+    fmt::print("attr = {}, mem_type_id = {}, mem type = {}\n", fmt::ptr(attr_->h5_obj), mem_type_id, Datatype(mem_type_id));
+
+    // save our metadata
+    Attribute* a = (Attribute*) attr_->mdata_obj;
+    a->write(Datatype(mem_type_id), buf);
+
+    return VOLBase::attr_write(attr_->h5_obj, mem_type_id, buf, dxpl_id, req);
+}
+
+herr_t
+LowFive::MetadataVOL::
+attr_close(void *attr, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* attr_ = (ObjectPointers*) attr;
+    fmt::print("close: attr = {}, dxpl_id = {}\n", fmt::ptr(attr_->h5_obj), dxpl_id);
+
+    herr_t retval = VOLBase::attr_close(attr_->h5_obj, dxpl_id, req);
+
+    Attribute* a = (Attribute*) attr_->mdata_obj;
+
+    delete attr_;
+
+    return retval;
+}

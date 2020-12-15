@@ -3,6 +3,7 @@ add_library             (lowfive
                             base/info.cpp
                             base/dataset.cpp
                             base/file.cpp
+                            base/attr.cpp
                             base/group.cpp
                             base/introspect.cpp
                             vol-metadata.cpp)

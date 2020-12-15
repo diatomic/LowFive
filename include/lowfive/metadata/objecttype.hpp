@@ -8,6 +8,7 @@ enum class ObjectType
     File,
     Group,
     Dataset,
+    Attribute,
     NamedDtype
 };
 

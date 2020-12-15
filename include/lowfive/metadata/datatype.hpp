@@ -17,6 +17,8 @@ struct Datatype: Hid
             Datatype(hid_t dtype_id_):
                 Hid(dtype_id_)
     {
+        if (id == 0) return;
+
         dtype_class    = convert_type_class(H5Tget_class(id));
         dtype_size     = 8 * H5Tget_size(id);
     }

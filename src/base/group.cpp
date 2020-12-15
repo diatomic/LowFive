@@ -20,7 +20,7 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL GROUP Create\n");
 #endif
 
@@ -64,8 +64,8 @@ _group_close(void *grp, hid_t dxpl_id, void **req)
     pass_through_t *o = (pass_through_t *)grp;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
-    printf("------- PASS THROUGH VOL H5Gclose\n");
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL GROUP close\n");
 #endif
 
     ret_value = o->vol->group_close(o->under_object, dxpl_id, req);

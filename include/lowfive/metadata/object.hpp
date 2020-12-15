@@ -5,16 +5,11 @@ namespace LowFive
 
 struct Object
 {
-    using Attributes = std::map<std::string, Attribute>;
-    using Properties = std::map<std::string, Attribute>;
-
     Object*                         parent;
     std::vector<Object*>            children;
 
     ObjectType                      type;
     std::string                     name;
-    Attributes                      attributes;
-    Properties                      properties;
 
     Object(ObjectType type_, std::string name_) :
         parent(nullptr),
