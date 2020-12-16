@@ -81,14 +81,16 @@ int main(int argc, char* argv[])
 
 
     /* create a compound datatype */
-    int dim = 2;
+    int dim = 3;
     hid_t comp_dtype = H5Tcreate (H5T_COMPOUND, 2 * dim * sizeof(int));
     H5Tinsert (comp_dtype, "lo_i", 0 * sizeof(int), H5T_NATIVE_INT);
     H5Tinsert (comp_dtype, "lo_j", 1 * sizeof(int), H5T_NATIVE_INT);
-    H5Tinsert (comp_dtype, "hi_i", 2 * sizeof(int), H5T_NATIVE_INT);
-    H5Tinsert (comp_dtype, "hi_j", 3 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "lo_k", 2 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "hi_i", 3 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "hi_j", 4 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "hi_k", 5 * sizeof(int), H5T_NATIVE_INT);
     
-    std::vector<int> domain { 2, 2, 6, 6 };
+    std::vector<int> domain { 2, 2, 2, 6, 6, 6 };
     hid_t aid = H5Screate(H5S_SCALAR);
     hid_t domain_attr = H5Acreate(group.getId(), "prob_domain", comp_dtype, aid, H5P_DEFAULT, H5P_DEFAULT);
     H5Awrite(domain_attr, comp_dtype, domain.data());
