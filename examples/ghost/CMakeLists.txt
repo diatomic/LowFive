@@ -1,4 +1,4 @@
-set                         (targets    core-mem)
+set                         (targets    ghost)
 
 foreach                     (t ${targets})
   add_executable            (${t} ${t}.cpp)

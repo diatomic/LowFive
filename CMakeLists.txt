@@ -55,6 +55,7 @@ find_package                (Threads)
 find_path                   (DIY_INCLUDE_DIRS diy/types.h)
 
 # fmt
+option                      (FMT_INSTALL "" ON)
 add_subdirectory            (ext/fmt)
 set                         (libraries ${libraries} fmt::fmt)
 
