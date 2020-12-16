@@ -150,17 +150,11 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     // sanity check that the datatype and dimensionality being read matches the metadata
     if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
             ds->type.dtype_size != 8 * H5Tget_size(mem_type_id))
-    {
-        fmt::print(stderr, "Error: dataset_read(): type mismatch\n");
-        abort();
-    }
+        throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
     if (rs.dim != ds->space.dim)
-    {
-        fmt::print(stderr, "Error: dataset_read(): dim mismatch\n");
-        abort();
-    }
+        throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
     if (rs.selection != Dataspace::Selection::hyperslabs)
-        fmt::print(stderr, "Warning: dataset_read(): skipping selections that are not hyperslabs\n");
+        throw MetadataError(fmt::format("Warning: dataset_read(): skipping selections that are not hyperslabs"));
 
     // check if the metadata dataspaces contain the selection being read
     if (rs.selection == Dataspace::Selection::hyperslabs)       // only handling hyperslab selections for now
@@ -175,6 +169,11 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
                 continue;
             size_t i;
             for (i = 0; i < rs.dim; i++)
+            {
+                // debug
+                fmt::print(stderr, "i={} rs: start={} count={} fs: start={} count={}\n",
+                        i, rs.start[i], rs.count[i], fs.start[i], fs.count[i]);
+
                 if (rs.dims !=  fs.dims                         ||      // assume the dims need to match
                         // TODO: not checking bounds for now, not clear whether we should
 //                         rs.min[i] <   fs.min[i]                     ||
@@ -184,6 +183,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
                         rs.stride[i] !=  fs.stride[i]               ||      // TODO: assume the stride needs to match for now
                         rs.block[i] !=  fs.block[i])                        // TODO: assume the block size needs to match for now
                     break;
+            }
             if (i == rs.dim)
             {
                 fmt::print(stderr, "Found matching dataspace in dataset type = {}, space = {}\n", ds->type, fs);
