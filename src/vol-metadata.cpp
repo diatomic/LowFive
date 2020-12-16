@@ -159,11 +159,11 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         fmt::print(stderr, "Error: dataset_read(): dim mismatch\n");
         abort();
     }
-    if (rs.selection != Dataspace::SelectionType::hyperslabs)
+    if (rs.selection != Dataspace::Selection::hyperslabs)
         fmt::print(stderr, "Warning: dataset_read(): skipping selections that are not hyperslabs\n");
 
     // check if the metadata dataspaces contain the selection being read
-    if (rs.selection == Dataspace::SelectionType::hyperslabs)   // only handling hyperslab selections for now
+    if (rs.selection == Dataspace::Selection::hyperslabs)       // only handling hyperslab selections for now
     {
         for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
         {
