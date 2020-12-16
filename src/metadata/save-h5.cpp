@@ -7,7 +7,7 @@ void save_dataset_data(const Hid& dataset, const Dataset* d)
 {
     for (auto x : d->data)
     {
-        if (x.file.selection != Dataspace::SelectionType::hyperslabs && x.file.selection != Dataspace::SelectionType::all)
+        if (x.file.selection != Dataspace::Selection::hyperslabs && x.file.selection != Dataspace::Selection::all)
             throw MetadataError(fmt::format("encountered unexpected non-hyperslab selection: {}", x.file.selection));
 
         H5Dwrite(dataset.id, x.type.id, x.memory.id, x.file.id, H5P_DEFAULT, x.data);

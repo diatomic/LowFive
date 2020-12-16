@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
 
     h5::Group group = file.createGroup("group1");
 
-    // dataset
+    /* write a dataset */
     std::vector<size_t> dims{2, 6};
 
     // Create the dataset
@@ -74,20 +74,33 @@ int main(int argc, char* argv[])
     dataset.write(data);
 
 
-    // Now let's add a attribute on this dataset
-    // This attribute will be named "note"
-    // and have the following content
-    //std::string string_list("very important dataset");
-    //h5::Attribute a = dataset.createAttribute<std::string>("note", h5::DataSpace::From(string_list));
-    //a.write(string_list);
-
-    // We also add a "version" attribute
-    // that will be an array 1x2 of integer
+    /* write an attribute */
     std::vector<int> version { 1, 0 };
     h5::Attribute v = group.createAttribute<int>("version", h5::DataSpace::From(version));
     v.write(version);
 
+
+    /* create a compound datatype */
+    int dim = 2;
+    hid_t comp_dtype = H5Tcreate (H5T_COMPOUND, 2 * dim * sizeof(int));
+    H5Tinsert (comp_dtype, "lo_i", 0 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "lo_j", 1 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "hi_i", 2 * sizeof(int), H5T_NATIVE_INT);
+    H5Tinsert (comp_dtype, "hi_j", 3 * sizeof(int), H5T_NATIVE_INT);
+    
+    std::vector<int> domain { 2, 2, 6, 6 };
+    hid_t aid = H5Screate(H5S_SCALAR);
+    hid_t domain_attr = H5Acreate(group.getId(), "prob_domain", comp_dtype, aid, H5P_DEFAULT, H5P_DEFAULT);
+    H5Awrite(domain_attr, comp_dtype, domain.data());
+    H5Aclose(domain_attr);
+    H5Sclose(aid);
+    
+    H5Tclose(comp_dtype);
+
+
     metadata_vol_plugin.print_files();   // print out metadata before the file closes
 
-    LowFive::save(*metadata_vol_plugin.files["variety1.h5"], "lowfive-variety1.h5");
+    auto* f = metadata_vol_plugin.files["variety1.h5"];
+    if (f)
+        LowFive::save(*f, "lowfive-variety1.h5");
 }

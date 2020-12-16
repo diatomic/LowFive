@@ -5,13 +5,15 @@ namespace LowFive
 
 struct Dataspace: Hid
 {
-    enum class SelectionType { none, points, hyperslabs, all };
+    enum class Class     { scalar, simple, null };
+    enum class Selection { none, points, hyperslabs, all };
 
     int                             dim;
     std::vector<size_t>             min, max,
                                     dims, maxdims;
 
-    SelectionType                   selection;
+    Class                           cls;
+    Selection                       selection;
 
     // hyperslab
     std::vector<size_t>             start, stride, count, block;
@@ -20,6 +22,20 @@ struct Dataspace: Hid
                 Hid(space_id)
     {
         if (id == 0)
+            return;
+
+        H5S_class_t cls_ = H5Sget_simple_extent_type(id);
+
+        if (cls_ == H5S_NO_CLASS)
+            throw MetadataError(fmt::format("Unexpected no class in dataspace = {}", id));
+        else if (cls_ == H5S_SCALAR)
+            cls = Class::scalar;
+        else if (cls_ == H5S_SIMPLE)
+            cls = Class::simple;
+        else if (cls_ == H5S_NULL)
+            cls = Class::null;
+
+        if (cls != Class::simple)
             return;
 
         dim = H5Sget_simple_extent_ndims(id);
@@ -38,13 +54,13 @@ struct Dataspace: Hid
         H5S_sel_type selection_ = H5Sget_select_type(space_id);
         if (selection_ == H5S_SEL_NONE)
         {
-            selection = SelectionType::none;
+            selection = Selection::none;
         } else if (selection_ == H5S_SEL_POINTS)
         {
-            selection = SelectionType::points;
+            selection = Selection::points;
         } else if (selection_ == H5S_SEL_HYPERSLABS)
         {
-            selection = SelectionType::hyperslabs;
+            selection = Selection::hyperslabs;
 
             if (H5Sis_regular_hyperslab(space_id) <= 0)
                 throw MetadataError(fmt::format("Cannot handle irregular hyperslabs, space_id = {}", space_id));
@@ -65,7 +81,7 @@ struct Dataspace: Hid
                 block[i]    = block_[i];
             }
         } else if (selection_ == H5S_SEL_ALL) {
-            selection = SelectionType::all;
+            selection = Selection::all;
         }
 
         for (size_t i = 0; i < dim; ++i)
@@ -84,31 +100,40 @@ struct Dataspace: Hid
 
     friend std::ostream& operator<<(std::ostream& out, const Dataspace& ds)
     {
-        fmt::print(out, "(min = [{}], max = [{}], dims = [{}], maxdims = [{}]",
-                   fmt::join(ds.min,    ","),
-                   fmt::join(ds.max,    ","),
-                   fmt::join(ds.dims,   ","),
-                   fmt::join(ds.maxdims, ","));
-
-        fmt::print(out, ", selection = ");
-        if (ds.selection == SelectionType::none)
-            fmt::print(out, "none");
-        else if (ds.selection == SelectionType::points)
-            fmt::print(out, "points");
-        else if (ds.selection == SelectionType::hyperslabs)
+        if (ds.cls == Class::scalar)
+            fmt::print(out, "class = scalar");
+        else if (ds.cls == Class::null)
+            fmt::print(out, "class = null");
+        else if (ds.cls == Class::simple)
         {
-            fmt::print(out, "hyperslab = (");
-            fmt::print(out, "start = [{}], stride = [{}], count = [{}], block = [{}]",
-                       fmt::join(ds.start,  ","),
-                       fmt::join(ds.stride, ","),
-                       fmt::join(ds.count,  ","),
-                       fmt::join(ds.block,  ","));
+            fmt::print(out, "class = simple, ");
+
+            fmt::print(out, "(min = [{}], max = [{}], dims = [{}], maxdims = [{}]",
+                       fmt::join(ds.min,    ","),
+                       fmt::join(ds.max,    ","),
+                       fmt::join(ds.dims,   ","),
+                       fmt::join(ds.maxdims, ","));
+
+            fmt::print(out, ", selection = ");
+            if (ds.selection == Selection::none)
+                fmt::print(out, "none");
+            else if (ds.selection == Selection::points)
+                fmt::print(out, "points");
+            else if (ds.selection == Selection::hyperslabs)
+            {
+                fmt::print(out, "hyperslab = (");
+                fmt::print(out, "start = [{}], stride = [{}], count = [{}], block = [{}]",
+                           fmt::join(ds.start,  ","),
+                           fmt::join(ds.stride, ","),
+                           fmt::join(ds.count,  ","),
+                           fmt::join(ds.block,  ","));
+                fmt::print(out, ")");
+            }
+            else if (ds.selection == Selection::all)
+                fmt::print(out, "all");
+
             fmt::print(out, ")");
         }
-        else if (ds.selection == SelectionType::all)
-            fmt::print(out, "all");
-
-        fmt::print(out, ")");
 
         return out;
     }
