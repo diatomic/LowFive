@@ -1,7 +1,5 @@
 #pragma once
 
-#include    <util.hpp>
-
 #include    <vector>
 #include    <cassert>
 #include    <diy/types.hpp>
@@ -81,10 +79,7 @@ struct PointBlock
                     (domain.max[j] - domain.min[j]);
     }
 
-#if 1
-
     // initialize a regular grid of points in a block
-    // using DIY's Grid class
     void generate_grid()                            // local block bounds
     {
         using GridPoint = diy::Point<size_t, DIM>;
@@ -112,41 +107,6 @@ struct PointBlock
             grid[i] = domain_grid.index(vertex);
         }
     }
-
-#else
-
-    // initialize a regular grid of points in a block
-    // using Tom's VolIterator
-    void generate_grid()                            // local block bounds
-    {
-        // set up volume iterator for the block grid
-        vector<size_t> block_npts(DIM), block_starts(DIM), dom_npts(DIM);
-        size_t grid_npts = 1;                       // total number of grid points in the block
-        for (auto i = 0; i < DIM; i++)
-        {
-            // swap dimensions to be C order to match DIY bounds and HDF5 dataspaces ordering
-            block_npts[DIM - i - 1]   = bounds.max[i] - bounds.min[i] + 1;
-            block_starts[DIM - i - 1] = bounds.min[i];
-            dom_npts[DIM - i - 1]     = domain.max[i] - domain.min[i] + 1;
-            grid_npts                 *= block_npts[DIM - i - 1];
-        }
-        VolIterator vi(block_npts, block_starts, dom_npts);
-
-        // assign globally unique values to the grid scalars, equal to global linear idx of the grid point
-        grid.resize(grid_npts);
-        while (!vi.done())
-        {
-            grid[vi.cur_iter()] = vi.sub_full_idx(vi.cur_iter());   // value = index in global domain
-
-            // debug: print a few values
-//             if (vi.cur_iter() < 10)
-//                 fmt::print(stderr, "writing {}\n", grid[vi.cur_iter()]);
-
-            vi.incr_iter();
-        }
-    }
-
-#endif
 
     // check that block values are in the block bounds (debug)
     void verify_block(const diy::Master::ProxyWithLink& cp) // communication proxy

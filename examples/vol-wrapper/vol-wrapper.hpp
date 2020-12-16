@@ -1,12 +1,11 @@
 #pragma once
 
-#include    <util.hpp>
-
 #include    <vector>
 #include    <cassert>
 #include    <diy/types.hpp>
 #include    <diy/point.hpp>
 #include    <diy/log.hpp>
+#include    <diy/grid.hpp>
 
 #include    "hdf5.h"
 
@@ -29,8 +28,6 @@ using SimplePoint = diy::Point<float, D>;
 // using discrete bounds so that grid points are not duplicated on block boundaries
 typedef     diy::DiscreteBounds         Bounds;
 typedef     diy::RegularGridLink        Link;
-// typedef     diy::ContinuousBounds       Bounds;
-// typedef     diy::RegularContinuousLink  Link;
 
 // block structure
 // the contents of a block are completely user-defined
@@ -44,8 +41,10 @@ struct PointBlock
 {
     typedef SimplePoint<DIM>                            Point;
 
-    PointBlock(const Bounds& bounds_):
-        bounds(bounds_)                 {}
+    PointBlock(const Bounds& core_, const Bounds& bounds_, const Bounds& domain_):
+        core(core_),
+        bounds(bounds_),
+        domain(domain_)                 {}
 
     // allocate a new block
     static void* create()               { return new PointBlock; }
@@ -56,7 +55,7 @@ struct PointBlock
     {
         const PointBlock* b = static_cast<const PointBlock*>(b_);
         diy::save(bb, b->bounds);
-        diy::save(bb, b->box);
+        diy::save(bb, b->domain);
         diy::save(bb, b->points);
     }
     // read the block and deserialize it
@@ -64,15 +63,13 @@ struct PointBlock
     {
         PointBlock* b = static_cast<PointBlock*>(b_);
         diy::load(bb, b->bounds);
-        diy::load(bb, b->box);
+        diy::load(bb, b->domain);
         diy::load(bb, b->points);
     }
 
     // initialize an unstructured set of points in a block
-    void generate_points(const Bounds& domain, // overall data bounds
-                         size_t n)             // number of points
+    void generate_points(size_t n)                  // number of points
     {
-        box = domain;
         points.resize(n);
         for (size_t i = 0; i < n; ++i)
             for (unsigned j = 0; j < DIM; ++j)
@@ -81,31 +78,31 @@ struct PointBlock
     }
 
     // initialize a regular grid of points in a block
-    void generate_grid(const Bounds& bounds)        // local block bounds
+    void generate_grid()                            // local block bounds
     {
-        // set up volume iterator for the block grid
-        vector<size_t> block_npts(DIM), block_starts(DIM), dom_npts(DIM);
-        size_t grid_npts = 1;                       // total number of grid points in the block
+        using GridPoint = diy::Point<size_t, DIM>;
+        using Grid = diy::GridRef<float, DIM>;
+        GridPoint shape, vertex;
+
+        // virtual grid covering local block bounds (for indexing only, no associated data)
         for (auto i = 0; i < DIM; i++)
+            shape[i] = bounds.max[i] - bounds.min[i] + 1;
+        Grid bounds_grid(NULL, shape);
+
+        // virtual grid covering global domain (for indexing only, no associated data)
+        for (auto i = 0; i < DIM; i++)
+            shape[i] = domain.max[i] - domain.min[i] + 1;
+        Grid domain_grid(NULL, shape);
+
+        // assign globally unique values to the grid scalars in the block
+        // equal to global linear idx of the grid point
+        grid.resize(bounds_grid.size());
+        for (auto i = 0; i < bounds_grid.size(); i++)
         {
-            block_npts[i]   = bounds.max[i] - bounds.min[i] + 1;
-            block_starts[i] = bounds.min[i];
-            dom_npts[i]     = box.max[i] - box.min[i] + 1;
-            grid_npts       *= block_npts[i];
-        }
-        VolIterator vi(block_npts, block_starts, dom_npts);
-
-        // assign globally unique values to the grid scalars, equal to global linear idx of the grid point
-        grid.resize(grid_npts);
-        while (!vi.done())
-        {
-            grid[vi.cur_iter()] = vi.sub_full_idx(vi.cur_iter());   // value = index in global domain
-
-            // debug: print a few values
-//             if (vi.cur_iter() < 10)
-//                 fmt::print(stderr, "writing {}\n", grid[vi.cur_iter()]);
-
-            vi.incr_iter();
+            vertex = bounds_grid.vertex(i);         // vertex in the local block
+            for (auto i = 0; i < DIM; i++)
+                vertex[i] += bounds.min[i];         // converted to global domain vertex
+            grid[i] = domain_grid.index(vertex);
         }
     }
 
@@ -114,18 +111,18 @@ struct PointBlock
     {
         for (size_t i = 0; i < points.size(); ++i)
             for (unsigned j = 0; j < DIM; ++j)
-                if (points[i][j] < box.min[j] || points[i][j] > box.max[j])
+                if (points[i][j] < domain.min[j] || points[i][j] > domain.max[j])
                 {
-                    fmt::print(stderr, "!!! Point outside the box !!!\n");
+                    fmt::print(stderr, "!!! Point outside the domain !!!\n");
                     fmt::print(stderr, "    {}\n", points[i]);
-                    fmt::print(stderr, "    {} - {}\n", box.min, box.max);
+                    fmt::print(stderr, "    {} - {}\n", domain.min, domain.max);
                 }
     }
     // print block values
     void print_block(const diy::Master::ProxyWithLink& cp,  // communication proxy
                      bool verbose)                          // amount of output
     {
-        fmt::print("[{}] Box:    {} -- {}\n", cp.gid(), box.min, box.max);
+        fmt::print("[{}] Domain: {} -- {}\n", cp.gid(), domain.min, domain.max);
         fmt::print("[{}] Bounds: {} -- {}\n", cp.gid(), bounds.min, bounds.max);
 
         if (verbose)
@@ -175,7 +172,7 @@ struct PointBlock
         // create the dataset for the grid
         vector<size_t>  grid_dims(DIM);             // global for entire domain
         for (auto i = 0; i < DIM; i++)
-            grid_dims[i] = box.max[i] - box.min[i] + 1;
+            grid_dims[i] = domain.max[i] - domain.min[i] + 1;
         DataSet dataset3 = group.createDataSet<float>("grid", DataSpace(grid_dims));
 
         // select all the grid points and write grid
@@ -257,8 +254,9 @@ struct PointBlock
     }
 
     // block data
-    Bounds              bounds      { DIM };        // local block bounds
-    Bounds              box         { DIM };        // global domain bounds
+    Bounds              bounds      { DIM };        // local block bounds incl. ghost
+    Bounds              core        { DIM };        // loacl block bounds excl. ghost
+    Bounds              domain      { DIM };        // global domain bounds
     vector<Point>       points;                     // unstructured set of points
     vector<float>       grid;                       // scalars linearized from a structured grid
 
@@ -287,15 +285,15 @@ struct AddPointBlock
                      const Link& link)       // neighborhood
         const
         {
-            Block*          b   = new Block(core);
+            Block*          b   = new Block(core, bounds, domain);
             Link*           l   = new Link(link);
             diy::Master&    m   = const_cast<diy::Master&>(master);
 
             m.add(gid, b, l); // add block to the master (mandatory)
 
             // initialize the block with a set of points and a regular grid (e.g.)
-            b->generate_points(domain, num_points);
-            b->generate_grid(bounds);
+            b->generate_points(num_points);
+            b->generate_grid();
         }
 
     diy::Master&  master;
