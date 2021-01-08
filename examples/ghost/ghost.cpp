@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
     int                       nblocks     = world.size();   // global number of blocks
     size_t                    num_points  = 100;            // points per block
     int                       mem_blocks  = -1;             // all blocks in memory
-    int                       threads     = -1;             // no multithreading
+    int                       threads     = 1;              // no multithreading
     int                       k           = 2;              // radix for k-ary reduction
     std::string               prefix      = "./DIY.XXXXXX"; // for saving block files out of core
     bool                      core        = false;          // in-core or MPI-IO file driver
@@ -90,7 +90,53 @@ int main(int argc, char* argv[])
     diy::RegularDecomposer<Bounds> decomposer(dim, domain, nblocks, share_face, wrap, ghosts);
     decomposer.decompose(world.rank(), assigner, create);
 
+
+    // Set up file access property list with core or mpi-io file driver
+    hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
+    if (core)
+    {
+        fmt::print("Using in-core file driver\n");
+        H5Pset_fapl_core(plist, 1024 /* grow memory by this incremenet */, 0 /* bool backing_store (actual file) */);
+    }
+    else
+    {
+        fmt::print("Using mpi-io file driver\n");
+        H5Pset_fapl_mpio(plist, master.communicator(), MPI_INFO_NULL);
+    }
+
+    // set up lowfive
+    l5::MetadataVOL vol_plugin;
+    l5::H5VOLProperty vol_prop(vol_plugin);
+    vol_prop.apply(plist);
+
+    // Create a new file using default properties
+    hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
+
+    // Create top-level group
+    hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    vector<hsize_t> domain_cnts(DIM);
+    for (auto i = 0; i < DIM; i++)
+        domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
+
+    // Create the file data space for the global grid
+    hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
+
+    // Create the dataset
+    hid_t dset = H5Dcreate2(group, "/group1/grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
     // test writing an HDF5 file in parallel using HighFive API
     master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->write_block_hdf5(cp, core); });
+            { b->write_block_hdf5(cp, dset); });
+
+    master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+            { b->read_block_hdf5(cp, dset); });
+
+    // clean up
+    herr_t status;
+    status = H5Dclose(dset);
+    status = H5Sclose(filespace);
+    status = H5Gclose(group);
+    status = H5Fclose(file);
+    status = H5Pclose(plist);
 }

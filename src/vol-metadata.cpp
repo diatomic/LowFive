@@ -141,61 +141,37 @@ LowFive::MetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
-    fmt::print("dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset_->h5_obj), mem_space_id, file_space_id);
+    fmt::print("dset = {}\nmem_space_id = {}\nfile_space_id = {}\n",
+               fmt::ptr(dset_->h5_obj),
+               mem_space_id, Dataspace(mem_space_id),
+               file_space_id, Dataspace(file_space_id));
 
     // get dataset from our metadata and dataspace being read
     Dataset*    ds = (Dataset*) dset_->mdata_obj;
     Dataspace   rs(file_space_id);
 
     // sanity check that the datatype and dimensionality being read matches the metadata
+    // TODO: HDF5 allows datatypes to not match and takes care of the conversion;
+    //       eventually, we need to support this functionality as well
     if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
             ds->type.dtype_size != 8 * H5Tget_size(mem_type_id))
         throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
     if (rs.dim != ds->space.dim)
         throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
-    if (rs.selection != Dataspace::Selection::hyperslabs)
-        throw MetadataError(fmt::format("Warning: dataset_read(): skipping selections that are not hyperslabs"));
 
-    // check if the metadata dataspaces contain the selection being read
-    if (rs.selection == Dataspace::Selection::hyperslabs)       // only handling hyperslab selections for now
+    for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
     {
-        for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
-        {
-            // TODO: assume it's the file dataspace that we want?
-            Dataspace& fs = dt.file;
+        Dataspace& fs = dt.file;
 
-            // for now assume selection type needs to match
-            if (rs.selection != fs.selection)
-                continue;
-            size_t i;
-            for (i = 0; i < rs.dim; i++)
-            {
-                // debug
-                fmt::print(stderr, "i={} rs: start={} count={} fs: start={} count={}\n",
-                        i, rs.start[i], rs.count[i], fs.start[i], fs.count[i]);
+        hid_t mem_dst = Dataspace::project_intersection(file_space_id, mem_space_id, fs.id);
+        hid_t mem_src = Dataspace::project_intersection(fs.id, dt.memory.id, file_space_id);
 
-                if (rs.dims !=  fs.dims                         ||      // assume the dims need to match
-                        // TODO: not checking bounds for now, not clear whether we should
-//                         rs.min[i] <   fs.min[i]                     ||
-//                         rs.max[i] >   fs.max[i]                     ||
-                        rs.start[i] <   fs.start[i]                 ||
-                        rs.start[i] + rs.count[i] > fs.start[i] + fs.count[i]   ||
-                        rs.stride[i] !=  fs.stride[i]               ||      // TODO: assume the stride needs to match for now
-                        rs.block[i] !=  fs.block[i])                        // TODO: assume the block size needs to match for now
-                    break;
-            }
-            if (i == rs.dim)
-            {
-                fmt::print(stderr, "Found matching dataspace in dataset type = {}, space = {}\n", ds->type, fs);
+        Dataspace dst(mem_dst, true);
+        Dataspace src(mem_src, true);
 
-                // debug: print the first few values
-//                 for (auto j = 0; j < 10; j++)
-//                     fmt::print(stderr, "reading {}\n", ((float *)dt.data)[j]);
-
-                break;
-            }
-        }   // for all data triples
-    }   // hyperslab selection
+        fmt::print("dst = {}\n", dst);
+        fmt::print("src = {}\n", src);
+    }   // for all data triples
 
     // TODO: eventually return here and don't pass through below
 //     return 0;
@@ -209,7 +185,10 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    fmt::print("dset = {}, mem_space_id = {}, file_space_id = {}\n", fmt::ptr(dset_->h5_obj), mem_space_id, file_space_id);
+    fmt::print("dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
+               fmt::ptr(dset_->h5_obj),
+               mem_space_id, Dataspace(mem_space_id),
+               file_space_id, Dataspace(file_space_id));
 
     // save our metadata
     Dataset* ds = (Dataset*) dset_->mdata_obj;

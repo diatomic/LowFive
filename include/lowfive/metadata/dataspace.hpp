@@ -18,8 +18,8 @@ struct Dataspace: Hid
     // hyperslab
     std::vector<size_t>             start, stride, count, block;
 
-            Dataspace(hid_t space_id):
-                Hid(space_id)
+            Dataspace(hid_t space_id, bool owned = false):
+                Hid(space_id, owned)
     {
         if (id == 0)
             return;
@@ -96,6 +96,11 @@ struct Dataspace: Hid
     hid_t   copy() const
     {
         return H5Scopy(id);
+    }
+
+    static hid_t project_intersection(hid_t src_space_id, hid_t dst_space_id, hid_t src_intersect_space_id)
+    {
+        return H5Sselect_project_intersection(src_space_id, dst_space_id, src_intersect_space_id);
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Dataspace& ds)

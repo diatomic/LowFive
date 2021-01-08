@@ -138,36 +138,11 @@ struct PointBlock
     // write the block in parallel to an HDF5 file using native HDF5 API
     void write_block_hdf5(
             const diy::Master::ProxyWithLink& cp,           // communication proxy
-            bool                              core_driver)  // whether to use core or MPI-IO file driver
+            hid_t                             dset)
     {
         fmt::print("Writing in native HDF5 API...\n");
 
-        hid_t       file, dset, memspace, filespace, plist, group;      // identifiers
         herr_t      status;
-
-        // Set up file access property list with core or mpi-io file driver
-        plist = H5Pcreate(H5P_FILE_ACCESS);
-        if (core_driver)
-        {
-            fmt::print("Using in-core file driver\n");
-            H5Pset_fapl_core(plist, 1024 /* grow memory by this incremenet */, 0 /* bool backing_store (actual file) */);
-        }
-        else
-        {
-            fmt::print("Using mpi-io file driver\n");
-            H5Pset_fapl_mpio(plist, cp.master()->communicator(), MPI_INFO_NULL);
-        }
-
-        // set up lowfive
-        l5::MetadataVOL vol_plugin;
-        l5::H5VOLProperty vol_prop(vol_plugin);
-        vol_prop.apply(plist);
-
-        // Create a new file using default properties
-        file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
-
-        // Create top-level group
-        group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
         // number of grid points in core, bounds, domain
         vector<hsize_t> core_cnts(DIM);
@@ -181,10 +156,7 @@ struct PointBlock
         }
 
         // Create the file data space for the global grid
-        filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
-
-        // Create the dataset
-        dset = H5Dcreate2(group, "/group1/grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
         // filespace = core selected out of global domain
         vector<hsize_t> ofst(DIM);
@@ -193,7 +165,7 @@ struct PointBlock
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
         // memspace = core selected out of bounds
-        memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
+        hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
         for (auto i = 0; i < DIM; i++)
             ofst[i] = core.min[i] - bounds.min[i];
         status = H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
@@ -201,20 +173,45 @@ struct PointBlock
         // write the dataset
         status = H5Dwrite(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &grid[0]);
 
+        status = H5Sclose(filespace);
+        status = H5Sclose(memspace);
+
+        fmt::print("HDF5 write success.\n");
+    }
+
+    // read the block in parallel to an HDF5 file using native HDF5 API
+    void read_block_hdf5(
+            const diy::Master::ProxyWithLink& cp,           // communication proxy
+            hid_t                             dset)
+    {
+        fmt::print("Reading in native HDF5 API...\n");
+
+        herr_t      status;
+
         // read back the grid as a test
         // include the ghost in the read back, so that the read grid matches what is in the block bounds
         vector<float> read_grid(grid.size());
 
+        // number of grid points in core, bounds, domain
+        vector<hsize_t> core_cnts(DIM);
+        vector<hsize_t> bounds_cnts(DIM);
+        vector<hsize_t> domain_cnts(DIM);
+        for (auto i = 0; i < DIM; i++)
+        {
+            core_cnts[i]    = core.max[i]   - core.min[i]   + 1;
+            bounds_cnts[i]  = bounds.max[i] - bounds.min[i] + 1;
+            domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
+        }
+
         // filespace = bounds selected out of global domain
-        status = H5Sclose(filespace);
-        filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
+        hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
+        vector<hsize_t> ofst(DIM);
         for (auto i = 0; i < DIM; i++)
             ofst[i] = bounds.min[i];
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &bounds_cnts[0], NULL);
 
         // memspace = simple count from bounds
-        status = H5Sclose(memspace);
-        memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
+        hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
         status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_grid[0]);
 
         // check that the values match
@@ -227,15 +224,10 @@ struct PointBlock
             }
         }
 
-        // clean up
-        status = H5Dclose(dset);
-        status = H5Sclose(memspace);
         status = H5Sclose(filespace);
-        status = H5Pclose(plist);
-        status = H5Gclose(group);
-        status = H5Fclose(file);
+        status = H5Sclose(memspace);
 
-        fmt::print("HDF5 success.\n");
+        fmt::print("HDF5 read success.\n");
     }
 
     // block data

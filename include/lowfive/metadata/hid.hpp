@@ -7,7 +7,8 @@ struct Hid
 {
     hid_t   id;
 
-            Hid(hid_t id_):         id(id_)         { if (id != 0) H5Iinc_ref(id); }
+            Hid(hid_t id_, bool owned = false):
+                id(id_)                             { if (id != 0 && !owned) H5Iinc_ref(id); }
 
             Hid(const Hid& other):  id(other.id)    { if (id != 0) H5Iinc_ref(id); }
             Hid(Hid&& other):       id(other.id)    { if (id != 0) H5Iinc_ref(id); }
