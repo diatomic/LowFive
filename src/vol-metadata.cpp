@@ -154,7 +154,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     // TODO: HDF5 allows datatypes to not match and takes care of the conversion;
     //       eventually, we need to support this functionality as well
     if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
-            ds->type.dtype_size != 8 * H5Tget_size(mem_type_id))
+            ds->type.dtype_size != H5Tget_size(mem_type_id))
         throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
     if (rs.dim != ds->space.dim)
         throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
@@ -164,19 +164,23 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         Dataspace& fs = dt.file;
 
         hid_t mem_dst = Dataspace::project_intersection(file_space_id, mem_space_id, fs.id);
-        hid_t mem_src = Dataspace::project_intersection(fs.id, dt.memory.id, file_space_id);
+        hid_t mem_src = Dataspace::project_intersection(fs.id,         dt.memory.id, file_space_id);
 
         Dataspace dst(mem_dst, true);
         Dataspace src(mem_src, true);
+
+        Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, ds->type.dtype_size, [&](size_t loc1, size_t loc2)
+        {
+            //fmt::print("{} <- {}\n", fmt::ptr((char*) buf + loc1), fmt::ptr((char*) dt.data + loc2));
+            std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, ds->type.dtype_size);
+        });
 
         fmt::print("dst = {}\n", dst);
         fmt::print("src = {}\n", src);
     }   // for all data triples
 
-    // TODO: eventually return here and don't pass through below
-//     return 0;
-
-    return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    return 0;
+    //return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 herr_t

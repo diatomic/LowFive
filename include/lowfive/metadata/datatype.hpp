@@ -12,7 +12,7 @@ std::string     type_class_string(DatatypeClass tclass);
 struct Datatype: Hid
 {
     DatatypeClass           dtype_class;
-    size_t                  dtype_size;         // in bits
+    size_t                  dtype_size;         // in bytes
 
             Datatype(hid_t dtype_id_):
                 Hid(dtype_id_)
@@ -20,7 +20,7 @@ struct Datatype: Hid
         if (id == 0) return;
 
         dtype_class    = convert_type_class(H5Tget_class(id));
-        dtype_size     = 8 * H5Tget_size(id);
+        dtype_size     = H5Tget_size(id);
     }
 
     hid_t   copy() const

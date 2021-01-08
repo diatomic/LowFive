@@ -193,21 +193,18 @@ struct PointBlock
         vector<float> read_grid(grid.size());
 
         // number of grid points in core, bounds, domain
-        vector<hsize_t> core_cnts(DIM);
         vector<hsize_t> bounds_cnts(DIM);
         vector<hsize_t> domain_cnts(DIM);
+        vector<hsize_t> ofst(DIM);
         for (auto i = 0; i < DIM; i++)
         {
-            core_cnts[i]    = core.max[i]   - core.min[i]   + 1;
             bounds_cnts[i]  = bounds.max[i] - bounds.min[i] + 1;
             domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
+            ofst[i] = bounds.min[i];
         }
 
         // filespace = bounds selected out of global domain
         hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
-        vector<hsize_t> ofst(DIM);
-        for (auto i = 0; i < DIM; i++)
-            ofst[i] = bounds.min[i];
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &bounds_cnts[0], NULL);
 
         // memspace = simple count from bounds

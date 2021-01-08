@@ -142,6 +142,104 @@ struct Dataspace: Hid
 
         return out;
     }
+
+    template<class F>
+    static void iterate(const Dataspace& space, size_t element_size, const F& f)
+    {
+        /* iterate */
+        unsigned sel_iter_flags = 0;
+        //sel_iter_flags = H5S_SEL_ITER_SHARE_WITH_DATASPACE;
+
+        hid_t iter = H5Ssel_iter_create(space.id, element_size, sel_iter_flags);
+
+        std::vector<hsize_t> off(1024);
+        std::vector<size_t>  len(1024);     // len returned is in bytes (as the documentation says)
+        size_t nseq   = 0;
+        size_t nbytes = 0;      // this is a misnomer; I believe the returned value is in elements
+
+        do
+        {
+            H5Ssel_iter_get_seq_list (iter, off.size(), 1024*1024, &nseq, &nbytes, off.data(), len.data());
+
+            for (size_t i = 0; i < nseq; ++i)
+            {
+                size_t  loc = 0;
+                for (size_t loc = 0; loc < len[i]; loc += element_size)
+                    f(off[i] + loc);
+            }
+        } while (nseq == off.size());
+
+        H5Ssel_iter_close(iter);
+    }
+
+    template<class F>
+    static void iterate(const Dataspace& space1, size_t size1,
+                        const Dataspace& space2, size_t size2,
+                        const F& f)
+    {
+        /* iterate */
+        unsigned sel_iter_flags = 0;
+        //sel_iter_flags = H5S_SEL_ITER_SHARE_WITH_DATASPACE;
+
+        hid_t iter1 = H5Ssel_iter_create(space1.id, size1, sel_iter_flags);
+        hid_t iter2 = H5Ssel_iter_create(space2.id, size2, sel_iter_flags);
+
+        std::vector<hsize_t> off1(1024);
+        std::vector<size_t>  len1(1024);     // len returned is in bytes (as the documentation says)
+        size_t nseq1   = 0;
+        size_t nbytes1 = 0;                  // this is a misnomer; I believe the returned value is in elements
+
+        std::vector<hsize_t> off2(1024);
+        std::vector<size_t>  len2(1024);     // len returned is in bytes (as the documentation says)
+        size_t nseq2   = 0;
+        size_t nbytes2 = 0;                  // this is a misnomer; I believe the returned value is in elements
+
+        bool done1 = false, done2 = false;
+        size_t i = 0, j = 0;
+        size_t loc1 = 0, loc2 = 0;
+        while(!done1 && !done2)
+        {
+            if (!done1 && i == nseq1)
+            {
+                H5Ssel_iter_get_seq_list (iter1, off1.size(), 1024*1024, &nseq1, &nbytes1, off1.data(), len1.data());
+                done1 = (nseq1 < off1.size());
+                i = 0;
+                loc1 = 0;
+            }
+            if (!done2 && j == nseq2)
+            {
+                H5Ssel_iter_get_seq_list (iter2, off2.size(), 1024*1024, &nseq2, &nbytes2, off2.data(), len2.data());
+                done2 = (nseq2 < off2.size());
+                j = 0;
+                loc2 = 0;
+            }
+
+            while (i < nseq1 && j < nseq2)
+            {
+                while (loc1 < len1[i] && loc2 < len2[j])
+                {
+                    f(off1[i] + loc1, off2[j] + loc2);
+
+                    loc1 += size1;
+                    loc2 += size2;
+                }
+
+                if (loc1 >= len1[i])
+                {
+                    ++i;
+                    loc1 = 0;
+                }
+                if (loc2 >= len2[j])
+                {
+                    ++j;
+                    loc2 = 0;
+                }
+            }
+        }
+
+        H5Ssel_iter_close(iter2);
+        H5Ssel_iter_close(iter1);
+    }
 };
 
 }
