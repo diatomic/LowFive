@@ -141,14 +141,12 @@ LowFive::MetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
-    fmt::print("dset = {}\nmem_space_id = {}\nfile_space_id = {}\n",
+    fmt::print("dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}\n",
                fmt::ptr(dset_->h5_obj),
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
 
-    // get dataset from our metadata and dataspace being read
-    Dataset*    ds = (Dataset*) dset_->mdata_obj;
-    Dataspace   rs(file_space_id);
+    Dataset* ds = (Dataset*) dset_->mdata_obj;              // dataset from our metadata
 
     // sanity check that the datatype and dimensionality being read matches the metadata
     // TODO: HDF5 allows datatypes to not match and takes care of the conversion;
@@ -156,7 +154,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
             ds->type.dtype_size != H5Tget_size(mem_type_id))
         throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
-    if (rs.dim != ds->space.dim)
+    if (Dataspace(file_space_id).dim != ds->space.dim)
         throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
 
     for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
@@ -169,10 +167,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         Dataspace dst(mem_dst, true);
         Dataspace src(mem_src, true);
 
-        Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, ds->type.dtype_size, [&](size_t loc1, size_t loc2)
+        Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, ds->type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
         {
-            //fmt::print("{} <- {}\n", fmt::ptr((char*) buf + loc1), fmt::ptr((char*) dt.data + loc2));
-            std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, ds->type.dtype_size);
+            std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
         });
 
         fmt::print("dst = {}\n", dst);
@@ -180,7 +177,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     }   // for all data triples
 
     return 0;
-    //return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+//     return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 herr_t

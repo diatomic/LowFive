@@ -143,41 +143,39 @@ struct Dataspace: Hid
         return out;
     }
 
+    // operate on entire sequence in bulk
     template<class F>
-    static void iterate(const Dataspace& space, size_t element_size, const F& f)
+    static void iterate(const   Dataspace& space,
+                        size_t  element_size,
+                        const   F& f)
     {
-        /* iterate */
         unsigned sel_iter_flags = 0;
         //sel_iter_flags = H5S_SEL_ITER_SHARE_WITH_DATASPACE;
 
         hid_t iter = H5Ssel_iter_create(space.id, element_size, sel_iter_flags);
 
         std::vector<hsize_t> off(1024);
-        std::vector<size_t>  len(1024);     // len returned is in bytes (as the documentation says)
+        std::vector<size_t>  len(1024);         // len returned is in bytes (as the documentation says)
         size_t nseq   = 0;
-        size_t nbytes = 0;      // this is a misnomer; I believe the returned value is in elements
+        size_t nbytes = 0;                      // this is a misnomer; I believe the returned value is in elements
 
         do
         {
             H5Ssel_iter_get_seq_list (iter, off.size(), 1024*1024, &nseq, &nbytes, off.data(), len.data());
 
             for (size_t i = 0; i < nseq; ++i)
-            {
-                size_t  loc = 0;
-                for (size_t loc = 0; loc < len[i]; loc += element_size)
-                    f(off[i] + loc);
-            }
-        } while (nseq == off.size());
+                f(off[i], len[i]);              // call f(size_t loc, size_t len)
+        } while (nseq);
 
         H5Ssel_iter_close(iter);
     }
 
+    // operate on longest length sequences possible in bulk
     template<class F>
-    static void iterate(const Dataspace& space1, size_t size1,
-                        const Dataspace& space2, size_t size2,
-                        const F& f)
+    static void iterate(const   Dataspace& space1, size_t size1,
+                        const   Dataspace& space2, size_t size2,
+                        const   F& f)
     {
-        /* iterate */
         unsigned sel_iter_flags = 0;
         //sel_iter_flags = H5S_SEL_ITER_SHARE_WITH_DATASPACE;
 
@@ -202,14 +200,14 @@ struct Dataspace: Hid
             if (!done1 && i == nseq1)
             {
                 H5Ssel_iter_get_seq_list (iter1, off1.size(), 1024*1024, &nseq1, &nbytes1, off1.data(), len1.data());
-                done1 = (nseq1 < off1.size());
+                done1 = (nseq1 == 0);
                 i = 0;
                 loc1 = 0;
             }
             if (!done2 && j == nseq2)
             {
                 H5Ssel_iter_get_seq_list (iter2, off2.size(), 1024*1024, &nseq2, &nbytes2, off2.data(), len2.data());
-                done2 = (nseq2 < off2.size());
+                done2 = (nseq2 == 0);
                 j = 0;
                 loc2 = 0;
             }
@@ -218,10 +216,11 @@ struct Dataspace: Hid
             {
                 while (loc1 < len1[i] && loc2 < len2[j])
                 {
-                    f(off1[i] + loc1, off2[j] + loc2);
+                    size_t min_len = std::min(len1[i] - loc1, len2[j] - loc2);
+                    f(off1[i] + loc1, off2[j] + loc2, min_len);     // call f(size_t loc1, size_t loc2, size_t len)
 
-                    loc1 += size1;
-                    loc2 += size2;
+                    loc1 += min_len;
+                    loc2 += min_len;
                 }
 
                 if (loc1 >= len1[i])
