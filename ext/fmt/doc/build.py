@@ -4,7 +4,7 @@
 import errno, os, re, sys
 from subprocess import check_call, CalledProcessError, Popen, PIPE, STDOUT
 
-versions = ['1.0.0', '1.1.0', '2.0.0', '3.0.2', '4.0.0', '4.1.0', '5.0.0', '5.1.0', '5.2.0', '5.2.1', '5.3.0', '6.0.0', '6.1.0', '6.1.1', '6.1.2', '6.2.0', '6.2.1', '7.0.0', '7.0.1', '7.0.2', '7.0.3', '7.1.0', '7.1.1', '7.1.2']
+versions = ['1.0.0', '1.1.0', '2.0.0', '3.0.2', '4.0.0', '4.1.0', '5.0.0', '5.1.0', '5.2.0', '5.2.1', '5.3.0', '6.0.0', '6.1.0', '6.1.1', '6.1.2', '6.2.0', '6.2.1', '7.0.0', '7.0.1', '7.0.2', '7.0.3', '7.1.0', '7.1.1', '7.1.2', '7.1.3']
 
 class Pip:
   def __init__(self, venv_dir):
@@ -24,6 +24,7 @@ def create_build_env(venv_dir='virtualenv'):
   # Install Sphinx and Breathe. Require the exact version of Sphinx which is
   # compatible with Breathe.
   pip = Pip(venv_dir)
+  pip.install('six')
   pip.install('sphinx-doc/sphinx', 'v3.3.0')
   pip.install('michaeljones/breathe', 'v4.23.0')
 
@@ -54,6 +55,7 @@ def build_docs(version='dev', **kwargs):
       ALIASES          += "endrst=\endverbatim"
       MACRO_EXPANSION   = YES
       PREDEFINED        = _WIN32=1 \
+                          __linux__=1 \
                           FMT_USE_VARIADIC_TEMPLATES=1 \
                           FMT_USE_RVALUE_REFERENCES=1 \
                           FMT_USE_USER_DEFINED_LITERALS=1 \

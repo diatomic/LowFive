@@ -16,6 +16,7 @@ The {fmt} library API consists of the following parts:
 * :ref:`fmt/chrono.h <chrono-api>`: date and time formatting
 * :ref:`fmt/compile.h <compile-api>`: format string compilation
 * :ref:`fmt/color.h <color-api>`: terminal color and text style
+* :ref:`fmt/os.h <os-api>`: system APIs
 * :ref:`fmt/ostream.h <ostream-api>`: ``std::ostream`` support
 * :ref:`fmt/printf.h <printf-api>`: ``printf`` formatting
 
@@ -33,7 +34,7 @@ include ``fmt/format.h`` instead of ``fmt/core.h``.
 
 The following functions use :ref:`format string syntax <syntax>`
 similar to that of Python's `str.format
-<http://docs.python.org/3/library/stdtypes.html#str.format>`_.
+<https://docs.python.org/3/library/stdtypes.html#str.format>`_.
 They take *format_str* and *args* as arguments.
 
 *format_str* is a format string that contains literal text and replacement
@@ -57,7 +58,7 @@ participate in an overload resolution if the latter is not a string.
 
 .. _print:
 
-.. doxygenfunction:: print(const S &format_str, Args&&... args)
+.. doxygenfunction:: fmt::print(const S &format_str, Args&&... args)
 .. doxygenfunction:: vprint(string_view, format_args)
 
 .. doxygenfunction:: print(std::FILE *f, const S &format_str, Args&&... args)
@@ -162,6 +163,11 @@ and string types as well as user-defined types with ``constexpr`` ``parse``
 functions in their ``formatter`` specializations.
 
 .. doxygendefine:: FMT_STRING
+
+To force the use of compile-time checks, define the preprocessor variable
+``FMT_ENFORCE_COMPILE_STRING``. When set, functions accepting ``FMT_STRING``
+will fail to compile with regular strings. Runtime-checked
+formatting is still possible using ``fmt::vformat``, ``fmt::vprint``, etc.
 
 .. _udt:
 
@@ -466,6 +472,14 @@ Terminal color and text style
 
 .. doxygenfunction:: bg(detail::color_type)
 
+.. _os-api:
+
+System APIs
+===========
+
+.. doxygenclass:: fmt::ostream
+   :members:
+
 .. _ostream-api:
 
 ``std::ostream`` Support
@@ -498,7 +512,7 @@ user-defined types that have overloaded ``operator<<``::
 
 The header ``fmt/printf.h`` provides ``printf``-like formatting functionality.
 The following functions use `printf format string syntax
-<http://pubs.opengroup.org/onlinepubs/009695399/functions/fprintf.html>`_ with
+<https://pubs.opengroup.org/onlinepubs/009695399/functions/fprintf.html>`_ with
 the POSIX extension for positional arguments. Unlike their standard
 counterparts, the ``fmt`` functions are type-safe and throw an exception if an
 argument type doesn't match its format specification.

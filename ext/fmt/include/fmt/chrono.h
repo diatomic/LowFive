@@ -383,12 +383,21 @@ inline std::tm gmtime(
 namespace detail {
 inline size_t strftime(char* str, size_t count, const char* format,
                        const std::tm* time) {
-  return std::strftime(str, count, format, time);
+  // Assign to a pointer to suppress GCCs -Wformat-nonliteral
+  // First assign the nullptr to suppress -Wsuggest-attribute=format
+  std::size_t (*strftime)(char*, std::size_t, const char*, const std::tm*) =
+      nullptr;
+  strftime = std::strftime;
+  return strftime(str, count, format, time);
 }
 
 inline size_t strftime(wchar_t* str, size_t count, const wchar_t* format,
                        const std::tm* time) {
-  return std::wcsftime(str, count, format, time);
+  // See above
+  std::size_t (*wcsftime)(wchar_t*, std::size_t, const wchar_t*,
+                          const std::tm*) = nullptr;
+  wcsftime = std::wcsftime;
+  return wcsftime(str, count, format, time);
 }
 }  // namespace detail
 
@@ -447,27 +456,61 @@ namespace detail {
 template <typename Period> FMT_CONSTEXPR const char* get_units() {
   return nullptr;
 }
-template <> FMT_CONSTEXPR const char* get_units<std::atto>() { return "as"; }
-template <> FMT_CONSTEXPR const char* get_units<std::femto>() { return "fs"; }
-template <> FMT_CONSTEXPR const char* get_units<std::pico>() { return "ps"; }
-template <> FMT_CONSTEXPR const char* get_units<std::nano>() { return "ns"; }
-template <> FMT_CONSTEXPR const char* get_units<std::micro>() { return "µs"; }
-template <> FMT_CONSTEXPR const char* get_units<std::milli>() { return "ms"; }
-template <> FMT_CONSTEXPR const char* get_units<std::centi>() { return "cs"; }
-template <> FMT_CONSTEXPR const char* get_units<std::deci>() { return "ds"; }
-template <> FMT_CONSTEXPR const char* get_units<std::ratio<1>>() { return "s"; }
-template <> FMT_CONSTEXPR const char* get_units<std::deca>() { return "das"; }
-template <> FMT_CONSTEXPR const char* get_units<std::hecto>() { return "hs"; }
-template <> FMT_CONSTEXPR const char* get_units<std::kilo>() { return "ks"; }
-template <> FMT_CONSTEXPR const char* get_units<std::mega>() { return "Ms"; }
-template <> FMT_CONSTEXPR const char* get_units<std::giga>() { return "Gs"; }
-template <> FMT_CONSTEXPR const char* get_units<std::tera>() { return "Ts"; }
-template <> FMT_CONSTEXPR const char* get_units<std::peta>() { return "Ps"; }
-template <> FMT_CONSTEXPR const char* get_units<std::exa>() { return "Es"; }
-template <> FMT_CONSTEXPR const char* get_units<std::ratio<60>>() {
+template <> FMT_CONSTEXPR inline const char* get_units<std::atto>() {
+  return "as";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::femto>() {
+  return "fs";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::pico>() {
+  return "ps";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::nano>() {
+  return "ns";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::micro>() {
+  return "µs";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::milli>() {
+  return "ms";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::centi>() {
+  return "cs";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::deci>() {
+  return "ds";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::ratio<1>>() {
+  return "s";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::deca>() {
+  return "das";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::hecto>() {
+  return "hs";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::kilo>() {
+  return "ks";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::mega>() {
+  return "Ms";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::giga>() {
+  return "Gs";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::tera>() {
+  return "Ts";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::peta>() {
+  return "Ps";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::exa>() {
+  return "Es";
+}
+template <> FMT_CONSTEXPR inline const char* get_units<std::ratio<60>>() {
   return "m";
 }
-template <> FMT_CONSTEXPR const char* get_units<std::ratio<3600>>() {
+template <> FMT_CONSTEXPR inline const char* get_units<std::ratio<3600>>() {
   return "h";
 }
 
@@ -768,19 +811,16 @@ inline std::chrono::duration<Rep, std::milli> get_milliseconds(
 template <typename Char, typename Rep, typename OutputIt,
           FMT_ENABLE_IF(std::is_integral<Rep>::value)>
 OutputIt format_duration_value(OutputIt out, Rep val, int) {
-  static FMT_CONSTEXPR_DECL const Char format[] = {'{', '}', 0};
-  return format_to(out, compile_string_to_view(format), val);
+  return write<Char>(out, val);
 }
 
 template <typename Char, typename Rep, typename OutputIt,
           FMT_ENABLE_IF(std::is_floating_point<Rep>::value)>
 OutputIt format_duration_value(OutputIt out, Rep val, int precision) {
-  static FMT_CONSTEXPR_DECL const Char pr_f[] = {'{', ':', '.', '{',
-                                                 '}', 'f', '}', 0};
-  if (precision >= 0)
-    return format_to(out, compile_string_to_view(pr_f), val, precision);
-  static FMT_CONSTEXPR_DECL const Char fp_f[] = {'{', ':', 'g', '}', 0};
-  return format_to(out, compile_string_to_view(fp_f), val);
+  auto specs = basic_format_specs<Char>();
+  specs.precision = precision;
+  specs.type = precision > 0 ? 'f' : 'g';
+  return write<Char>(out, val, specs);
 }
 
 template <typename Char, typename OutputIt>
@@ -800,13 +840,15 @@ template <typename Char, typename Period, typename OutputIt>
 OutputIt format_duration_unit(OutputIt out) {
   if (const char* unit = get_units<Period>())
     return copy_unit(string_view(unit), out, Char());
-  static FMT_CONSTEXPR_DECL const Char num_f[] = {'[', '{', '}', ']', 's', 0};
-  if (const_check(Period::den == 1))
-    return format_to(out, compile_string_to_view(num_f), Period::num);
-  static FMT_CONSTEXPR_DECL const Char num_def_f[] = {'[', '{', '}', '/', '{',
-                                                      '}', ']', 's', 0};
-  return format_to(out, compile_string_to_view(num_def_f), Period::num,
-                   Period::den);
+  *out++ = '[';
+  out = write<Char>(out, Period::num);
+  if (const_check(Period::den != 1)) {
+    *out++ = '/';
+    out = write<Char>(out, Period::den);
+  }
+  *out++ = ']';
+  *out++ = 's';
+  return out;
 }
 
 template <typename FormatContext, typename OutputIt, typename Rep,

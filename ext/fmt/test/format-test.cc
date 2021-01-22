@@ -868,7 +868,10 @@ TEST(FormatterTest, Width) {
   EXPECT_EQ("    0xcafe", format("{0:10}", reinterpret_cast<void*>(0xcafe)));
   EXPECT_EQ("x          ", format("{0:11}", 'x'));
   EXPECT_EQ("str         ", format("{0:12}", "str"));
-  EXPECT_EQ(fmt::format("{:*^5}", "🤡"), "**🤡**");
+  EXPECT_EQ(format("{:*^5}", "🤡"), "**🤡**");
+  EXPECT_EQ(format("{:#6}", 42.0), "  42.0");
+  EXPECT_EQ(format("{:6c}", static_cast<int>('x')), "x     ");
+  EXPECT_EQ(format("{:>06.0f}", 0.00884311), "000000");
 }
 
 template <typename T> inline T const_check(T value) { return value; }
@@ -978,6 +981,7 @@ TEST(FormatterTest, Precision) {
   EXPECT_EQ("1.2", format("{0:.2}", 1.2345));
   EXPECT_EQ("1.2", format("{0:.2}", 1.2345l));
   EXPECT_EQ("1.2e+56", format("{:.2}", 1.234e56));
+  EXPECT_EQ("1.1", format("{0:.3}", 1.1));
   EXPECT_EQ("1e+00", format("{:.0e}", 1.0L));
   EXPECT_EQ("  0.0e+00", format("{:9.1e}", 0.0));
   EXPECT_EQ(
@@ -1108,7 +1112,7 @@ TEST(FormatterTest, RuntimePrecision) {
 template <typename T>
 void check_unknown_types(const T& value, const char* types, const char*) {
   char format_str[BUFFER_SIZE];
-  const char* special = ".0123456789}";
+  const char* special = ".0123456789L}";
   for (int i = CHAR_MIN; i <= CHAR_MAX; ++i) {
     char c = static_cast<char>(i);
     if (std::strchr(types, c) || std::strchr(special, c) || !c) continue;
@@ -1404,7 +1408,7 @@ TEST(FormatterTest, FormatLongDouble) {
 }
 
 TEST(FormatterTest, FormatChar) {
-  const char types[] = "cbBdoxXL";
+  const char types[] = "cbBdoxX";
   check_unknown_types('a', types, "char");
   EXPECT_EQ("a", format("{0}", 'a'));
   EXPECT_EQ("z", format("{0:c}", 'z'));
@@ -1412,7 +1416,8 @@ TEST(FormatterTest, FormatChar) {
   int n = 'x';
   for (const char* type = types + 1; *type; ++type) {
     std::string format_str = fmt::format("{{:{}}}", *type);
-    EXPECT_EQ(fmt::format(format_str, n), fmt::format(format_str, 'x'));
+    EXPECT_EQ(fmt::format(format_str, n), fmt::format(format_str, 'x'))
+        << format_str;
   }
   EXPECT_EQ(fmt::format("{:02X}", n), fmt::format("{:02X}", 'x'));
 }
@@ -1761,6 +1766,13 @@ TEST(FormatTest, JoinArg) {
 #endif
 }
 
+#ifdef __cpp_lib_byte
+TEST(FormatTest, JoinBytes) {
+  std::vector<std::byte> v = {std::byte(1), std::byte(2), std::byte(3)};
+  EXPECT_EQ("1, 2, 3", fmt::format("{}", fmt::join(v, ", ")));
+}
+#endif
+
 template <typename T> std::string str(const T& value) {
   return fmt::format("{}", value);
 }
@@ -1814,6 +1826,7 @@ static FMT_CONSTEXPR_DECL const char static_no_null[2] = {'{', '}'};
 static FMT_CONSTEXPR_DECL const wchar_t static_no_null_wide[2] = {'{', '}'};
 
 TEST(FormatTest, CompileTimeString) {
+  EXPECT_EQ("foo", fmt::format(FMT_STRING("foo")));
   EXPECT_EQ("42", fmt::format(FMT_STRING("{}"), 42));
   EXPECT_EQ(L"42", fmt::format(FMT_STRING(L"{}"), 42));
   EXPECT_EQ("foo", fmt::format(FMT_STRING("{}"), string_like()));
@@ -1979,6 +1992,9 @@ TEST(FormatTest, ToString) {
   EXPECT_EQ("42", fmt::to_string(42));
   EXPECT_EQ("0x1234", fmt::to_string(reinterpret_cast<void*>(0x1234)));
   EXPECT_EQ("foo", fmt::to_string(adl_test::fmt::detail::foo()));
+
+  enum test_enum : unsigned char { test_value };
+  EXPECT_EQ("0", fmt::to_string(test_value));
 }
 
 TEST(FormatTest, ToWString) { EXPECT_EQ(L"42", fmt::to_wstring(42)); }
@@ -2125,7 +2141,7 @@ TEST(FormatTest, ConstexprParseArgID) {
 }
 
 struct test_format_specs_handler {
-  enum Result { NONE, PLUS, MINUS, SPACE, HASH, ZERO, ERROR };
+  enum Result { NONE, PLUS, MINUS, SPACE, HASH, ZERO, LOC, ERROR };
   Result res = NONE;
 
   fmt::align_t alignment = fmt::align::none;
@@ -2157,6 +2173,7 @@ struct test_format_specs_handler {
   FMT_CONSTEXPR void on_space() { res = SPACE; }
   FMT_CONSTEXPR void on_hash() { res = HASH; }
   FMT_CONSTEXPR void on_zero() { res = ZERO; }
+  FMT_CONSTEXPR void on_localized() { res = LOC; }
 
   FMT_CONSTEXPR void on_width(int w) { width = w; }
   FMT_CONSTEXPR void on_dynamic_width(fmt::detail::auto_id) {}
@@ -2189,6 +2206,7 @@ TEST(FormatTest, ConstexprParseFormatSpecs) {
   static_assert(parse_test_specs(" ").res == handler::SPACE, "");
   static_assert(parse_test_specs("#").res == handler::HASH, "");
   static_assert(parse_test_specs("0").res == handler::ZERO, "");
+  static_assert(parse_test_specs("L").res == handler::LOC, "");
   static_assert(parse_test_specs("42").width == 42, "");
   static_assert(parse_test_specs("{42}").width_ref.val.index == 42, "");
   static_assert(parse_test_specs(".42").precision == 42, "");
