@@ -52,7 +52,10 @@ endif                       ()
 find_package                (Threads)
 
 # DIY
-find_path                   (DIY_INCLUDE_DIRS diy/types.h)
+option                      (build_examples "" OFF)
+option                      (build_tests "" OFF)
+add_subdirectory            (ext/diy)
+set                         (libraries ${libraries} diy)
 
 # fmt
 option                      (FMT_INSTALL "" ON)
@@ -73,7 +76,6 @@ include_directories         (SYSTEM ${HDF5_INCLUDE_DIR})
 # Include dirs
 set                         (CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-isystem")
 include_directories         (${CMAKE_CURRENT_SOURCE_DIR}/include
-                            ${DIY_INCLUDE_DIRS}
                             SYSTEM ${MPI_C_INCLUDE_PATH})
 
 # Libraries
