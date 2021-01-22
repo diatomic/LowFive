@@ -5,16 +5,23 @@ namespace LowFive
 
 struct Hid
 {
-    hid_t   id;
+    hid_t   id = 0;
 
             Hid(hid_t id_, bool owned = false):
                 id(id_)                             { if (id != 0 && !owned) H5Iinc_ref(id); }
 
-            Hid(const Hid& other):  id(other.id)    { if (id != 0) H5Iinc_ref(id); }
-            Hid(Hid&& other):       id(other.id)    { if (id != 0) H5Iinc_ref(id); }
+            Hid(const Hid& other)                   { update(other.id); }
+            Hid(Hid&& other)                        { update(other.id); }
 
-    Hid&    operator=(const Hid& other)             { id = other.id; if (id != 0) H5Iinc_ref(id); return *this; }
-    Hid&    operator=(Hid&& other)                  { id = other.id; if (id != 0) H5Iinc_ref(id); return *this; }
+    Hid&    operator=(const Hid& other)             { update(other.id); return *this; }
+    Hid&    operator=(Hid&& other)                  { update(other.id); return *this; }
+
+    void    update(hid_t oid)
+    {
+        if (oid != 0) H5Iinc_ref(oid);
+        if (id != 0) H5Idec_ref(id);
+        id = oid;
+    }
 
             ~Hid()
     {
