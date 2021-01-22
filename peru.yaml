@@ -1,6 +1,7 @@
 imports:
     HighFive: ./ext/HighFive
     fmt: ./ext/fmt
+    diy: ./ext/diy
 
 git module HighFive:
     url: gh:BlueBrain/HighFive
@@ -9,3 +10,6 @@ git module HighFive:
 git module fmt:
     url: gh:fmtlib/fmt
     rev: 38c7def47ad641054a6551f0b3625ebb28e3864f
+
+git module diy:
+    url: gh:diatomic/diy
