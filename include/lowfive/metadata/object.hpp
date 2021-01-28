@@ -13,7 +13,17 @@ struct Object
 
     Object(ObjectType type_, std::string name_) :
         parent(nullptr),
-        type(type_), name(name_)                        {}
+        type(type_)
+    {
+        // remove path from name
+        std::size_t found = name_.find_last_of("/");
+        while (found == name_.size() - 1)          // remove any trailing slashes
+        {
+            name_ = name_.substr(0, found);
+            found = name_.find_last_of("/");
+        }
+        name = name_.substr(found + 1);
+    }
 
     virtual ~Object()
     {
@@ -35,6 +45,41 @@ struct Object
 
         for (auto* child : children)
             child->print();
+    }
+
+    virtual Object* search(std::string& cur_path)                       // current path to the name with objects already found removed, will be truncated further
+    {
+        // remove any trailing slashes from current path
+        std::size_t found = cur_path.find_last_of("/");
+        while (found == cur_path.size() - 1)
+            cur_path = cur_path.substr(0, found);
+
+        size_t start    = cur_path.find_first_not_of("/");              // starting position of name in path
+        size_t end      = cur_path.find_first_of("/", start);           // ending position of name in path
+
+        if (start == std::string::npos)                                 // no name
+            return NULL;
+        else if (end == std::string::npos)                              // current path is just the name
+        {
+            if (name == cur_path)
+                return this;
+            return NULL;
+        }
+        else                                                            // peel the name from the front and update current path
+        {
+            std::string obj_name = cur_path.substr(start, end - start); // name peeled from front of path
+            if (name != obj_name)
+                return NULL;
+            cur_path = cur_path.substr(end + 1);
+            Object* obj;
+            for (auto* child : children)                                // recurse subtree
+            {
+                if ((obj = child->search(cur_path)) != NULL)
+                    return obj;
+            }
+            return NULL;
+        }
+        return nullptr;
     }
 
     Object* add_child(Object* object)
