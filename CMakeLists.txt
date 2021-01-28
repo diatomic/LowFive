@@ -17,6 +17,7 @@ if                          (NOT CMAKE_BUILD_TYPE)
     set_property            (CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif                       (NOT CMAKE_BUILD_TYPE)
 
+# FIXME: where did this come from? (check with Tom)
 # OSX flags
 if                          (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   add_definitions           (-DMAC_OSX)

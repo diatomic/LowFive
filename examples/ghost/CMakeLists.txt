@@ -1,4 +1,4 @@
-set                         (targets    ghost)
+set                         (targets    ghost ghost-index-query)
 
 foreach                     (t ${targets})
   add_executable            (${t} ${t}.cpp)

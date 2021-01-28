@@ -98,6 +98,22 @@ struct Dataspace: Hid
         return H5Scopy(id);
     }
 
+    size_t  size() const
+    {
+        return H5Sget_simple_extent_npoints(id);
+    }
+
+    bool    intersects(const Dataspace& other) const
+    {
+        hid_t intersection_id = H5Scombine_select(id, H5S_SELECT_AND, other.id);
+        if (intersection_id == H5I_INVALID_HID)       // not sure if this is supposed to happen; might be better to throw an error to investigate this
+            return false;
+
+        Dataspace intersection(intersection_id, true);
+
+        return intersection.size() > 0;
+    }
+
     static hid_t project_intersection(hid_t src_space_id, hid_t dst_space_id, hid_t src_intersect_space_id)
     {
         return H5Sselect_project_intersection(src_space_id, dst_space_id, src_intersect_space_id);

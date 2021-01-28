@@ -54,9 +54,25 @@ struct MetadataVOL: public LowFive::VOLBase
         {
             fmt::print("--------------------------------------------------------------------------------\n");
             fmt::print("File {}\n", f.first);
-            f.second->print_tree();
+            f.second->print();
             fmt::print("--------------------------------------------------------------------------------\n");
         }
+    }
+
+    // locate an object in the metadata of one file by its full path, which uniquely identifies one object
+    Object*         locate(std::string filename, std::string full_path) const
+    {
+        Object* obj;
+        auto it = files.find(filename);
+        if (it == files.end())
+            return NULL;
+        for (auto* child : it->second->children)
+        {
+            if ((obj = child->search(full_path)) != NULL)
+                return obj;
+        }
+        fmt::print("Unable to locate object {}\n", full_path);
+        return NULL;
     }
 
     void*           info_copy(const void *_info) override;

@@ -5,7 +5,7 @@ namespace LowFive
 
 void save_dataset_data(const Hid& dataset, const Dataset* d)
 {
-    for (auto x : d->data)
+    for (auto& x : d->data)
     {
         if (x.file.selection != Dataspace::Selection::hyperslabs && x.file.selection != Dataspace::Selection::all)
             throw MetadataError(fmt::format("encountered unexpected non-hyperslab selection: {}", x.file.selection));

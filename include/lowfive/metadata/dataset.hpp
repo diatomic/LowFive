@@ -13,9 +13,11 @@ struct Dataset : public Object
         const void* data;
     };
 
+    using DataTriples = std::vector<DataTriple>;
+
     Datatype                        type;
     Dataspace                       space;
-    std::vector<DataTriple>         data;
+    DataTriples                     data;
 
 
     Dataset(std::string name, hid_t dtype_id, hid_t space_id):
