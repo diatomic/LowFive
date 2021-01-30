@@ -9,8 +9,8 @@ git module HighFive:
 
 git module fmt:
     url: gh:fmtlib/fmt
-    rev: 9c418bc468baf434a848010bff74663e1f820e79
+    rev: 58aa04573f6fab54dd998183d333bf9d630843ee
 
 git module diy:
-    url: gh:diatomic/diy
-    rev: 686b3a89f3fcd863ee67b41763331d5cf8157866
+    url: kgl:mrzv/diy
+    rev: e3bfa9846332a4621385226cd8417b9967d97022
