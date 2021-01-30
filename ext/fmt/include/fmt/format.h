@@ -381,7 +381,7 @@ template <typename T> inline T* make_checked(T* p, size_t) { return p; }
 #endif
 
 template <typename Container, FMT_ENABLE_IF(is_contiguous<Container>::value)>
-#if FMT_CLANG_VERSION
+#if FMT_CLANG_VERSION >= 307
 __attribute__((no_sanitize("undefined")))
 #endif
 inline checked_ptr<typename Container::value_type>
@@ -658,8 +658,9 @@ void buffer<T>::append(const U* begin, const U* end) {
 
 template <typename OutputIt, typename T, typename Traits>
 void iterator_buffer<OutputIt, T, Traits>::flush() {
-  out_ = copy_str<T>(data_, data_ + this->limit(this->size()), out_);
+  auto size = this->size();
   this->clear();
+  out_ = copy_str<T>(data_, data_ + this->limit(size), out_);
 }
 }  // namespace detail
 
@@ -940,8 +941,8 @@ template <typename T = void> struct FMT_EXTERN_TEMPLATE_API basic_data {
   static const char reset_color[5];
   static const wchar_t wreset_color[5];
   static const char signs[];
-  static constexpr const char left_padding_shifts[] = {31, 31, 0, 1, 0};
-  static constexpr const char right_padding_shifts[] = {0, 31, 0, 1, 0};
+  static constexpr const char left_padding_shifts[5] = {31, 31, 0, 1, 0};
+  static constexpr const char right_padding_shifts[5] = {0, 31, 0, 1, 0};
 
   // DEPRECATED! These are for ABI compatibility.
   static const uint32_t zero_or_powers_of_10_32[];
@@ -1423,6 +1424,14 @@ FMT_CONSTEXPR void handle_int_type_spec(char spec, Handler&& handler) {
   }
 }
 
+template <typename Char, typename Handler>
+FMT_CONSTEXPR void handle_bool_type_spec(const basic_format_specs<Char>* specs,
+                                         Handler&& handler) {
+  if (!specs) return handler.on_str();
+  if (specs->type && specs->type != 's') return handler.on_int();
+  handler.on_str();
+}
+
 template <typename ErrorHandler = error_handler, typename Char>
 FMT_CONSTEXPR float_specs parse_float_type_spec(
     const basic_format_specs<Char>& specs, ErrorHandler&& eh = {}) {
@@ -1540,6 +1549,21 @@ class cstring_type_checker : public ErrorHandler {
 
   FMT_CONSTEXPR void on_string() {}
   FMT_CONSTEXPR void on_pointer() {}
+};
+
+template <typename ErrorHandler>
+class bool_type_checker : private ErrorHandler {
+ private:
+  char type_;
+
+ public:
+  FMT_CONSTEXPR explicit bool_type_checker(char type, ErrorHandler eh)
+      : ErrorHandler(eh), type_(type) {}
+
+  FMT_CONSTEXPR void on_int() {
+    handle_int_type_spec(type_, int_type_checker<ErrorHandler>(*this));
+  }
+  FMT_CONSTEXPR void on_str() {}
 };
 
 template <typename OutputIt, typename Char>
@@ -1674,7 +1698,7 @@ template <typename OutputIt, typename Char, typename UInt> struct int_writer {
     return string_view(prefix, prefix_size);
   }
 
-  void write_dec() {
+  FMT_CONSTEXPR void write_dec() {
     auto num_digits = count_digits(abs_value);
     out = write_int(
         out, num_digits, get_prefix(), specs, [this, num_digits](iterator it) {
@@ -2344,7 +2368,8 @@ class arg_formatter_base {
   }
 
   FMT_CONSTEXPR iterator operator()(bool value) {
-    if (specs_ && specs_->type) return (*this)(value ? 1 : 0);
+    if (specs_ && specs_->type && specs_->type != 's')
+      return (*this)(value ? 1 : 0);
     write(value != 0);
     return out_;
   }
@@ -3515,9 +3540,12 @@ struct formatter<T, Char,
     case detail::type::ulong_long_type:
     case detail::type::int128_type:
     case detail::type::uint128_type:
-    case detail::type::bool_type:
       handle_int_type_spec(specs_.type,
                            detail::int_type_checker<decltype(eh)>(eh));
+      break;
+    case detail::type::bool_type:
+      handle_bool_type_spec(
+          &specs_, detail::bool_type_checker<decltype(eh)>(specs_.type, eh));
       break;
     case detail::type::char_type:
       handle_char_specs(

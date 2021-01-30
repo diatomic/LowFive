@@ -1129,6 +1129,9 @@ TEST(BoolTest, FormatBool) {
   EXPECT_EQ("1", format("{:d}", true));
   EXPECT_EQ("true ", format("{:5}", true));
   EXPECT_EQ(L"true", format(L"{}", true));
+  EXPECT_EQ("true", format("{:s}", true));
+  EXPECT_EQ("false", format("{:s}", false));
+  EXPECT_EQ("false ", format("{:6s}", false));
 }
 
 TEST(FormatterTest, FormatShort) {
@@ -2018,6 +2021,17 @@ TEST(FormatTest, FormatTo) {
   EXPECT_EQ(string_view(v.data(), v.size()), "foo");
 }
 
+struct nongrowing_container {
+  using value_type = char;
+  void push_back(char) { throw std::runtime_error("can't take it any more"); }
+};
+
+TEST(FormatTest, FormatToPropagatesExceptions) {
+  auto c = nongrowing_container();
+  EXPECT_THROW(fmt::format_to(std::back_inserter(c), "{}", 42),
+               std::runtime_error);
+}
+
 TEST(FormatTest, FormatToN) {
   char buffer[4];
   buffer[3] = 'x';
@@ -2435,7 +2449,6 @@ TEST(FormatTest, FormatStringErrors) {
   EXPECT_ERROR("{:.{}}", "argument not found", double);
   EXPECT_ERROR("{:.2}", "precision not allowed for this argument type", int);
   EXPECT_ERROR("{:s}", "invalid type specifier", int);
-  EXPECT_ERROR("{:s}", "invalid type specifier", bool);
   EXPECT_ERROR("{:s}", "invalid type specifier", char);
   EXPECT_ERROR("{:+}", "invalid format specifier for char", char);
   EXPECT_ERROR("{:s}", "invalid type specifier", double);
