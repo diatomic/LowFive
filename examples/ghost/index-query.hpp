@@ -86,6 +86,8 @@ struct Index
 
     void                query(const LowFive::Dataset::DataTriples& data)
     {
+        fmt::print("Querying\n");
+
         // enqueue all queried file dataspaces to the ranks that are
         // responsible for the boxes that (might) intersect them
         master.foreach([&](Block*, const diy::Master::ProxyWithLink& cp)
@@ -95,6 +97,7 @@ struct Index
                 Bounds b { dim };           // diy representation of the triplet's bounding box
                 b.min = Point(x.file.min);
                 b.max = Point(x.file.max);
+                auto gids = bounds_to_gids(b);
                 for (int gid : bounds_to_gids(b))
                     cp.enqueue({ gid, assigner.rank(gid) }, x.file);
             }
@@ -127,19 +130,43 @@ struct Index
         });
         master.exchange(true);      // rexchange
 
-        // dequeue redirects and request data
+        // TODO: dequeue redirects and request data;
+        //       for now, print
+        fmt::print("Redirects:\n");
+        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+        {
+            BoxLocations all_redirects;
+            for (auto& x : *cp.incoming())
+            {
+                int     gid     = x.first;
+                auto&   queue   = x.second;
+                while (queue)
+                {
+                    BoxLocations redirects;
+                    cp.dequeue(gid, redirects);
+                    for (auto& x : redirects)
+                        all_redirects.push_back(x);
+                }
+            }
+            print(master.communicator().rank(), all_redirects);
+        });
+    }
+
+    static void         print(int rank, const BoxLocations& boxes)
+    {
+        for (auto& box : boxes)
+        {
+            auto& bid = std::get<1>(box);
+            auto& ds  = std::get<0>(box);
+            fmt::print("{}: ({} {}) -> {}\n", rank, bid.gid, bid.proc, ds);
+        }
     }
 
     void                print()
     {
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
-            for (auto& box : b->boxes)
-            {
-                auto& bid = std::get<1>(box);
-                auto& ds  = std::get<0>(box);
-                fmt::print("{}: ({} {}) -> {}\n", master.communicator().rank(), bid.gid, bid.proc, ds);
-            }
+            print(master.communicator().rank(), b->boxes);
         });
     }
 

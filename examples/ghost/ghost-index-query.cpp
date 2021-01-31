@@ -152,12 +152,30 @@ int main(int argc, char* argv[])
     /* "Read" the data */
     /*******************/
 
+    // Create the dataset
+    hid_t dset2 = H5Dcreate2(group, "/group1/grid2", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    // test writing an HDF5 file in parallel using HighFive API
+    // this fills data triplets which we'll use for reading (eventually this
+    // will migrate into dataset_read)
+    master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+            { b->write_block_hdf5(cp, dset2); });
+
     /******************/
     /* Query the data */
     /******************/
 
+    auto* dataset2 = static_cast<const l5::Dataset*>(vol_plugin.locate("outfile1.h5", "/group1/grid2"));
+    if (!dataset2)
+    {
+        fmt::print("Dataset not found\n");
+        return 1;
+    }
+    index.query(dataset2->data);
+
     // clean up
     herr_t status;
+    status = H5Dclose(dset2);
     status = H5Dclose(dset);
     status = H5Sclose(filespace);
     status = H5Gclose(group);
