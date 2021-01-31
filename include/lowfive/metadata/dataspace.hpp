@@ -18,7 +18,7 @@ struct Dataspace: Hid
     // hyperslab
     std::vector<size_t>             start, stride, count, block;
 
-            Dataspace(hid_t space_id, bool owned = false):
+            Dataspace(hid_t space_id = 0, bool owned = false):
                 Hid(space_id, owned)
     {
         if (id == 0)
@@ -105,13 +105,13 @@ struct Dataspace: Hid
 
     bool    intersects(const Dataspace& other) const
     {
-        hid_t intersection_id = H5Scombine_select(id, H5S_SELECT_AND, other.id);
-        if (intersection_id == H5I_INVALID_HID)       // not sure if this is supposed to happen; might be better to throw an error to investigate this
-            return false;
-
-        Dataspace intersection(intersection_id, true);
-
-        return intersection.size() > 0;
+        std::vector<hsize_t> start, end;
+        for (int i = 0; i < other.dim; ++i)
+        {
+            start.push_back(other.min[i]);
+            end.push_back(other.max[i]);
+        }
+        return H5Sselect_intersect_block(id, start.data(), end.data()) > 0;
     }
 
     static hid_t project_intersection(hid_t src_space_id, hid_t dst_space_id, hid_t src_intersect_space_id)
