@@ -23,7 +23,7 @@ struct Serialization<::LowFive::Dataspace>
         diy::load(bb, nalloc);
         hid_t ds_id = H5Sdecode(bb.advance(nalloc));
 
-        ds = Dataspace(ds_id);
+        ds = Dataspace(ds_id, true);
     }
 };
 
@@ -47,7 +47,7 @@ struct Serialization<::LowFive::Datatype>
         diy::load(bb,nalloc);
         hid_t dt_id = H5Tdecode(bb.advance(nalloc));
 
-        dt = Datatype(dt_id);
+        dt = Datatype(dt_id, true);
     }
 };
 
