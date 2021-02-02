@@ -14,8 +14,8 @@ struct Datatype: Hid
     DatatypeClass           dtype_class;
     size_t                  dtype_size;         // in bytes
 
-            Datatype(hid_t dtype_id_ = 0):
-                Hid(dtype_id_)
+            Datatype(hid_t dtype_id_ = 0, bool owned = false):
+                Hid(dtype_id_, owned)
     {
         if (id == 0) return;
 
