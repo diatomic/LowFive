@@ -86,23 +86,23 @@ struct Index
         });
     }
 
-    void                query(const LowFive::Dataset::DataTriples& data)
+    void                query(const LowFive::Dataset::DataTriples& data,            // input: local data triples
+                              const LowFive::Dataspace&            file_space,      // input: query in terms of file space
+                              const LowFive::Dataspace&            mem_space,       // ouput: memory space of resulting data
+                              void*                                buf)             // output: resulting data, allocated by caller
     {
         fmt::print("Querying\n");
 
-        // enqueue all queried file dataspaces to the ranks that are
+        // enqueue queried file dataspace to the ranks that are
         // responsible for the boxes that (might) intersect them
         master.foreach([&](Block*, const diy::Master::ProxyWithLink& cp)
         {
-            for (auto& x : data)
-            {
-                Bounds b { dim };           // diy representation of the triplet's bounding box
-                b.min = Point(x.file.min);
-                b.max = Point(x.file.max);
-                auto gids = bounds_to_gids(b);
-                for (int gid : bounds_to_gids(b))
-                    cp.enqueue({ gid, assigner.rank(gid) }, x.file);
-            }
+            Bounds b { dim };           // diy representation of the dataspace's bounding box
+            b.min = Point(file_space.min);
+            b.max = Point(file_space.max);
+            auto gids = bounds_to_gids(b);
+            for (int gid : bounds_to_gids(b))
+                cp.enqueue({ gid, assigner.rank(gid) }, file_space);
         });
         master.exchange(true);      // rexchange
 
@@ -136,6 +136,7 @@ struct Index
         //fmt::print("Redirects:\n");
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
+            // dequeue redirects
             BoxLocations all_redirects;
             for (auto& x : *cp.incoming())
             {
@@ -151,25 +152,23 @@ struct Index
             }
             //print(master.communicator().rank(), all_redirects);
 
-            for (auto& x : data)
+            // request data for the queried space
+            std::set<BlockID> blocks;
+            for (auto& y : all_redirects)
             {
-                std::set<BlockID> blocks;
-                for (auto& y : all_redirects)
-                {
-                    auto& bid = std::get<1>(y);
-                    auto& ds  = std::get<0>(y);
+                auto& bid = std::get<1>(y);
+                auto& ds  = std::get<0>(y);
 
-                    if (x.file.intersects(ds) && blocks.find(bid) == blocks.end())
-                    {
-                        cp.enqueue(bid, x.file);
-                        blocks.insert(bid);
-                    }
+                if (file_space.intersects(ds) && blocks.find(bid) == blocks.end())
+                {
+                    cp.enqueue(bid, file_space);
+                    blocks.insert(bid);
                 }
             }
         });
         master.exchange(true);
 
-        // send the data
+        // send the data for the queried space
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
             for (auto& x : *cp.incoming())
@@ -183,6 +182,7 @@ struct Index
                     LowFive::Dataspace ds;
                     cp.dequeue(gid, ds);
 
+                    bool first = true;
                     for (auto& y : *(b->data))
                     {
                         if (y.file.intersects(ds))
@@ -191,9 +191,20 @@ struct Index
                             LowFive::Dataspace mem_src (LowFive::Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
                             LowFive::Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                             {
-                                cp.enqueue(bid, file_src);
-                                cp.enqueue(bid, len);
+                                if (first)
+                                {
+                                    cp.enqueue(bid, file_src);
+                                    cp.enqueue(bid, len);
+                                    first = false;
+
+                                    // debug
+//                                     fmt::print("gid {} enq to gid {} len {} space {}\n", cp.gid(), bid.gid, len, file_src);
+                                }
                                 cp.enqueue(bid, (char*) y.data + loc, len);
+
+                                // debug
+//                                 fmt::print("gid {} enq to gid {} data ranging from {} to {}, loc {} len {}\n", cp.gid(), bid.gid,
+//                                     ((float*)y.data)[loc / 4], ((float*)y.data)[(loc + len) / 4 - 1], loc, len);
                             });
                         }
                     }
@@ -202,7 +213,7 @@ struct Index
         });
         master.exchange(true);
 
-        // receive the data
+        // receive the data for the queried space
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
             for (auto& x : *cp.incoming())
@@ -218,15 +229,21 @@ struct Index
                     size_t len;
                     cp.dequeue(gid, len);
 
-                    for (auto& x : data)
-                    {
-                        if (!x.file.intersects(ds)) continue;
+                    // debug
+//                     fmt::print("gid {} deq from gid {} len {} space {} \n", cp.gid(), gid, len, ds);
 
-                        LowFive::Dataspace mem_dst (LowFive::Dataspace::project_intersection(x.file.id, x.memory.id, ds.id), true);
+                    if (file_space.intersects(ds))
+                    {
+                        LowFive::Dataspace mem_dst(LowFive::Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
                         // TODO: this assumes data types match
-                        LowFive::Dataspace::iterate(mem_dst, x.type.dtype_size, [&](size_t loc, size_t len)
+
+                        LowFive::Dataspace::iterate(mem_dst, data[0].type.dtype_size, [&](size_t loc, size_t len)
                         {
-                            std::memcpy((char*) x.data + loc, queue.advance(len), len);
+                            std::memcpy((char*)buf + loc, queue.advance(len), len);
+
+                            // debug
+//                             fmt::print("gid {} deq from gid {} data ranging from {} to {}, loc {} len {}\n", cp.gid(), gid,
+//                                 ((float*)buf)[loc / 4], ((float*)buf)[(loc + len) / 4 - 1], loc, len);
                         });
                     }
                 }
@@ -249,6 +266,13 @@ struct Index
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
             print(master.communicator().rank(), b->boxes);
+
+            // debug: print the data
+            for (auto& x : *(b->data))
+            {
+                fmt::print("index has data ranging from {} to {}\n",
+                        ((float*)x.data)[0], ((float*)x.data)[x.memory.size() - 1]);
+            }
         });
     }
 
