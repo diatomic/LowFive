@@ -7,6 +7,7 @@ add_library             (lowfive
                             base/group.cpp
                             base/introspect.cpp
                             vol-metadata.cpp
+                            vol-dist-metadata.cpp
                             metadata/save-h5.cpp
                         )
 target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY} diy)

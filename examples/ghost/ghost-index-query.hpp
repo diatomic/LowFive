@@ -17,10 +17,8 @@
 #include    <core_file_driver.hpp>
 
 #include    <lowfive/H5VOLProperty.hpp>
-#include    <lowfive/vol-metadata.hpp>
+#include    <lowfive/vol-dist-metadata.hpp>
 namespace l5 = LowFive;
-
-#include    "index-query.hpp"
 
 // D-dimensional point
 template<unsigned D>
@@ -51,8 +49,10 @@ struct PointBlock
 
     // allocate a new block
     static void* create()               { return new PointBlock; }
+
     // free a block
     static void destroy(void* b)        { delete static_cast<PointBlock*>(b); }
+
     // serialize the block and write it
     static void save(const void* b_, diy::BinaryBuffer& bb)
     {
@@ -61,6 +61,7 @@ struct PointBlock
         diy::save(bb, b->domain);
         diy::save(bb, b->points);
     }
+
     // read the block and deserialize it
     static void load(void* b_, diy::BinaryBuffer& bb)
     {
@@ -146,66 +147,11 @@ struct PointBlock
         fmt::print("HDF5 write success.\n");
     }
 
-    // query the data according to the block bounds
-    // TODO: eventually fold into reading the data, for now two steps, query followed by read
-    // TODO: only for 1 block per rank?
-    void query_block(
-            const diy::Master::ProxyWithLink& cp,           // communication proxy
-            const l5::Dataset*                dset,
-            Index&                            index)
-    {
-        herr_t      status;
-
-        // number of grid points in core, bounds, domain
-        std::vector<hsize_t> bounds_cnts(DIM);
-        std::vector<hsize_t> domain_cnts(DIM);
-        std::vector<hsize_t> ofst(DIM);
-        for (auto i = 0; i < DIM; i++)
-        {
-            bounds_cnts[i]  = bounds.max[i] - bounds.min[i] + 1;
-            domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
-            ofst[i] = bounds.min[i];
-        }
-
-        // filespace = bounds selected out of global domain
-        hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
-        status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &bounds_cnts[0], NULL);
-
-        // memspace = simple count from bounds
-        hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
-
-        // query the data, using the filespace (from block bounds) as the query
-        std::vector<float> query_grid(grid.size());
-        index.query(dset->data, l5::Dataspace(filespace), l5::Dataspace(memspace), query_grid.data());
-
-        status = H5Sclose(filespace);
-        status = H5Sclose(memspace);
-
-        // check that the values match
-        bool success = true;
-        for (size_t i = 0; i < grid.size(); ++i)
-        {
-            if (grid[i] != query_grid[i])
-            {
-                success = false;
-                fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, query_grid[i]);
-//                 exit(0);
-            }
-        }
-
-        if (success)
-            fmt::print("HDF5 query success.\n");
- }
-
     // read the block in parallel to an HDF5 file using native HDF5 API
-    // TODO: deprecate, not used in this example
-    // query_block used to "read" data instead of read_block_hdf5
     void read_block_hdf5(
             const diy::Master::ProxyWithLink& cp,           // communication proxy
             hid_t                             dset)
     {
-        fmt::print("Reading in native HDF5 API...\n");
-
         herr_t      status;
 
         // read back the grid as a test
@@ -235,7 +181,6 @@ struct PointBlock
         bool success = true;
         for (size_t i = 0; i < grid.size(); ++i)
         {
-//             fmt::print("grid[{}] = {} read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
             if (grid[i] != read_grid[i])
             {
                 success = false;

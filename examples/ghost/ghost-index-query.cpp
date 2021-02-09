@@ -6,7 +6,6 @@
 #include    <diy/../../examples/opts.h>
 
 #include    "ghost-index-query.hpp"
-#include    "index-query.hpp"
 
 static const unsigned DIM = 3;
 typedef     PointBlock<DIM>             Block;
@@ -106,13 +105,9 @@ int main(int argc, char* argv[])
     }
 
     // set up lowfive
-    l5::MetadataVOL vol_plugin;
+    l5::DistMetadataVOL vol_plugin(world);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
-
-    /******************/
-    /* Write the data */
-    /******************/
 
     // create a new file using default properties
     hid_t file = H5Fcreate("outfile1.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
@@ -134,34 +129,9 @@ int main(int argc, char* argv[])
     master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_hdf5(cp, dset); });
 
-    /******************/
-    /* Index the data */
-    /******************/
-    // TODO: encapsulate inside writing the data in VOL
-
-    auto* dataset = static_cast<const l5::Dataset*>(vol_plugin.locate("outfile1.h5", "/group1/grid"));
-    if (!dataset)
-    {
-        fmt::print("Dataset not found\n");
-        return 1;
-    }
-    Index index(world, dataset);
-    fmt::print("Index created\n");
-    index.print();
-
-    /******************/
-    /* Query the data */
-    /******************/
-    // TODO: encapsulate inside reading the data in VOL
-
-    auto* dataset2 = static_cast<const l5::Dataset*>(vol_plugin.locate("outfile1.h5", "/group1/grid"));
-    if (!dataset2)
-    {
-        fmt::print("Dataset not found\n");
-        return 1;
-    }
+    // read the data
     master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->query_block(cp, dataset2, index); });
+            { b->read_block_hdf5(cp, dset); });
 
     // clean up
     herr_t status;
