@@ -8,6 +8,29 @@
 namespace LowFive
 {
 
+// properties of the entire VOL object
+// can be overwritten by individual objects
+struct VOLProperties
+{
+    bool memory;        // in-memory copy (coul be deep or shallow) of all files
+    bool passthru;      // pass-through to native HDF5 for all files
+    bool copy;          // make a deep copy if memory == true
+};
+
+// TODO: eventually add more custom properties only for files
+// or move some of the VOL properties to the file level
+// TODO: move to metadata/file.hpp?
+struct FileProperties: public VOLProperties
+{
+};
+
+// TODO: eventually add more custom properties only for datasets
+// or move some of the file properties to the dataset level
+// TODO: move to metadata/dataset.hpp?
+struct DatasetProperties: public FileProperties
+{
+};
+
 // custom VOL object
 // only need to specialize those functions that are custom
 
@@ -22,6 +45,8 @@ struct MetadataVOL: public LowFive::VOLBase
     using Group     = LowFive::Group;
 
     using Files     = std::map<std::string, File*>;
+
+    VOLProperties   vol_properties;
 
     struct ObjectPointers
     {
