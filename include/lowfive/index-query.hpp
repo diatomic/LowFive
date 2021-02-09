@@ -91,7 +91,7 @@ struct Index
                               const LowFive::Dataspace&            mem_space,       // ouput: memory space of resulting data
                               void*                                buf)             // output: resulting data, allocated by caller
     {
-        fmt::print("Querying\n");
+//         fmt::print("Querying\n");
 
         // enqueue queried file dataspace to the ranks that are
         // responsible for the boxes that (might) intersect them
