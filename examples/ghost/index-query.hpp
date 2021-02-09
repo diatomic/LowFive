@@ -181,30 +181,16 @@ struct Index
                 {
                     LowFive::Dataspace ds;
                     cp.dequeue(gid, ds);
-
-                    bool first = true;
                     for (auto& y : *(b->data))
                     {
                         if (y.file.intersects(ds))
                         {
                             LowFive::Dataspace file_src(LowFive::Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
                             LowFive::Dataspace mem_src (LowFive::Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
+                            cp.enqueue(bid, file_src);
                             LowFive::Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                             {
-                                if (first)
-                                {
-                                    cp.enqueue(bid, file_src);
-                                    cp.enqueue(bid, len);
-                                    first = false;
-
-                                    // debug
-//                                     fmt::print("gid {} enq to gid {} len {} space {}\n", cp.gid(), bid.gid, len, file_src);
-                                }
                                 cp.enqueue(bid, (char*) y.data + loc, len);
-
-                                // debug
-//                                 fmt::print("gid {} enq to gid {} data ranging from {} to {}, loc {} len {}\n", cp.gid(), bid.gid,
-//                                     ((float*)y.data)[loc / 4], ((float*)y.data)[(loc + len) / 4 - 1], loc, len);
                             });
                         }
                     }
@@ -226,24 +212,13 @@ struct Index
                 {
                     LowFive::Dataspace ds;
                     cp.dequeue(gid, ds);
-                    size_t len;
-                    cp.dequeue(gid, len);
-
-                    // debug
-//                     fmt::print("gid {} deq from gid {} len {} space {} \n", cp.gid(), gid, len, ds);
-
                     if (file_space.intersects(ds))
                     {
                         LowFive::Dataspace mem_dst(LowFive::Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
                         // TODO: this assumes data types match
-
                         LowFive::Dataspace::iterate(mem_dst, data[0].type.dtype_size, [&](size_t loc, size_t len)
                         {
                             std::memcpy((char*)buf + loc, queue.advance(len), len);
-
-                            // debug
-//                             fmt::print("gid {} deq from gid {} data ranging from {} to {}, loc {} len {}\n", cp.gid(), gid,
-//                                 ((float*)buf)[loc / 4], ((float*)buf)[(loc + len) / 4 - 1], loc, len);
                         });
                     }
                 }
