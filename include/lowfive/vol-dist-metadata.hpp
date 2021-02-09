@@ -16,8 +16,16 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     Index*          index;
 
-                    DistMetadataVOL(diy::mpi::communicator& world_):
-                        world(world_), index(nullptr)                               {}
+                    DistMetadataVOL(diy::mpi::communicator& world_,
+                                    bool                    memory_,
+                                    bool                    passthru_,
+                                    bool                    copy_ = true):
+                        world(world_), index(nullptr)
+                    {
+                        vol_properties.memory   = memory_;
+                        vol_properties.passthru = passthru_;
+                        vol_properties.copy     = copy_;
+                    }
                     ~DistMetadataVOL()
                     {
                         if (index)

@@ -5,6 +5,7 @@ LowFive::MetadataVOL::
 info_copy(const void *_info)
 {
     fmt::print(stderr, "Copy Info\n");
+    // NB: calling VOLBase::info_copy even if vol_properties.passthru is false, otherwise things break
     return VOLBase::info_copy(_info);
 }
 
@@ -19,7 +20,8 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
 
     ObjectPointers* obj_ptrs = new ObjectPointers;
     obj_ptrs->mdata_obj = f;
-    obj_ptrs->h5_obj = VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
+    if (vol_properties.passthru)
+        obj_ptrs->h5_obj = VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
 
     return obj_ptrs;
 }
@@ -34,8 +36,9 @@ file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **r
     fmt::print(stderr, "file_optional: opt_type = {}\n", opt_type);
     // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
 
-    // FIXME: need to handle this internally, without passthrough
-    herr_t res = VOLBase::file_optional(file_->h5_obj, opt_type, dxpl_id, req, arguments);
+    herr_t res = 0;
+    if (vol_properties.passthru)
+        res = VOLBase::file_optional(file_->h5_obj, opt_type, dxpl_id, req, arguments);
 
     return res;
 }
@@ -47,7 +50,10 @@ file_close(void *file, hid_t dxpl_id, void **req)
     ObjectPointers* file_ = (ObjectPointers*) file;
     File* f = (File*) file_->mdata_obj;
 
-    herr_t res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
+    herr_t res = 0;
+
+    if (vol_properties.passthru)
+        res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
 
     delete file_;
 
@@ -75,10 +81,11 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = new ObjectPointers;
 
-    result->h5_obj = VOLBase::dataset_create(obj_->h5_obj, loc_params, name,
-            lcpl_id,  type_id,
-            space_id, dcpl_id,
-            dapl_id,  dxpl_id, req);
+    if (vol_properties.passthru)
+        result->h5_obj = VOLBase::dataset_create(obj_->h5_obj, loc_params, name,
+                lcpl_id,  type_id,
+                space_id, dcpl_id,
+                dapl_id,  dxpl_id, req);
 
     // add the dataset to our file metadata
     std::string name_(name);
@@ -99,8 +106,9 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
-    //herr_t result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
-    //fmt::print("result = {}\n", result);
+    herr_t result = 0;
+    if (vol_properties.passthru)
+        result = VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
 
     if (get_type == H5VL_DATASET_GET_SPACE)
     {
@@ -133,7 +141,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
     }
 
-    return 0;
+    return result;
 }
 
 herr_t
@@ -176,8 +184,10 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         fmt::print("src = {}\n", src);
     }   // for all data triples
 
+    if (vol_properties.passthru)
+        return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+
     return 0;
-//     return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 herr_t
@@ -195,7 +205,10 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     Dataset* ds = (Dataset*) dset_->mdata_obj;
     ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
 
-    return VOLBase::dataset_write(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    if (vol_properties.passthru)
+        return VOLBase::dataset_write(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+
+    return 0;
 }
 
 herr_t
@@ -205,12 +218,14 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     fmt::print("close: dset = {}, dxpl_id = {}\n", fmt::ptr(dset_->h5_obj), dxpl_id);
 
-    herr_t retval = VOLBase::dataset_close(dset_->h5_obj, dxpl_id, req);
+    herr_t retval = 0;
+
+    if (vol_properties.passthru)
+        retval = VOLBase::dataset_close(dset_->h5_obj, dxpl_id, req);
 
     Dataset* ds = (Dataset*) dset_->mdata_obj;
 
     delete dset_;
-
     return retval;
 }
 
@@ -224,7 +239,8 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
     ObjectPointers* result = new ObjectPointers;
-    result->h5_obj = VOLBase::group_create(obj_->h5_obj, loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
+    if (vol_properties.passthru)
+        result->h5_obj = VOLBase::group_create(obj_->h5_obj, loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
     result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Group(name));
 
     return result;
@@ -238,12 +254,14 @@ group_close(void *grp, hid_t dxpl_id, void **req)
 
     fmt::print(stderr, "Group Close\n");
 
-    herr_t retval = VOLBase::group_close(grp_->h5_obj, dxpl_id, req);
+    herr_t retval = 0;
+
+    if (vol_properties.passthru)
+        retval = VOLBase::group_close(grp_->h5_obj, dxpl_id, req);
 
     Group* g = (Group*) grp_->mdata_obj;
 
     delete grp_;
-
     return retval;
 }
 
@@ -257,7 +275,8 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
     ObjectPointers* result = new ObjectPointers;
-    result->h5_obj = VOLBase::attr_create(obj_->h5_obj, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
+    if (vol_properties.passthru)
+        result->h5_obj = VOLBase::attr_create(obj_->h5_obj, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
     result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
 
     return result;
@@ -323,7 +342,9 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
     Attribute* a = (Attribute*) attr_->mdata_obj;
     a->write(Datatype(mem_type_id), buf);
 
-    return VOLBase::attr_write(attr_->h5_obj, mem_type_id, buf, dxpl_id, req);
+    if (vol_properties.passthru)
+        return VOLBase::attr_write(attr_->h5_obj, mem_type_id, buf, dxpl_id, req);
+    return 0;
 }
 
 herr_t
@@ -333,11 +354,13 @@ attr_close(void *attr, hid_t dxpl_id, void **req)
     ObjectPointers* attr_ = (ObjectPointers*) attr;
     fmt::print("close: attr = {}, dxpl_id = {}\n", fmt::ptr(attr_->h5_obj), dxpl_id);
 
-    herr_t retval = VOLBase::attr_close(attr_->h5_obj, dxpl_id, req);
+    herr_t retval = 0;
+
+    if (vol_properties.passthru)
+        retval = VOLBase::attr_close(attr_->h5_obj, dxpl_id, req);
 
     Attribute* a = (Attribute*) attr_->mdata_obj;
 
     delete attr_;
-
     return retval;
 }

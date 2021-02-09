@@ -105,12 +105,12 @@ int main(int argc, char* argv[])
     }
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(world);
+    l5::DistMetadataVOL vol_plugin(world, true, false);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
     // create a new file using default properties
-    hid_t file = H5Fcreate("outfile1.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
+    hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
 
     // create top-level group
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
