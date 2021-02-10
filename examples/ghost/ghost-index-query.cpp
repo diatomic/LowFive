@@ -21,10 +21,11 @@ int main(int argc, char* argv[])
     int                       nblocks     = world.size();   // global number of blocks
     int                       mem_blocks  = -1;             // all blocks in memory
     int                       threads     = 1;              // no multithreading
-    int                       k           = 2;              // radix for k-ary reduction
     std::string               prefix      = "./DIY.XXXXXX"; // for saving block files out of core
-    bool                      core        = false;          // in-core or MPI-IO file driver
     int                       ghost       = 0;              // number of ghost points (core - bounds) per side
+    // opts does not handle bool correctly, using int instead
+    int                       metadata    = 1;              // build in-memory metadata
+    int                       passthru    = 0;              // write file to disk
 
     // default global data bounds
     Bounds domain { dim };
@@ -38,13 +39,13 @@ int main(int argc, char* argv[])
     using namespace opts;
     Options ops;
     ops
-        >> Option('k', "k",       k,              "use k-ary swap")
         >> Option('b', "blocks",  nblocks,        "number of blocks")
         >> Option('t', "thread",  threads,        "number of threads")
-        >> Option('m', "memory",  mem_blocks,     "number of blocks to keep in memory")
-        >> Option('c', "core",    core,           "whether use in-core file driver or MPI-IO")
+        >> Option(     "memblks", mem_blocks,     "number of blocks to keep in memory")
         >> Option('g', "ghost",   ghost,          "number of ghost points per side in local grid")
         >> Option(     "prefix",  prefix,         "prefix for external storage")
+        >> Option('m', "memory",  metadata,       "build and use in-memory metadata")
+        >> Option('f', "file",    passthru,       "write file to disk")
         ;
     ops
         >> Option('x',  "max-x",  domain.max[0],  "domain max x")
@@ -91,21 +92,12 @@ int main(int argc, char* argv[])
     diy::RegularDecomposer<Bounds> decomposer(dim, domain, nblocks, share_face, wrap, ghosts);
     decomposer.decompose(world.rank(), assigner, create);
 
-    // Set up file access property list with core or mpi-io file driver
+    // Set up file access property list with mpi-io file driver
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
-    if (core)
-    {
-        fmt::print("Using in-core file driver\n");
-        H5Pset_fapl_core(plist, 1024 /* grow memory by this incremenet */, 0 /* bool backing_store (actual file) */);
-    }
-    else
-    {
-        fmt::print("Using mpi-io file driver\n");
-        H5Pset_fapl_mpio(plist, master.communicator(), MPI_INFO_NULL);
-    }
+    H5Pset_fapl_mpio(plist, master.communicator(), MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(world, true, false);
+    l5::DistMetadataVOL vol_plugin(world, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
