@@ -86,12 +86,14 @@ struct Index
         });
     }
 
-    void                query(const LowFive::Dataset::DataTriples& data,            // input: local data triples
+    void                query(const LowFive::Dataset&              dataset,         // input: dataset
                               const LowFive::Dataspace&            file_space,      // input: query in terms of file space
                               const LowFive::Dataspace&            mem_space,       // ouput: memory space of resulting data
                               void*                                buf)             // output: resulting data, allocated by caller
     {
 //         fmt::print("Querying\n");
+
+        const LowFive::Dataset::DataTriples& data = dataset.data;
 
         // enqueue queried file dataspace to the ranks that are
         // responsible for the boxes that (might) intersect them
@@ -212,15 +214,15 @@ struct Index
                 {
                     LowFive::Dataspace ds;
                     cp.dequeue(gid, ds);
-                    if (file_space.intersects(ds))
+
+                    if (!file_space.intersects(ds))
+                        throw LowFive::MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
+
+                    LowFive::Dataspace mem_dst(LowFive::Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
+                    LowFive::Dataspace::iterate(mem_dst, data[0].type.dtype_size, [&](size_t loc, size_t len)
                     {
-                        LowFive::Dataspace mem_dst(LowFive::Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
-                        // TODO: this assumes data types match
-                        LowFive::Dataspace::iterate(mem_dst, data[0].type.dtype_size, [&](size_t loc, size_t len)
-                        {
-                            std::memcpy((char*)buf + loc, queue.advance(len), len);
-                        });
-                    }
+                        std::memcpy((char*)buf + loc, queue.advance(len), len);
+                    });
                 }
             }
         });
