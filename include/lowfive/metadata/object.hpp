@@ -49,6 +49,9 @@ struct Object
             child->print();
     }
 
+    // search for the object at the leaf of the current path in the subtree rooted at this object
+    // this object can be either the root of the current path or its direct parent
+    // returns pointer to object or null if not found
     virtual Object* search(std::string& cur_path)                       // current path to the name with objects already found removed, will be truncated further
     {
         // remove any trailing slashes from current path
@@ -56,30 +59,60 @@ struct Object
         while (found == cur_path.size() - 1)
             cur_path = cur_path.substr(0, found);
 
-        size_t start    = cur_path.find_first_not_of("/");              // starting position of name in path
-        size_t end      = cur_path.find_first_of("/", start);           // ending position of name in path
+        size_t start, end;                                              // starting and ending position of root name in path
+        if (cur_path[0] == '/')
+        {
+            start   = 0;
+            end     = 1;
+        }
+        else
+        {
+            start = cur_path.find_first_not_of("/");
+            end = cur_path.find_first_of("/", start);
+        }
 
         if (start == std::string::npos)                                 // no name
-            return NULL;
-        else if (end == std::string::npos)                              // current path is just the name
+            return nullptr;
+        else if (end == std::string::npos)                              // current path is the leaf
         {
             if (name == cur_path)
                 return this;
-            return NULL;
+            return nullptr;
         }
-        else                                                            // peel the name from the front and update current path
+        else                                                            // current path is not the leaf yet
         {
             std::string obj_name = cur_path.substr(start, end - start); // name peeled from front of path
-            if (name != obj_name)
-                return NULL;
-            cur_path = cur_path.substr(end + 1);
+            Object* parent = this;                                      // parent of subtree to search
+
+            if (obj_name == "/" && type == ObjectType::File)            // root of curent path is the file (assumes file name is correct)
+                cur_path = cur_path.substr(end);
+            else if (obj_name == name)                                  // root of curent path is this object
+                cur_path = cur_path.substr(end + 1);
+            else                                                        // root of current path could be one of the direct children
+            {
+                bool found_child = false;
+                for (auto* child : children)
+                {
+                    if (child->name == obj_name)
+                    {
+                        cur_path = cur_path.substr(end + 1);
+                        found_child = true;
+                        parent = child;
+                        break;
+                    }
+                }
+                if (!found_child)
+                    return nullptr;
+            }
+
+            // recurse subtree
             Object* obj;
-            for (auto* child : children)                                // recurse subtree
+            for (auto* child : parent->children)
             {
                 if ((obj = child->search(cur_path)) != NULL)
                     return obj;
             }
-            return NULL;
+            return nullptr;
         }
         return nullptr;
     }

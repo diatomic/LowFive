@@ -39,9 +39,9 @@ VOLBase(unsigned version_, int value_, std::string name_):
             &_attr_optional,                            /* optional */
             &_attr_close                                /* close */
         },
-        {                                               /* dataset_cls */
-            &_dataset_create,                            /* create */
-            NULL, // OUR_pass_through_dataset_open,             /* open */
+        {                                           /* dataset_cls */
+            &_dataset_create,                           /* create */
+            &_dataset_open,                             /* open */
             &_dataset_read,                             /* read */
             &_dataset_write,                            /* write */
             &_dataset_get,                              /* get */
