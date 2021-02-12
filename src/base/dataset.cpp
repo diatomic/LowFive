@@ -49,6 +49,52 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 }
 
 /*-------------------------------------------------------------------------
+ * Function:    dataset_open
+ *
+ * Purpose:     Opens a dataset in a container
+ *
+ * Return:      Success:    Pointer to a dataset object
+ *              Failure:    NULL
+ *
+ *-------------------------------------------------------------------------
+ */
+void*
+LowFive::VOLBase::
+_dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
+{
+    pass_through_t *dset;
+    pass_through_t *o = (pass_through_t *)obj;
+    void *under;
+
+#ifdef ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL DATASET Open\n");
+#endif
+
+    under = o->vol->dataset_open(o->under_object, loc_params, name, dapl_id, dxpl_id, req);
+
+    if(under) {
+        dset = o->create(under);
+
+        /* Check for async request */
+        if(req && *req)
+            *req = o->create(*req);
+    } /* end if */
+    else
+        dset = NULL;
+
+    return (void *)dset;
+} /* end dataset_open() */
+
+void*
+LowFive::VOLBase::
+dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
+{
+    return H5VLdataset_open(obj, loc_params, info.under_vol_id, name, dapl_id, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
  * Function:    dataset_read
  *
  * Purpose:     Reads data elements from a dataset into a buffer.

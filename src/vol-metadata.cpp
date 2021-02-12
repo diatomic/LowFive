@@ -50,6 +50,27 @@ file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **r
     return res;
 }
 
+void*
+LowFive::MetadataVOL::
+file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ptrs = new ObjectPointers;
+
+    if (vol_properties.memory)
+    {
+        // create our file metadata
+        std::string name_(name);
+        File* f = new File(name_);
+        files.emplace(name_, f);
+        obj_ptrs->mdata_obj = f;
+    }
+
+    if (vol_properties.passthru)
+        obj_ptrs->h5_obj = VOLBase::file_open(name, flags, fapl_id, dxpl_id, req);
+
+    return obj_ptrs;
+}
+
 herr_t
 LowFive::MetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
@@ -103,6 +124,24 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         std::string name_(name);
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id));
     }
+
+    return (void*)result;
+}
+
+void*
+LowFive::MetadataVOL::
+dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    ObjectPointers* result = new ObjectPointers;
+
+    if (vol_properties.passthru)
+        result->h5_obj = VOLBase::dataset_open(obj_->h5_obj, loc_params, name, dapl_id, dxpl_id, req);
+
+    // find the dataset in our file metadata
+    std::string name_(name);
+    if (vol_properties.memory)
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
 
     return (void*)result;
 }
