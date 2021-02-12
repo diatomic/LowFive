@@ -93,24 +93,6 @@ int main(int argc, char* argv[])
     // create a new file using default properties
     hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
 
-    // ------- test reading data ----------- //
-
-//     H5Fclose(file);
-//     hid_t file1 = H5Fopen("outfile.h5", H5F_ACC_RDWR, plist);
-// 
-//     hid_t dset2 = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
-// 
-//     // read the data
-//     master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-//             { b->read_block_hdf5(cp, dset2); });
-// 
-//     H5Dclose(dset2);
-//     H5Fclose(file1);
-//     H5Pclose(plist);
-//     return 0;
-
-    // ------- end of test reading data ----------- //
-
     // create top-level group
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
