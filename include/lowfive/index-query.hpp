@@ -50,6 +50,9 @@ struct Index
 
     // TODO: index-query are written with the bulk-synchronous assumption;
     //       think about how to make it completely asynchronous
+    // NB, index and query are called once for each (DIY) block of the user code, not once per rank
+    // The bulk synchronous assumption means that each rank must have the same number of blocks (no remainders)
+    // It also means that all ranks in a producer-consumer task pair need to index/query the same number of times
 
     void                index(const LowFive::Dataset::DataTriples& data)
     {
@@ -67,6 +70,7 @@ struct Index
                     cp.enqueue({ gid, assigner.rank(gid) }, x.file);
             }
         });
+
         master.exchange(true);      // rexchange
 
         // dequeue bounds and save them in boxes
@@ -97,6 +101,7 @@ struct Index
 
         // enqueue queried file dataspace to the ranks that are
         // responsible for the boxes that (might) intersect them
+//         fmt::print("Enqueue file dataspace\n");
         master.foreach([&](Block*, const diy::Master::ProxyWithLink& cp)
         {
             Bounds b { dim };           // diy representation of the dataspace's bounding box
@@ -109,6 +114,7 @@ struct Index
         master.exchange(true);      // rexchange
 
         // dequeue and check intersections
+//         fmt::print("Dequeue and check instersections\n");
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
             for (auto& x : *cp.incoming())
@@ -135,7 +141,7 @@ struct Index
         master.exchange(true);      // rexchange
 
         // dequeue redirects and request data;
-        //fmt::print("Redirects:\n");
+//         fmt::print("Dequeue redirects and request data\n");
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
             // dequeue redirects
@@ -171,6 +177,7 @@ struct Index
         master.exchange(true);
 
         // send the data for the queried space
+//         fmt::print("Send data:\n");
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
             for (auto& x : *cp.incoming())
@@ -202,8 +209,13 @@ struct Index
         master.exchange(true);
 
         // receive the data for the queried space
+//         fmt::print("Receive data:\n");
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
+            // TODO: need to empty the queue when buf is null, bailing out too soon here
+            if (!buf)
+                return;
+
             for (auto& x : *cp.incoming())
             {
                 int     gid     = x.first;
@@ -219,7 +231,7 @@ struct Index
                         throw LowFive::MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
 
                     LowFive::Dataspace mem_dst(LowFive::Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
-                    LowFive::Dataspace::iterate(mem_dst, data[0].type.dtype_size, [&](size_t loc, size_t len)
+                    LowFive::Dataspace::iterate(mem_dst, dataset.type.dtype_size, [&](size_t loc, size_t len)
                     {
                         std::memcpy((char*)buf + loc, queue.advance(len), len);
                     });
@@ -242,14 +254,16 @@ struct Index
     {
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
-            print(master.communicator().rank(), b->boxes);
+            if (master.communicator().rank() == 0)
+                print(master.communicator().rank(), b->boxes);
 
             // debug: print the data
-            for (auto& x : *(b->data))
-            {
-                fmt::print("index has data ranging from {} to {}\n",
-                        ((float*)x.data)[0], ((float*)x.data)[x.memory.size() - 1]);
-            }
+//             for (auto& x : *(b->data))
+//             {
+//                 if (master.communicator().rank() == 0)
+//                     fmt::print("index has data ranging from {} to {}\n",
+//                         ((float*)x.data)[0], ((float*)x.data)[x.memory.size() - 1]);
+//             }
         });
     }
 
