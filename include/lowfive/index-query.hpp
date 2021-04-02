@@ -15,7 +15,9 @@ struct Index
     using BlockID               = diy::BlockID;
     using Link                  = diy::RegularGridLink;
 
-    using BoxLocations          = std::vector<std::tuple<LowFive::Dataspace, BlockID>>;
+    using BoxLocations          = std::vector<std::tuple<LowFive::Dataspace, int>>;
+
+    using communicator          = diy::mpi::communicator;
 
     struct Block
     {
@@ -23,16 +25,23 @@ struct Index
         const LowFive::Dataset::DataTriples*    data;       // local data
     };
 
-                        Index(diy::mpi::communicator& world, const LowFive::Dataset* dataset):
-                            master(world, 1, world.size()),
-                            assigner(world.size(), world.size())
+    enum tags { dimension = 1, domain, redirect, data, done };
+
+    // producer version of the constructor
+                        Index(communicator& local_, communicator& intercomm_, const LowFive::Dataset* dataset):
+                            local(local_),
+                            intercomm(intercomm_),
+                            master(local, 1, local.size()),
+                            assigner(local.size(), local.size())
     {
         dim = dataset->space.dims.size();
+        type = dataset->type;
+
         Bounds domain { dim };
         domain.max = dataset->space.dims;
 
-        decomposer = Decomposer(dim, domain, world.size());
-        decomposer.decompose(world.rank(), assigner,
+        decomposer = Decomposer(dim, domain, local.size());
+        decomposer.decompose(local.rank(), assigner,
                              [&](int            gid,            // block global id
                                  const  Bounds& core,           // block bounds without any ghost added
                                  const  Bounds& bounds,         // block bounds including any ghost region added
@@ -46,6 +55,37 @@ struct Index
         });
 
         index(dataset->data);
+    }
+
+    // consumer version of the constructor
+                        Index(communicator& local_, communicator& intercomm_):
+                            local(local_),
+                            intercomm(intercomm_),
+                            master(local, 1, local.size()),                     // unused, but must initialize
+                            assigner(intercomm.size(), intercomm.size())        // producer info
+    {
+        bool root = local.rank() == 0;
+
+        // query producer for dim
+        if (root)
+        {
+            intercomm.send(0, tags::dimension, 0);
+            intercomm.recv(0, tags::dimension, dim);
+            recv(intercomm, 0, tags::dimension, type);
+        }
+        diy::mpi::broadcast(local, dim, 0);
+        broadcast(local, type, 0);
+
+        // query producer for domain
+        Bounds domain { dim };
+        if (root)
+        {
+            intercomm.send(0, tags::domain, 0);
+            recv(intercomm, 0, tags::domain, domain);
+        }
+        broadcast(local, domain, 0);
+
+        decomposer = Decomposer(dim, domain, intercomm.size());
     }
 
     // TODO: index-query are written with the bulk-synchronous assumption;
@@ -84,169 +124,200 @@ struct Index
                 {
                     LowFive::Dataspace ds(0);            // dummy to be filled
                     cp.dequeue(gid, ds);
-                    b->boxes.emplace_back(ds, BlockID { gid, assigner.rank(gid) });
+                    b->boxes.emplace_back(ds, gid);
                 }
             }
         });
     }
 
-    void                query(const LowFive::Dataset&              dataset,         // input: dataset
-                              const LowFive::Dataspace&            file_space,      // input: query in terms of file space
+    // serialize and send
+    template<class T>
+    static void         send(communicator& comm, int dest, int tag, const T& x)
+    {
+        diy::MemoryBuffer b;
+        diy::save(b, x);
+        comm.send(dest, tag, b.buffer);
+    }
+
+    // recv and deserialize
+    template<class T>
+    static void         recv(communicator& comm, int source, int tag, T& x)
+    {
+        diy::MemoryBuffer b;
+        comm.recv(source, tag, b.buffer);
+        diy::load(b, x);
+    }
+
+    // serialize and broadcast (+ deserialize)
+    template<class T>
+    static void         broadcast(communicator& comm, T& x, int root)
+    {
+        diy::MemoryBuffer b;
+        if (comm.rank() == root)
+        {
+            diy::save(b, x);
+            diy::mpi::broadcast(comm, b.buffer, root);
+        } else
+        {
+            diy::mpi::broadcast(comm, b.buffer, root);
+            diy::load(b, x);
+        }
+    }
+
+    void                serve()
+    {
+        diy::mpi::request all_done;
+        bool all_done_active = false;
+        if (local.rank() != 0)
+        {
+            all_done = local.ibarrier();
+            all_done_active = true;
+        }
+
+        while (true)
+        {
+            if (all_done_active && all_done.test())
+                break;
+
+            diy::mpi::optional<diy::mpi::status> ostatus = intercomm.iprobe(diy::mpi::any_source, diy::mpi::any_tag);
+            if (!ostatus)
+                continue;
+
+            int tag    = ostatus->tag();
+            int source = ostatus->source();
+
+            if (tag == tags::dimension)
+            {
+                int x;
+                intercomm.recv(source, tags::dimension, x);     // clear the message
+                intercomm.send(source, tags::dimension, dim);
+                send(intercomm, source, tags::dimension, type);
+            } else if (tag == tags::domain)
+            {
+                int x;
+                intercomm.recv(source, tags::domain, x);        // clear the message
+                send(intercomm, source, tags::domain, decomposer.domain);
+            } else if (tag == tags::redirect)
+            {
+                LowFive::Dataspace ds(0);               // dummy to be filled
+                recv(intercomm, source, tags::redirect, ds);
+
+                auto* b = master.block<Block>(0);       // only one block per rank
+                BoxLocations redirects;
+                for (auto& y : b->boxes)
+                {
+                    auto& ds2 = std::get<0>(y);
+                    if (ds.intersects(ds2))
+                        redirects.push_back(y);
+                }
+
+                send(intercomm, source, tags::redirect, redirects);
+            } else if (tag == tags::data)
+            {
+                LowFive::Dataspace ds;
+                recv(intercomm, source, tags::data, ds);
+
+                auto* b = master.block<Block>(0);       // only one block per rank
+                diy::MemoryBuffer queue;
+                for (auto& y : *(b->data))
+                {
+                    if (y.file.intersects(ds))
+                    {
+                        LowFive::Dataspace file_src(LowFive::Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
+                        LowFive::Dataspace mem_src (LowFive::Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
+                        diy::save(queue, file_src);
+                        LowFive::Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                        {
+                            diy::save(queue, (char*) y.data + loc, len);
+                        });
+                    }
+                }
+                intercomm.send(source, tags::data, queue.buffer);
+            } else if (tag == tags::done)
+            {
+                int x;
+                intercomm.recv(source, tags::done, x);      // clear the queue
+                all_done = local.ibarrier();
+                all_done_active = true;
+            }
+
+            // TODO: add other potential queries (e.g., datatype)
+        }
+    }
+
+    void                close()
+    {
+        local.barrier();
+
+        if (local.rank() == 0)
+            intercomm.send(0, tags::done, 0);
+    }
+
+    void                query(const LowFive::Dataspace&            file_space,      // input: query in terms of file space
                               const LowFive::Dataspace&            mem_space,       // ouput: memory space of resulting data
                               void*                                buf)             // output: resulting data, allocated by caller
     {
-//         fmt::print("Querying\n");
-
-        const LowFive::Dataset::DataTriples& data = dataset.data;
-
         // enqueue queried file dataspace to the ranks that are
         // responsible for the boxes that (might) intersect them
-//         fmt::print("Enqueue file dataspace\n");
-        master.foreach([&](Block*, const diy::Master::ProxyWithLink& cp)
+        Bounds b { dim };           // diy representation of the dataspace's bounding box
+        b.min = Point(file_space.min);
+        b.max = Point(file_space.max);
+
+        BoxLocations all_redirects;
+        auto gids = bounds_to_gids(b);
+        for (int gid : bounds_to_gids(b))
         {
-            Bounds b { dim };           // diy representation of the dataspace's bounding box
-            b.min = Point(file_space.min);
-            b.max = Point(file_space.max);
-            auto gids = bounds_to_gids(b);
-            for (int gid : bounds_to_gids(b))
-                cp.enqueue({ gid, assigner.rank(gid) }, file_space);
-        });
-        master.exchange(true);      // rexchange
+            // TODO: make this asynchronous (isend + irecv, etc)
+            send(intercomm, gid, tags::redirect, file_space);
 
-        // dequeue and check intersections
-//         fmt::print("Dequeue and check instersections\n");
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+            BoxLocations redirects;
+            recv(intercomm, gid, tags::redirect, redirects);
+            for (auto& x : redirects)
+                all_redirects.push_back(x);
+        }
+
+        // request and receive data
+        std::set<int> blocks;
+        for (auto& y : all_redirects)
         {
-            for (auto& x : *cp.incoming())
+            // TODO: make this asynchronous (isend + irecv, etc)
+
+            auto& gid = std::get<1>(y);
+            auto& ds  = std::get<0>(y);
+
+            if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
             {
-                int     gid     = x.first;
-                auto&   queue   = x.second;
-                while (queue)
-                {
-                    LowFive::Dataspace ds(0);            // dummy to be filled
-                    cp.dequeue(gid, ds);
+                blocks.insert(gid);
+                send(intercomm, gid, tags::data, file_space);
 
-                    BoxLocations redirects;
-                    for (auto& y : b->boxes)
-                    {
-                        auto& ds2 = std::get<0>(y);
-                        if (ds.intersects(ds2))
-                            redirects.push_back(y);
-                    }
+                diy::MemoryBuffer queue;
+                intercomm.recv(gid, tags::data, queue.buffer);
 
-                    cp.enqueue(BlockID { gid, assigner.rank(gid) }, redirects);
-                }
-            }
-        });
-        master.exchange(true);      // rexchange
-
-        // dequeue redirects and request data;
-//         fmt::print("Dequeue redirects and request data\n");
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-        {
-            // dequeue redirects
-            BoxLocations all_redirects;
-            for (auto& x : *cp.incoming())
-            {
-                int     gid     = x.first;
-                auto&   queue   = x.second;
-                while (queue)
-                {
-                    BoxLocations redirects;
-                    cp.dequeue(gid, redirects);
-                    for (auto& x : redirects)
-                        all_redirects.push_back(x);
-                }
-            }
-            //print(master.communicator().rank(), all_redirects);
-
-            // request data for the queried space
-            std::set<BlockID> blocks;
-            for (auto& y : all_redirects)
-            {
-                auto& bid = std::get<1>(y);
-                auto& ds  = std::get<0>(y);
-
-                if (file_space.intersects(ds) && blocks.find(bid) == blocks.end())
-                {
-                    cp.enqueue(bid, file_space);
-                    blocks.insert(bid);
-                }
-            }
-        });
-        master.exchange(true);
-
-        // send the data for the queried space
-//         fmt::print("Send data:\n");
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-        {
-            for (auto& x : *cp.incoming())
-            {
-                int     gid     = x.first;
-                BlockID bid { gid, assigner.rank(gid) };
-
-                auto&   queue   = x.second;
                 while (queue)
                 {
                     LowFive::Dataspace ds;
-                    cp.dequeue(gid, ds);
-                    for (auto& y : *(b->data))
-                    {
-                        if (y.file.intersects(ds))
-                        {
-                            LowFive::Dataspace file_src(LowFive::Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
-                            LowFive::Dataspace mem_src (LowFive::Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
-                            cp.enqueue(bid, file_src);
-                            LowFive::Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
-                            {
-                                cp.enqueue(bid, (char*) y.data + loc, len);
-                            });
-                        }
-                    }
-                }
-            }
-        });
-        master.exchange(true);
-
-        // receive the data for the queried space
-//         fmt::print("Receive data:\n");
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-        {
-            // TODO: need to empty the queue when buf is null, bailing out too soon here
-            if (!buf)
-                return;
-
-            for (auto& x : *cp.incoming())
-            {
-                int     gid     = x.first;
-                BlockID bid { gid, assigner.rank(gid) };
-
-                auto&   queue   = x.second;
-                while (queue)
-                {
-                    LowFive::Dataspace ds;
-                    cp.dequeue(gid, ds);
+                    diy::load(queue, ds);
 
                     if (!file_space.intersects(ds))
                         throw LowFive::MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
 
                     LowFive::Dataspace mem_dst(LowFive::Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
-                    LowFive::Dataspace::iterate(mem_dst, dataset.type.dtype_size, [&](size_t loc, size_t len)
+                    LowFive::Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
                     {
                         std::memcpy((char*)buf + loc, queue.advance(len), len);
                     });
                 }
             }
-        });
+        }
     }
 
     static void         print(int rank, const BoxLocations& boxes)
     {
         for (auto& box : boxes)
         {
-            auto& bid = std::get<1>(box);
+            auto& gid = std::get<1>(box);
             auto& ds  = std::get<0>(box);
-            fmt::print("{}: ({} {}) -> {}\n", rank, bid.gid, bid.proc, ds);
+            fmt::print("{}: ({}) -> {}\n", rank, gid, ds);
         }
     }
 
@@ -267,9 +338,11 @@ struct Index
         });
     }
 
+    communicator                local, intercomm;
     diy::Master                 master;
     diy::ContiguousAssigner     assigner;
     int                         dim;
+    LowFive::Datatype           type;
     Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
 
 

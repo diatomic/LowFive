@@ -39,4 +39,13 @@ struct Dataset : public Object
     }
 };
 
+struct RemoteDataset : public Object
+{
+    RemoteDataset(std::string name):
+        Object(ObjectType::Dataset, name)
+    {}
+
+    void* index = nullptr;
+};
+
 }

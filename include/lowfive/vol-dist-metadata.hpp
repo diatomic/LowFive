@@ -11,28 +11,25 @@ namespace LowFive
 // custom VOL object for distributed metadata
 struct DistMetadataVOL: public LowFive::MetadataVOL
 {
-    diy::mpi::
-    communicator    world;
+    using communicator = diy::mpi::communicator;
 
-    Index*          index;
+    communicator    local;
+    communicator    intercomm;
 
-                    DistMetadataVOL(diy::mpi::communicator& world_,
+                    DistMetadataVOL(diy::mpi::communicator  local_,
+                                    diy::mpi::communicator  intercomm_,
                                     bool                    memory_,
                                     bool                    passthru_,
                                     bool                    copy_ = true):
-                        world(world_), index(nullptr)
+                        local(local_), intercomm(intercomm_)
                     {
                         vol_properties.memory   = memory_;
                         vol_properties.passthru = passthru_;
                         vol_properties.copy     = copy_;
                     }
-                    ~DistMetadataVOL()
-                    {
-                        if (index)
-                            delete index;
-                    }
 
-    herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req) override;
+    void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
+    herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
     herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
 };
 
