@@ -23,6 +23,7 @@ int main(int argc, char* argv[])
     // opts does not handle bool correctly, using int instead
     int                       metadata    = 1;              // build in-memory metadata
     int                       passthru    = 0;              // write file to disk
+    float                     prod_frac   = 0.5;            // fraction of world ranks in producer
 
     // default global data bounds
     Bounds domain { dim };
@@ -42,6 +43,7 @@ int main(int argc, char* argv[])
         >> Option(     "prefix",  prefix,         "prefix for external storage")
         >> Option('m', "memory",  metadata,       "build and use in-memory metadata")
         >> Option('f', "file",    passthru,       "write file to disk")
+        >> Option('p', "p_frac",  prod_frac,      "fraction of world ranks in producer")
         ;
     ops
         >> Option('x',  "max-x",  domain.max[0],  "domain max x")
@@ -72,13 +74,14 @@ int main(int argc, char* argv[])
     // producer also needs to know this number so it can match collective operations
     int con_nblocks = pow(2, dim) * nblocks;
 
-    // split the world into producer (first half of ranks) and consumer (remainder)
-    int producer_ranks = world.size() / 2;
+    // split the world into producer and consumer
+    int producer_ranks = world.size() * prod_frac;
     bool producer = world.rank() < producer_ranks;
     diy::mpi::communicator local = world.split(producer);
 
     MPI_Comm intercomm;
     MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer ? producer_ranks : 0, /* tag = */ 0, &intercomm);
+    diy::mpi::communicator diy_intercomm(intercomm);
 
     // Set up file access property list with mpi-io file driver
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
@@ -93,6 +96,12 @@ int main(int argc, char* argv[])
 
     if (producer)
     {
+        //  --- producer ranks running workflow runtime system code ---
+
+        // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
+        // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
+        vol_plugin.data_ownership("outfile.h5", "/group1/*", l5::Dataset::Ownership::lowfive);
+
         // --- producer ranks running user task code  ---
 
         // diy setup for the producer
@@ -124,16 +133,6 @@ int main(int argc, char* argv[])
         // create the dataset with default properties
         hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-        // use dataset creation properties to signal lowfive ownership of data (deep copy)
-        // TODO: register a custom property instead of using existing alloc time property
-//         hid_t properties = H5Pcreate(H5P_DATASET_CREATE);
-//         H5Pset_alloc_time(properties, H5D_ALLOC_TIME_EARLY);
-//         hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, properties, H5P_DEFAULT);
-//         H5Pclose(properties);
-
-        // or alternatively call lowfive API outside of hdf5
-//         vol_plugin.set_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
-
         // write the data
         prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
                 { b->write_block_hdf5(cp, dset); });
@@ -143,12 +142,21 @@ int main(int argc, char* argv[])
         H5Sclose(filespace);
         H5Gclose(group);
         H5Fclose(file);
+
+        // signal the consumer that data are ready
+        if (passthru && !metadata)
+            diy_intercomm.barrier();
+
     }   // producer ranks
 
     // --- ranks of consumer task ---
 
     else
     {
+        // wait for data to be ready
+        if (passthru && !metadata)
+            diy_intercomm.barrier();
+
         // create a new file using default properties
         hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
 

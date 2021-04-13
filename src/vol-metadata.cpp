@@ -113,21 +113,31 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     if (vol_properties.passthru)
         result->h5_obj = VOLBase::dataset_create(obj_->h5_obj, loc_params, name,
-                lcpl_id,  type_id,
-                space_id, dcpl_id,
-                dapl_id,  dxpl_id, req);
+                lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
 
-    if (vol_properties.memory)                              // add the dataset to our file metadata
+    if (vol_properties.memory)                                              // add the dataset to our file metadata
     {
+        // trace object back to root to build full path and file name
         std::string name_(name);
-        // set ownership of the data
-        LowFive::Dataset::Ownership own;
-        H5D_alloc_time_t            alloc_time;             // HDF5 property
-        H5Pget_alloc_time(dcpl_id, &alloc_time);
-        if (alloc_time == H5D_ALLOC_TIME_EARLY)             // TODO: register custom property instead of using alloc time
-            own = LowFive::Dataset::Ownership::lowfive;     // lowfive makes a deep copy
-        else
-            own = LowFive::Dataset::Ownership::user;        // lowfive keeps only a shallow pointer
+        std::string full_path;
+        std::string filename;
+        backtrack_name(name_, static_cast<Object*>(obj_->mdata_obj), filename, full_path);
+
+        // check the ownership map for the full path name and file name
+        Dataset::Ownership own = Dataset::Ownership::user;
+        for (auto& o : data_owners)
+        {
+            // o.filename and o.full_path can have wildcards '*' and '?'
+            if (match(o.filename.c_str(), filename.c_str()) && match(o.full_path.c_str(), full_path.c_str()))
+            {
+                own = o.ownership;
+                break;
+            }
+        }
+
+        // debug
+//         fmt::print("dataset_create(): filename {} full_path {} own {}\n", filename, full_path, own);
+
         // add the dataset
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id, own));
     }
@@ -142,7 +152,9 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = new ObjectPointers;
 
-    if (vol_properties.passthru)
+    // open from the file if not opening from memory
+    // if both memory and passthru are enabled, open from memory only
+    if (vol_properties.passthru && !vol_properties.memory)
         result->h5_obj = VOLBase::dataset_open(obj_->h5_obj, loc_params, name, dapl_id, dxpl_id, req);
 
     // find the dataset in our file metadata
@@ -289,12 +301,15 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
 
     herr_t retval = 0;
 
-    if (vol_properties.passthru)
+    // close from the file if not using metadata in memory
+    // if both memory and passthru are enabled, close from file (producer) only
+    if (vol_properties.passthru && !vol_properties.memory)
         retval = VOLBase::dataset_close(dset_->h5_obj, dxpl_id, req);
-
-    // TODO: why create a pointer that isn't used?
-    if (vol_properties.memory)
-        Dataset* ds = (Dataset*) dset_->mdata_obj;
+    else if (vol_properties.passthru && vol_properties.memory)
+    {
+        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
+            retval = VOLBase::dataset_close(dset_->h5_obj, dxpl_id, req);
+    }
 
     delete dset_;
     return retval;

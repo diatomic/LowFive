@@ -241,39 +241,3 @@ struct AddPointBlock
 
     diy::Master&  master;
 };
-
-// a null read in order to participate in collective querying
-void read_null(hid_t    dset,
-               int      dim)
-{
-//     fmt::print("read_null()\n");
-
-    std::vector<hsize_t> counts(dim);                   // default initialized to 0's
-
-    hid_t filespace = H5Screate_simple(dim, &counts[0], NULL);
-    hid_t memspace = H5Screate_simple(dim, &counts[0], NULL);
-    H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, nullptr);
-
-    H5Sclose(filespace);
-    H5Sclose(memspace);
-
-//     fmt::print("read_null() success.\n");
-}
-
-// a null write in order to participate in collective indexing
-void write_null(hid_t   dset,
-                int     dim)
-{
-//     fmt::print("write_null()\n");
-
-    std::vector<hsize_t> counts(dim);                   // default initialized to 0's
-
-    hid_t filespace = H5Screate_simple(dim, &counts[0], NULL);
-    hid_t memspace = H5Screate_simple(dim, &counts[0], NULL);
-    H5Dwrite(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, nullptr);
-
-    H5Sclose(filespace);
-    H5Sclose(memspace);
-
-//     fmt::print("write_null() success.\n");
-}

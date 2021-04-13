@@ -31,6 +31,14 @@ struct DatasetProperties: public FileProperties
 {
 };
 
+// dataset ownership
+struct DataOwnership
+{
+    std::string         filename;
+    std::string         full_path;
+    Dataset::Ownership  ownership;
+};
+
 // custom VOL object
 // only need to specialize those functions that are custom
 
@@ -45,6 +53,7 @@ struct MetadataVOL: public LowFive::VOLBase
     using Group     = LowFive::Group;
 
     using Files     = std::map<std::string, File*>;
+    using DataOwners    = std::vector<DataOwnership>;
 
     VOLProperties   vol_properties;
 
@@ -52,9 +61,13 @@ struct MetadataVOL: public LowFive::VOLBase
     {
         void*           h5_obj;             // HDF5 object (e.g., dset)
         void*           mdata_obj;          // metadata object (tree node)
+
+        ObjectPointers() : h5_obj(nullptr), mdata_obj(nullptr)
+                    {}
     };
 
     Files           files;
+    DataOwners      data_owners;
 
                     MetadataVOL():
                         VOLBase(/* version = */ 0, /* value = */ 510, /* name = */ "metadata-vol")
@@ -94,12 +107,59 @@ struct MetadataVOL: public LowFive::VOLBase
         return it->second->search(full_path);
     }
 
-    void set_ownership(std::string filename, std::string full_path, Dataset::Ownership own)
+    // record intended ownership of a dataset
+    void data_ownership(std::string filename, std::string full_path, Dataset::Ownership own)
     {
-        Object* object = locate(filename, full_path);
-        // TODO: can other types of objects change ownership?
-        if (object->type == ObjectType::Dataset)
-            static_cast<Dataset*>(object)->set_ownership(own);
+        data_owners.emplace_back(DataOwnership { filename, full_path, own });
+    }
+
+    // trace object back to root to build full path and file name
+    void backtrack_name(
+            std::string     name,                   // name of current object
+            Object*         parent,                 // parent of current object
+            std::string&    filename,               // (output) file name of enclosing file
+            std::string&    full_path)              // full path name of object in file
+    {
+        if (parent->type == ObjectType::File)
+            filename = parent->name;
+        else
+        {
+            full_path = parent->name + std::string("/") + name;
+            Object* p = parent->parent;
+            while (p)
+            {
+                if (p->type == ObjectType::File)
+                {
+                    filename    = p->name;
+                    full_path   = std::string("/") + full_path;
+                    break;
+                }
+                else
+                {
+                    full_path   = p->name + std::string("/") + full_path;
+                    p           = p->parent;
+                }
+            }
+        }
+    }
+
+    // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
+    // checks if two given strings; the first string may contain wildcard characters
+    bool match(const char *first, const char * second)
+    {
+        if (*first == '\0' && *second == '\0')
+            return true;
+
+        if (*first == '*' && *(first+1) != '\0' && *second == '\0')
+            return false;
+
+        if (*first == '?' || *first == *second)
+            return match(first+1, second+1);
+
+        if (*first == '*')
+            return match(first+1, second) || match(first, second+1);
+
+        return false;
     }
 
     void*           info_copy(const void *_info) override;
