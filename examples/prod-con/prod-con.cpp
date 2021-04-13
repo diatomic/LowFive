@@ -121,8 +121,18 @@ int main(int argc, char* argv[])
         // create the file data space for the global grid
         hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
-        // create the dataset
+        // create the dataset with default properties
         hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+        // use dataset creation properties to signal lowfive ownership of data (deep copy)
+        // TODO: register a custom property instead of using existing alloc time property
+//         hid_t properties = H5Pcreate(H5P_DATASET_CREATE);
+//         H5Pset_alloc_time(properties, H5D_ALLOC_TIME_EARLY);
+//         hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, properties, H5P_DEFAULT);
+//         H5Pclose(properties);
+
+        // or alternatively call lowfive API outside of hdf5
+//         vol_plugin.set_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
 
         // write the data
         prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
@@ -149,7 +159,7 @@ int main(int argc, char* argv[])
         // create the file data space for the global grid
         hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
-        // create the dataset
+        // open the dataset
         hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
 
         // --- consumer ranks running user task code ---

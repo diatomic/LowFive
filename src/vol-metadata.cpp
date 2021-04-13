@@ -105,7 +105,6 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
                hid_t dapl_id,  hid_t dxpl_id, void **req)
 {
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
-
     fmt::print("data type = {}\n", Datatype(type_id));
     fmt::print("data space = {}\n", Dataspace(space_id));
 
@@ -118,11 +117,19 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
                 space_id, dcpl_id,
                 dapl_id,  dxpl_id, req);
 
-    if (vol_properties.memory)
+    if (vol_properties.memory)                              // add the dataset to our file metadata
     {
-        // add the dataset to our file metadata
         std::string name_(name);
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id));
+        // set ownership of the data
+        LowFive::Dataset::Ownership own;
+        H5D_alloc_time_t            alloc_time;             // HDF5 property
+        H5Pget_alloc_time(dcpl_id, &alloc_time);
+        if (alloc_time == H5D_ALLOC_TIME_EARLY)             // TODO: register custom property instead of using alloc time
+            own = LowFive::Dataset::Ownership::lowfive;     // lowfive makes a deep copy
+        else
+            own = LowFive::Dataset::Ownership::user;        // lowfive keeps only a shallow pointer
+        // add the dataset
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id, own));
     }
 
     return (void*)result;

@@ -10,7 +10,13 @@ struct Dataset : public Object
         Datatype    type;       // memory type
         Dataspace   memory;
         Dataspace   file;
-        const void* data;
+        char*       data;
+    };
+
+    enum Ownership
+    {
+        user,                   // lowfive has only shallow pointer
+        lowfive                 // lowfive deep copies data
     };
 
     using DataTriples = std::vector<DataTriple>;
@@ -18,22 +24,44 @@ struct Dataset : public Object
     Datatype                        type;
     Dataspace                       space;
     DataTriples                     data;
+    Ownership                       ownership;
 
-
-    Dataset(std::string name, hid_t dtype_id, hid_t space_id):
-        Object(ObjectType::Dataset, name), type(dtype_id), space(space_id)
+    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own):
+        Object(ObjectType::Dataset, name), type(dtype_id), space(space_id), ownership(own)
     {}
+
+    ~Dataset()
+    {
+        if (ownership == Ownership::lowfive)
+        {
+            for (auto& d : data)
+                delete[] d.data;
+        }
+    }
+
+    void set_ownership(Ownership own)
+    {
+        ownership = own;
+    }
 
     void write(Datatype type, Dataspace memory, Dataspace file, const void* buf)
     {
-        data.emplace_back(DataTriple { type, memory, file, buf });
+        if (ownership == Ownership::lowfive)
+        {
+            size_t nbytes   = file.size() * type.dtype_size;
+            char* copy      = new char[nbytes];
+            std::memcpy(copy, buf, nbytes);
+            data.emplace_back(DataTriple { type, memory, file, copy });
+        }
+        else
+            data.emplace_back(DataTriple { type, memory, file, static_cast<char*>(const_cast<void*>(buf)) });
     }
 
     void print() const override
     {
         fmt::print(stderr, "---- Dataset ---\n");
         Object::print();
-        fmt::print(stderr, "type = {}, space = {}\n", type, space);
+        fmt::print(stderr, "type = {}, space = {}, ownership = {}\n", type, space, ownership);
         for (auto& d : data)
             fmt::print("memory = {}, file = {}, data = {}\n", d.memory, d.file, fmt::ptr(d.data));
     }

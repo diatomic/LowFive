@@ -91,13 +91,15 @@ struct MetadataVOL: public LowFive::VOLBase
         auto it = files.find(filename);
         if (it == files.end())
             return NULL;
-        for (auto* child : it->second->children)
-        {
-            if ((obj = child->search(full_path)) != NULL)
-                return obj;
-        }
-        fmt::print("Unable to locate object {}\n", full_path);
-        return NULL;
+        return it->second->search(full_path);
+    }
+
+    void set_ownership(std::string filename, std::string full_path, Dataset::Ownership own)
+    {
+        Object* object = locate(filename, full_path);
+        // TODO: can other types of objects change ownership?
+        if (object->type == ObjectType::Dataset)
+            static_cast<Dataset*>(object)->set_ownership(own);
     }
 
     void*           info_copy(const void *_info) override;
