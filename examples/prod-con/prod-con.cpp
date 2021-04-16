@@ -79,9 +79,13 @@ int main(int argc, char* argv[])
     bool producer = world.rank() < producer_ranks;
     diy::mpi::communicator local = world.split(producer);
 
+    fmt::print("producer_ranks: {}\n", producer_ranks);
+
     MPI_Comm intercomm;
     MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer ? producer_ranks : 0, /* tag = */ 0, &intercomm);
     diy::mpi::communicator diy_intercomm(intercomm);
+
+    fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), diy_intercomm.size());
 
     // Set up file access property list with mpi-io file driver
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);

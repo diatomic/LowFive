@@ -62,7 +62,7 @@ struct Index
                             local(local_),
                             intercomm(intercomm_),
                             master(local, 1, local.size()),                     // unused, but must initialize
-                            assigner(intercomm.size(), intercomm.size())        // producer info
+                            assigner(intercomm.size(), intercomm.size())        // producer info; TODO: this should be remote_size, not convenient to fix in the constructor
     {
         bool root = local.rank() == 0;
 
@@ -85,7 +85,9 @@ struct Index
         }
         broadcast(local, domain, 0);
 
-        decomposer = Decomposer(dim, domain, intercomm.size());
+        int remote_size;
+        MPI_Comm_remote_size(intercomm, &remote_size);
+        decomposer = Decomposer(dim, domain, remote_size);
     }
 
     // TODO: index-query are written with the bulk-synchronous assumption;
