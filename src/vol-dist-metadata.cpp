@@ -10,7 +10,10 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     {
         // assume we are the consumer, since nothing stored in memory (open also implies that)
         // build and record the index to be used in read
-        Index* index = new Index(local, intercomm);      // NB: because no dataset is provided will only build index based on the intercomm
+        int remote_size;
+        MPI_Comm_remote_size(intercomm, &remote_size);
+
+        Index* index = new Index(local, intercomm, remote_size);      // NB: because no dataset is provided will only build index based on the intercomm
 
         auto* ds = new RemoteDataset(name);
         ds->index = index;

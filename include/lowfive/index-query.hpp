@@ -66,11 +66,11 @@ struct Index
     }
 
     // consumer version of the constructor
-                        Index(communicator& local_, communicator& intercomm_):
+                        Index(communicator& local_, communicator& intercomm_, int remote_size):
                             local(local_),
                             intercomm(intercomm_),
                             master(local, 1, local.size()),                     // unused, but must initialize
-                            assigner(intercomm.size(), intercomm.size())        // producer info; TODO: this should be remote_size, not convenient to fix in the constructor
+                            assigner(remote_size, remote_size)
     {
         bool root = local.rank() == 0;
 
@@ -94,8 +94,6 @@ struct Index
         }
         broadcast(local, domain, 0);
 
-        int remote_size;
-        MPI_Comm_remote_size(intercomm, &remote_size);
         decomposer = Decomposer(dim, domain, remote_size);
     }
 
