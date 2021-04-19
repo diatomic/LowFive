@@ -25,7 +25,15 @@ struct Index
         const LowFive::Dataset::DataTriples*    data;       // local data
     };
 
-    enum tags { dimension = 1, domain, redirect, data, done };
+    enum msgs   { dimension = 1, domain, redirect, data, done };        // message type
+
+    // tags indicate the source of communication, so that in the threaded
+    // regime, they can be used to correctly distinguish between senders and
+    // receipients
+    enum tags   {
+                    producer = 1,       // communication from producer
+                    consumer            // communication from consumer
+                };
 
     // producer version of the constructor
                         Index(communicator& local_, communicator& intercomm_, const LowFive::Dataset* dataset):
@@ -69,9 +77,9 @@ struct Index
         // query producer for dim
         if (root)
         {
-            intercomm.send(0, tags::dimension, 0);
-            intercomm.recv(0, tags::dimension, dim);
-            recv(intercomm, 0, tags::dimension, type);
+            send(intercomm, 0, tags::consumer, msgs::dimension, 0);
+            int msg = recv(intercomm, 0, tags::producer, dim);  expected(msg, msgs::dimension);
+                msg = recv(intercomm, 0, tags::producer, type); expected(msg, msgs::dimension);
         }
         diy::mpi::broadcast(local, dim, 0);
         broadcast(local, type, 0);
@@ -80,8 +88,9 @@ struct Index
         Bounds domain { dim };
         if (root)
         {
-            intercomm.send(0, tags::domain, 0);
-            recv(intercomm, 0, tags::domain, domain);
+            send(intercomm, 0, tags::consumer, msgs::domain, 0);
+            int msg = recv(intercomm, 0, tags::producer, domain);
+            expected(msg, msgs::domain);
         }
         broadcast(local, domain, 0);
 
@@ -134,20 +143,39 @@ struct Index
 
     // serialize and send
     template<class T>
-    static void         send(communicator& comm, int dest, int tag, const T& x)
+    static void         send(communicator& comm, int dest, int tag, int msg, const T& x)
     {
         diy::MemoryBuffer b;
         diy::save(b, x);
+        send(comm, dest, tag, msg, b);
+    }
+
+    // send, using existing buffer
+    static void      send(communicator& comm, int dest, int tag, int msg, diy::MemoryBuffer& b)
+    {
+        diy::save(b, msg);
         comm.send(dest, tag, b.buffer);
     }
 
     // recv and deserialize
     template<class T>
-    static void         recv(communicator& comm, int source, int tag, T& x)
+    static int      recv(communicator& comm, int source, int tag, T& x)
     {
         diy::MemoryBuffer b;
         comm.recv(source, tag, b.buffer);
+        int msg;
+        diy::load_back(b, msg);
         diy::load(b, x);
+        return msg;
+    }
+
+    // recv message type, but keep the buffer
+    static int      recv(communicator& comm, int source, int tag, diy::MemoryBuffer& b)
+    {
+        comm.recv(source, tag, b.buffer);
+        int msg;
+        diy::load_back(b, msg);
+        return msg;
     }
 
     // serialize and broadcast (+ deserialize)
@@ -181,28 +209,28 @@ struct Index
             if (all_done_active && all_done.test())
                 break;
 
-            diy::mpi::optional<diy::mpi::status> ostatus = intercomm.iprobe(diy::mpi::any_source, diy::mpi::any_tag);
+            diy::mpi::optional<diy::mpi::status> ostatus = intercomm.iprobe(diy::mpi::any_source, tags::consumer);
             if (!ostatus)
                 continue;
 
             int tag    = ostatus->tag();
             int source = ostatus->source();
 
-            if (tag == tags::dimension)
+            diy::MemoryBuffer b;
+            int msg = recv(intercomm, source, tags::consumer, b);
+
+            if (msg == msgs::dimension)
             {
-                int x;
-                intercomm.recv(source, tags::dimension, x);     // clear the message
-                intercomm.send(source, tags::dimension, dim);
-                send(intercomm, source, tags::dimension, type);
-            } else if (tag == tags::domain)
+                diy::MemoryBuffer out;
+                send(intercomm, source, tags::producer, msgs::dimension, dim);
+                send(intercomm, source, tags::producer, msgs::dimension, type);
+            } else if (msg == msgs::domain)
             {
-                int x;
-                intercomm.recv(source, tags::domain, x);        // clear the message
-                send(intercomm, source, tags::domain, decomposer.domain);
-            } else if (tag == tags::redirect)
+                send(intercomm, source, tags::producer, msgs::domain, decomposer.domain);
+            } else if (msg == msgs::redirect)
             {
                 LowFive::Dataspace ds(0);               // dummy to be filled
-                recv(intercomm, source, tags::redirect, ds);
+                diy::load(b, ds);
 
                 auto* b = master.block<Block>(0);       // only one block per rank
                 BoxLocations redirects;
@@ -213,11 +241,11 @@ struct Index
                         redirects.push_back(y);
                 }
 
-                send(intercomm, source, tags::redirect, redirects);
-            } else if (tag == tags::data)
+                send(intercomm, source, tags::producer, msgs::redirect, redirects);
+            } else if (msg == msgs::data)
             {
                 LowFive::Dataspace ds;
-                recv(intercomm, source, tags::data, ds);
+                diy::load(b, ds);
 
                 auto* b = master.block<Block>(0);       // only one block per rank
                 diy::MemoryBuffer queue;
@@ -234,11 +262,9 @@ struct Index
                         });
                     }
                 }
-                intercomm.send(source, tags::data, queue.buffer);
-            } else if (tag == tags::done)
+                send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
+            } else if (msg == msgs::done)
             {
-                int x;
-                intercomm.recv(source, tags::done, x);      // clear the queue
                 all_done = local.ibarrier();
                 all_done_active = true;
             }
@@ -247,12 +273,18 @@ struct Index
         }
     }
 
+    static void         expected(int received_, int expected_)
+    {
+        if (received_ != expected_)
+            throw std::runtime_error(fmt::format("Message mismatch: expected = {}, received {}", expected_, received_));
+    }
+
     void                close()
     {
         local.barrier();
 
         if (local.rank() == 0)
-            intercomm.send(0, tags::done, 0);
+            send(intercomm, 0, tags::consumer, msgs::done, 0);
     }
 
     void                query(const LowFive::Dataspace&            file_space,      // input: query in terms of file space
@@ -270,10 +302,10 @@ struct Index
         for (int gid : bounds_to_gids(b))
         {
             // TODO: make this asynchronous (isend + irecv, etc)
-            send(intercomm, gid, tags::redirect, file_space);
+            send(intercomm, gid, tags::consumer, msgs::redirect, file_space);
 
             BoxLocations redirects;
-            recv(intercomm, gid, tags::redirect, redirects);
+            int msg = recv(intercomm, gid, tags::producer, redirects); expected(msg, msgs::redirect);
             for (auto& x : redirects)
                 all_redirects.push_back(x);
         }
@@ -290,10 +322,10 @@ struct Index
             if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
             {
                 blocks.insert(gid);
-                send(intercomm, gid, tags::data, file_space);
+                send(intercomm, gid, tags::consumer, msgs::data, file_space);
 
                 diy::MemoryBuffer queue;
-                intercomm.recv(gid, tags::data, queue.buffer);
+                int msg = recv(intercomm, gid, tags::producer, queue); expected(msg, msgs::data);
 
                 while (queue)
                 {
