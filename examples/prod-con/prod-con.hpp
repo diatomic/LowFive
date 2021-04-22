@@ -241,3 +241,7 @@ struct AddPointBlock
 
     diy::Master&  master;
 };
+
+static const unsigned DIM = 3;
+typedef     PointBlock<DIM>             Block;
+typedef     AddPointBlock<DIM>          AddBlock;

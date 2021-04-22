@@ -25,7 +25,7 @@ struct Index
         const LowFive::Dataset::DataTriples*    data;       // local data
     };
 
-    enum msgs   { dimension = 1, domain, redirect, data, done };        // message type
+    enum msgs   { dimension = 1, domain, redirect, data, done, ready };        // message type
 
     // tags indicate the source of communication, so that in the threaded
     // regime, they can be used to correctly distinguish between senders and
@@ -39,7 +39,7 @@ struct Index
                         Index(communicator& local_, communicator& intercomm_, const LowFive::Dataset* dataset):
                             local(local_),
                             intercomm(intercomm_),
-                            master(local, 1, local.size()),
+                            master(local, 1, -1),
                             assigner(local.size(), local.size())
     {
         dim = dataset->space.dims.size();
@@ -69,7 +69,7 @@ struct Index
                         Index(communicator& local_, communicator& intercomm_, int remote_size):
                             local(local_),
                             intercomm(intercomm_),
-                            master(local, 1, local.size()),                     // unused, but must initialize
+                            master(local, 1, -1),                     // unused, but must initialize
                             assigner(remote_size, remote_size)
     {
         bool root = local.rank() == 0;
@@ -77,9 +77,15 @@ struct Index
         // query producer for dim
         if (root)
         {
+            int x;
+            int msg;
+
+            // wait for the ready signal
+            msg = recv(intercomm, 0, tags::producer, x); expected(msg, msgs::ready);
+
             send(intercomm, 0, tags::consumer, msgs::dimension, 0);
-            int msg = recv(intercomm, 0, tags::producer, dim);  expected(msg, msgs::dimension);
-                msg = recv(intercomm, 0, tags::producer, type); expected(msg, msgs::dimension);
+            msg = recv(intercomm, 0, tags::producer, dim);  expected(msg, msgs::dimension);
+            msg = recv(intercomm, 0, tags::producer, type); expected(msg, msgs::dimension);
         }
         diy::mpi::broadcast(local, dim, 0);
         broadcast(local, type, 0);
@@ -194,6 +200,13 @@ struct Index
 
     void                serve()
     {
+        local.barrier();
+        if (local.rank() == 0)
+        {
+            // signal to consumer that we are ready
+            send(intercomm, 0, tags::producer, msgs::ready, 0);
+        }
+
         diy::mpi::request all_done;
         bool all_done_active = false;
         if (local.rank() != 0)

@@ -8,6 +8,8 @@ if                          (NOT DEFINED CMAKE_CXX_STANDARD)
     set                     (CMAKE_CXX_STANDARD 11)
 endif                       ()
 
+set                         (CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # ignore variadic args warning (no other good solution)
 set                         (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-varargs")
 
@@ -42,6 +44,7 @@ if                          (HDF5_LIBRARY)
   message                   ("HDF5_LIBRARY = " ${HDF5_LIBRARY})
 else                        ()
   message                   ("Looking for HDF5")
+  set                       (HDF5_USE_STATIC_LIBRARIES ON)
   find_package              (HDF5 REQUIRED)
   set                       (HDF5_LIBRARY ${HDF5_C_LIBRARY_hdf5})
 endif                       ()
@@ -56,7 +59,8 @@ include_directories         (${CMAKE_CURRENT_SOURCE_DIR}/include
 # Libraries
 set                         (libraries
                              ${libraries}
-                             ${CMAKE_THREAD_LIBS_INIT})
+                             ${CMAKE_THREAD_LIBS_INIT}
+                             ${CMAKE_DL_LIBS})
 
 # Testing
 # NB testing must be enabled before adding tests subdirectory, otherwise no tests will be found

@@ -1,19 +1,19 @@
+#include    <thread>
+
 #include    <diy/master.hpp>
 #include    <diy/decomposition.hpp>
 #include    <diy/assigner.hpp>
 #include    <diy/../../examples/opts.h>
 
-#include    "prod-con.hpp"
+#include    <dlfcn.h>
 
-static const unsigned DIM = 3;
-typedef     PointBlock<DIM>             Block;
-typedef     AddPointBlock<DIM>          AddBlock;
+#include    "prod-con.hpp"
 
 int main(int argc, char* argv[])
 {
     int   dim = DIM;
 
-    diy::mpi::environment     env(argc, argv);
+    diy::mpi::environment     env(argc, argv, MPI_THREAD_MULTIPLE);
     diy::mpi::communicator    world;
 
     int                       nblocks     = world.size();   // global number of blocks
@@ -24,6 +24,7 @@ int main(int argc, char* argv[])
     int                       metadata    = 1;              // build in-memory metadata
     int                       passthru    = 0;              // write file to disk
     float                     prod_frac   = 0.5;            // fraction of world ranks in producer
+    bool                      shared      = false;          // producer and consumer run on the same ranks
 
     // default global data bounds
     Bounds domain { dim };
@@ -44,6 +45,7 @@ int main(int argc, char* argv[])
         >> Option('m', "memory",  metadata,       "build and use in-memory metadata")
         >> Option('f', "file",    passthru,       "write file to disk")
         >> Option('p', "p_frac",  prod_frac,      "fraction of world ranks in producer")
+        >> Option('s', "shared",  shared,         "share ranks between producer and consumer (-p ignored)")
         ;
     ops
         >> Option('x',  "max-x",  domain.max[0],  "domain max x")
@@ -74,135 +76,63 @@ int main(int argc, char* argv[])
     // producer also needs to know this number so it can match collective operations
     int con_nblocks = pow(2, dim) * nblocks;
 
-    // split the world into producer and consumer
     int producer_ranks = world.size() * prod_frac;
     bool producer = world.rank() < producer_ranks;
-    diy::mpi::communicator local = world.split(producer);
-
     fmt::print("producer_ranks: {}\n", producer_ranks);
 
-    MPI_Comm intercomm;
-    MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer ? producer_ranks : 0, /* tag = */ 0, &intercomm);
-    diy::mpi::communicator diy_intercomm(intercomm);
+    void* lib_producer = dlopen("./producer.hx", RTLD_LAZY);
+    if (!lib_producer)
+        fmt::print(stderr, "Couldn't open producer.hx\n");
 
-    fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), diy_intercomm.size());
+    void* lib_consumer = dlopen("./consumer.hx", RTLD_LAZY);
+    if (!lib_consumer)
+        fmt::print(stderr, "Couldn't open consumer.hx\n");
 
-    // Set up file access property list with mpi-io file driver
-    hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
+    void* producer_f_ = dlsym(lib_producer, "producer_f");
+    if (!producer_f_)
+        fmt::print(stderr, "Couldn't find producer_f\n");
+    void* consumer_f_ = dlsym(lib_consumer, "consumer_f");
+    if (!consumer_f_)
+        fmt::print(stderr, "Couldn't find consumer_f\n");
 
-    // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomm, metadata, passthru);
-    l5::H5VOLProperty vol_prop(vol_plugin);
-    vol_prop.apply(plist);
+    using communicator = diy::mpi::communicator;
 
-    // --- ranks of producer task ---
+    std::mutex exclusive;
 
-    if (producer)
+    communicator producer_comm, consumer_comm;
+    producer_comm.duplicate(world);
+    consumer_comm.duplicate(world);
+
+    auto producer_f = [&]()
     {
-        //  --- producer ranks running workflow runtime system code ---
+        ((void (*) (communicator&, communicator, std::mutex&, bool,
+                              std::string, int,
+                              int, int, int, int,
+                              Bounds,
+                              int, int)) (producer_f_))(world, producer_comm, exclusive, shared, prefix, producer_ranks, metadata, passthru, threads, mem_blocks, domain, nblocks, dim);
+    };
 
-        // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
-        // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
-        vol_plugin.data_ownership("outfile.h5", "/group1/*", l5::Dataset::Ownership::lowfive);
-
-        // --- producer ranks running user task code  ---
-
-        // diy setup for the producer
-        diy::FileStorage                prod_storage(prefix);
-        diy::Master                     prod_master(local,
-                threads,
-                mem_blocks,
-                &Block::create,
-                &Block::destroy,
-                &prod_storage,
-                &Block::save,
-                &Block::load);
-        AddBlock                        prod_create(prod_master);
-        diy::ContiguousAssigner         prod_assigner(local.size(), nblocks);
-        diy::RegularDecomposer<Bounds>  prod_decomposer(dim, domain, nblocks);
-        prod_decomposer.decompose(local.rank(), prod_assigner, prod_create);
-
-        // create a new file using default properties
-        hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
-        hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-        std::vector<hsize_t> domain_cnts(DIM);
-        for (auto i = 0; i < DIM; i++)
-            domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
-
-        // create the file data space for the global grid
-        hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
-
-        // create the dataset with default properties
-        hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-        // write the data
-        prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-                { b->write_block_hdf5(cp, dset); });
-
-        // clean up
-        H5Dclose(dset);
-        H5Sclose(filespace);
-        H5Gclose(group);
-        H5Fclose(file);
-
-        // signal the consumer that data are ready
-        if (passthru && !metadata)
-            diy_intercomm.barrier();
-
-    }   // producer ranks
-
-    // --- ranks of consumer task ---
-
-    else
+    auto consumer_f = [&]()
     {
-        // wait for data to be ready
-        if (passthru && !metadata)
-            diy_intercomm.barrier();
+        ((void (*) (communicator&, communicator, std::mutex&, bool,
+                              std::string, int,
+                              int, int, int, int,
+                              Bounds,
+                              int, int)) (consumer_f_))(world, consumer_comm, exclusive, shared, prefix, producer_ranks, metadata, passthru, threads, mem_blocks, domain, con_nblocks, dim);
+    };
 
-        // create a new file using default properties
-        hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
+    if (!shared)
+    {
+        if (producer)
+            producer_f();
+        else
+            consumer_f();
+    } else
+    {
+        auto producer_thread = std::thread(producer_f);
+        auto consumer_thread = std::thread(consumer_f);
 
-        std::vector<hsize_t> domain_cnts(DIM);
-        for (auto i = 0; i < DIM; i++)
-            domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
-
-        // create the file data space for the global grid
-        hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
-
-        // open the dataset
-        hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
-
-        // --- consumer ranks running user task code ---
-
-        // diy setup for the consumer task on the consumer side
-        diy::FileStorage                con_storage(prefix);
-        diy::Master                     con_master(local,
-                threads,
-                mem_blocks,
-                &Block::create,
-                &Block::destroy,
-                &con_storage,
-                &Block::save,
-                &Block::load);
-        AddBlock                        con_create(con_master);
-        diy::ContiguousAssigner         con_assigner(local.size(), con_nblocks);
-        diy::RegularDecomposer<Bounds>  con_decomposer(dim, domain, con_nblocks);
-        con_decomposer.decompose(local.rank(), con_assigner, con_create);
-
-        // read the data
-        con_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-                { b->read_block_hdf5(cp, dset); });
-
-        // clean up
-        H5Dclose(dset);
-        H5Sclose(filespace);
-        H5Fclose(file);
-    }       // consumer ranks
-
-    // ---  all ranks running workflow runtime system code ---
-
-    // clean up
-    H5Pclose(plist);
+        producer_thread.join();
+        consumer_thread.join();
+    }
 }

@@ -15,13 +15,15 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     communicator    local;
     communicator    intercomm;
+    bool            shared;
 
                     DistMetadataVOL(diy::mpi::communicator  local_,
                                     diy::mpi::communicator  intercomm_,
+                                    bool                    shared_,
                                     bool                    memory_,
                                     bool                    passthru_,
                                     bool                    copy_ = true):
-                        local(local_), intercomm(intercomm_)
+                        local(local_), intercomm(intercomm_), shared(shared_)
                     {
                         vol_properties.memory   = memory_;
                         vol_properties.passthru = passthru_;
