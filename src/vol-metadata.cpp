@@ -71,31 +71,6 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     return obj_ptrs;
 }
 
-herr_t
-LowFive::MetadataVOL::
-file_close(void *file, hid_t dxpl_id, void **req)
-{
-    ObjectPointers* file_ = (ObjectPointers*) file;
-
-    // TODO: why create a pointer that isn't used?
-    if (vol_properties.memory)
-        File* f = (File*) file_->mdata_obj;
-
-    herr_t res = 0;
-
-    if (vol_properties.passthru)
-        res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
-
-    delete file_;
-
-    // deliberately verbose, to emphasize checking of res
-    if (res == 0)
-        return 0;
-    else
-        return res;
-}
-
-
 void*
 LowFive::MetadataVOL::
 dataset_create(void *obj, const H5VL_loc_params_t *loc_params,

@@ -34,14 +34,9 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     if (vol_properties.memory)
     {
-        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))     // producer
-        {
-            // build and index and serve
-            // TODO: this really should happen at file close, not dataset close
-
-            Index index(local, intercomm, ds);
-            index.serve();
-        } else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
+        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))                   // producer
+            serve_data.push_back(ds);   // record dataset for serving later when file closes
+        else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
         {
             Index* index = (Index*) ds->index;
             index->close();
@@ -76,4 +71,30 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     return 0;
+}
+
+herr_t
+LowFive::DistMetadataVOL::
+file_close(void *file, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* file_ = (ObjectPointers*) file;
+
+    // serve datasets (producer only)
+    for (Dataset* ds : serve_data)          // only producer pushed any datasets to serve_data
+    {
+        Index index(local, intercomm, ds);
+        index.serve();
+    }
+
+    herr_t res = 0;
+    if (vol_properties.passthru)
+        res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
+
+    delete file_;
+
+    // deliberately verbose, to emphasize checking of res
+    if (res == 0)
+        return 0;
+    else
+        return res;
 }

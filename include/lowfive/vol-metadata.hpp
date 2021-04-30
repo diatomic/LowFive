@@ -54,6 +54,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     using Files     = std::map<std::string, File*>;
     using DataOwners    = std::vector<DataOwnership>;
+    using ServeData     = std::vector<Dataset*>;        // datasets producer is serving
 
     VOLProperties   vol_properties;
 
@@ -68,6 +69,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     Files           files;
     DataOwners      data_owners;
+    ServeData       serve_data;
 
                     MetadataVOL():
                         VOLBase(/* version = */ 0, /* value = */ 510, /* name = */ "metadata-vol")
@@ -166,7 +168,6 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
     herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;
     void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req) override;
 
     void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) override;
