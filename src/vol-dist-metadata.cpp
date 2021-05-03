@@ -55,10 +55,18 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 
     if (vol_properties.memory)
     {
+        // consumer with the name of a remote dataset
         if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
         {
+            // check that the dataset name is the full path (the only mode supported for now)
+            // TODO: if only leaf name is given, could use backtrack_name to find full path
+            // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
+            if (ds->name[0] != '/')
+                throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
+
+            // query to producer
             Index* index = (Index*) ds->index;
-            index->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
+            index->query(ds->name, Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         } else
         {
             // TODO: handle correctly
@@ -80,9 +88,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
     ObjectPointers* file_ = (ObjectPointers*) file;
 
     // serve datasets (producer only)
-    for (Dataset* ds : serve_data)          // only producer pushed any datasets to serve_data
+    if (serve_data.size())              // only producer pushed any datasets to serve_data
     {
-        Index index(local, intercomm, ds);
+        Index index(local, intercomm, serve_data);
         index.serve();
     }
 

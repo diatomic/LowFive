@@ -22,10 +22,10 @@ struct Index
     struct Block
     {
         BoxLocations                            boxes;      // boxes we are responsible for under the regular decomposition (for redirects)
-        const LowFive::Dataset::DataTriples*    data;       // local data
+        const LowFive::MetadataVOL::ServeData*  index_data; // local data for multiple datasets
     };
 
-    enum msgs   { dimension = 1, domain, redirect, data, done, ready };        // message type
+    enum msgs   { dimension = 1, domain, redirect, data, done, ready, dataset_path };        // message type
 
     // tags indicate the source of communication, so that in the threaded
     // regime, they can be used to correctly distinguish between senders and
@@ -36,12 +36,15 @@ struct Index
                 };
 
     // producer version of the constructor
-                        Index(communicator& local_, communicator& intercomm_, const LowFive::Dataset* dataset):
+                        Index(communicator& local_, communicator& intercomm_, const LowFive::MetadataVOL::ServeData& serve_data):
                             local(local_),
                             intercomm(intercomm_),
                             master(local, 1, -1),
                             assigner(local.size(), local.size())
     {
+        // TODO: assuming all datasets have same size, space, type
+        LowFive::Dataset* dataset = serve_data[0];
+
         dim = dataset->space.dims.size();
         type = dataset->type;
 
@@ -62,7 +65,7 @@ struct Index
             master.add(gid, b, l);
         });
 
-        index(dataset->data);
+        index(serve_data);
     }
 
     // consumer version of the constructor
@@ -109,14 +112,17 @@ struct Index
     // The bulk synchronous assumption means that each rank must have the same number of blocks (no remainders)
     // It also means that all ranks in a producer-consumer task pair need to index/query the same number of times
 
-    void                index(const LowFive::Dataset::DataTriples& data)
+    void                index(const LowFive::MetadataVOL::ServeData& serve_data)
     {
         // enqueue all file dataspaces available on local rank to the ranks
         // that are responsible for the boxes that (might) intersect them
         master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
         {
-            b->data = &data;
-            for (auto& x : data)
+            b->index_data = &serve_data;
+            // TODO: assuming filespace is same for all datasets
+            LowFive::Dataset* dset = (*b->index_data)[0];
+
+            for (auto& x : dset->data)
             {
                 Bounds b { dim };           // diy representation of the triplet's bounding box
                 b.min = Point(x.file.min);
@@ -253,6 +259,9 @@ struct Index
                 }
 
                 send(intercomm, source, tags::producer, msgs::redirect, redirects);
+            } else if (msg == msgs::dataset_path)
+            {
+                diy::load(b, serve_dset_path);
             } else if (msg == msgs::data)
             {
                 LowFive::Dataspace ds;
@@ -260,20 +269,30 @@ struct Index
 
                 auto* b = master.block<Block>(0);       // only one block per rank
                 diy::MemoryBuffer queue;
-                for (auto& y : *(b->data))
+
+                for (auto& dset : *b->index_data)
                 {
-                    if (y.file.intersects(ds))
+                    // serve the dataset if the full path matches the last queried path name
+                    std::string full_path, unused;
+                    LowFive::MetadataVOL::backtrack_name(dset->name, dset->parent, unused, full_path);
+                    if (full_path == serve_dset_path)
                     {
-                        LowFive::Dataspace file_src(LowFive::Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
-                        LowFive::Dataspace mem_src (LowFive::Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
-                        diy::save(queue, file_src);
-                        LowFive::Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                        for (auto& y : dset->data)
                         {
-                            diy::save(queue, (char*) y.data + loc, len);
-                        });
+                            if (y.file.intersects(ds))
+                            {
+                                LowFive::Dataspace file_src(LowFive::Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
+                                LowFive::Dataspace mem_src (LowFive::Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
+                                diy::save(queue, file_src);
+                                LowFive::Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                                        {
+                                        diy::save(queue, (char*) y.data + loc, len);
+                                        });
+                            }
+                        }
+                        send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
                     }
                 }
-                send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
             } else if (msg == msgs::done)
             {
                 all_done = local.ibarrier();
@@ -298,7 +317,8 @@ struct Index
             send(intercomm, 0, tags::consumer, msgs::done, 0);
     }
 
-    void                query(const LowFive::Dataspace&            file_space,      // input: query in terms of file space
+    void                query(const std::string                    full_path,       // input: full path name of dataset
+                              const LowFive::Dataspace&            file_space,      // input: query in terms of file space
                               const LowFive::Dataspace&            mem_space,       // ouput: memory space of resulting data
                               void*                                buf)             // output: resulting data, allocated by caller
     {
@@ -333,6 +353,7 @@ struct Index
             if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
             {
                 blocks.insert(gid);
+                send(intercomm, gid, tags::consumer, msgs::dataset_path, full_path);
                 send(intercomm, gid, tags::consumer, msgs::data, file_space);
 
                 diy::MemoryBuffer queue;
@@ -389,6 +410,7 @@ struct Index
     int                         dim;
     LowFive::Datatype           type;
     Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
+    std::string                 serve_dset_path;                // full path of next dataset to serve
 
 
     // TODO: move this into RegularDecomposer itself (this is a slightly modified point_to_gids)

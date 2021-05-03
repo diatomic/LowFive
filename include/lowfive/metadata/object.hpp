@@ -13,18 +13,25 @@ struct Object
     ObjectType                      type;
     std::string                     name;
 
-    Object(ObjectType type_, std::string name_) :
+    Object(ObjectType   type_,
+           std::string  name_,
+           bool         remove_path = true) :       // strip path from name
         parent(nullptr),
         type(type_)
     {
         // remove path from name
-        std::size_t found = name_.find_last_of("/");
-        while (found == name_.size() - 1)          // remove any trailing slashes
+        if (remove_path)
         {
-            name_ = name_.substr(0, found);
-            found = name_.find_last_of("/");
+            std::size_t found = name_.find_last_of("/");
+            while (found == name_.size() - 1)          // remove any trailing slashes
+            {
+                name_ = name_.substr(0, found);
+                found = name_.find_last_of("/");
+            }
+            name = name_.substr(found + 1);
         }
-        name = name_.substr(found + 1);
+        else
+            name = name_;
     }
 
     virtual ~Object()

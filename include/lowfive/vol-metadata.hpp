@@ -116,6 +116,7 @@ struct MetadataVOL: public LowFive::VOLBase
     }
 
     // trace object back to root to build full path and file name
+    static
     void backtrack_name(
             std::string     name,                   // name of current object
             Object*         parent,                 // parent of current object
