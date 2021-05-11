@@ -94,15 +94,5 @@ file_close(void *file, hid_t dxpl_id, void **req)
         index.serve();
     }
 
-    herr_t res = 0;
-    if (vol_properties.passthru)
-        res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
-
-    delete file_;
-
-    // deliberately verbose, to emphasize checking of res
-    if (res == 0)
-        return 0;
-    else
-        return res;
+    return MetadataVOL::file_close(file, dxpl_id, req);
 }
