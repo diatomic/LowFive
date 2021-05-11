@@ -17,13 +17,13 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         else
             MPI_Comm_remote_size(intercomm, &remote_size);
 
-        Index* index = new Index(local, intercomm, remote_size);      // NB: because no dataset is provided will only build index based on the intercomm
+        Query* query = new Query(local, intercomm, remote_size);      // NB: because no dataset is provided will only build index based on the intercomm
 
         // TODO: query id (index in serve_data), given the name; this requires
         //       ids to be consistent across ranks
 
         auto* ds = new RemoteDataset(name);
-        ds->index = index;
+        ds->query = query;
         result->mdata_obj = ds;
     }
 
@@ -41,9 +41,9 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
             serve_data.push_back(ds);   // record dataset for serving later when file closes
         else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
         {
-            Index* index = (Index*) ds->index;
-            index->close();
-            delete index;
+            Query* query = (Query*) ds->query;
+            query->close();
+            delete query;
         }
     }
 
@@ -68,8 +68,8 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
                 throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
 
             // query to producer
-            Index* index = (Index*) ds->index;
-            index->query(ds->name, Dataspace(file_space_id), Dataspace(mem_space_id), buf);
+            Query* query = (Query*) ds->query;
+            query->query(ds->name, Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         } else
         {
             // TODO: handle correctly

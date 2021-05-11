@@ -2,7 +2,8 @@
 
 #include    <fmt/core.h>
 #include    "vol-metadata.hpp"
-#include    "index-query.hpp"
+#include    "index.hpp"
+#include    "query.hpp"
 #include    <diy/types.hpp>
 
 namespace LowFive

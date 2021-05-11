@@ -1,0 +1,118 @@
+#pragma once
+
+#include "index-query.hpp"
+
+namespace LowFive
+{
+
+struct Query: public IndexQuery
+{
+    int                         dim;
+    Datatype                    type;
+    Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
+
+    // consumer version of the constructor
+                        Query(communicator& local_, communicator& intercomm_, int remote_size):
+                              IndexQuery(local_, intercomm_)
+    {
+        bool root = local.rank() == 0;
+
+        // query producer for dim
+        if (root)
+        {
+            int x;
+            int msg;
+
+            // wait for the ready signal
+            msg = recv(intercomm, 0, tags::producer, x); expected(msg, msgs::ready);
+
+            send(intercomm, 0, tags::consumer, msgs::dimension, 0);
+            msg = recv(intercomm, 0, tags::producer, dim);  expected(msg, msgs::dimension);
+            msg = recv(intercomm, 0, tags::producer, type); expected(msg, msgs::dimension);
+        }
+        diy::mpi::broadcast(local, dim, 0);
+        broadcast(local, type, 0);
+
+        // query producer for domain
+        Bounds domain { dim };
+        if (root)
+        {
+            send(intercomm, 0, tags::consumer, msgs::domain, 0);
+            int msg = recv(intercomm, 0, tags::producer, domain);
+            expected(msg, msgs::domain);
+        }
+        broadcast(local, domain, 0);
+
+        decomposer = Decomposer(dim, domain, remote_size);
+    }
+
+    void                close()
+    {
+        local.barrier();
+
+        if (local.rank() == 0)
+            send(intercomm, 0, tags::consumer, msgs::done, 0);
+    }
+
+    void                query(const std::string                    full_path,       // input: full path name of dataset
+                              const Dataspace&                     file_space,      // input: query in terms of file space
+                              const Dataspace&                     mem_space,       // ouput: memory space of resulting data
+                              void*                                buf)             // output: resulting data, allocated by caller
+    {
+        // enqueue queried file dataspace to the ranks that are
+        // responsible for the boxes that (might) intersect them
+        Bounds b { dim };           // diy representation of the dataspace's bounding box
+        b.min = Point(file_space.min);
+        b.max = Point(file_space.max);
+
+        BoxLocations all_redirects;
+        auto gids = bounds_to_gids(b, decomposer);
+        for (int gid : gids)
+        {
+            // TODO: make this asynchronous (isend + irecv, etc)
+            send(intercomm, gid, tags::consumer, msgs::redirect, file_space);
+
+            BoxLocations redirects;
+            int msg = recv(intercomm, gid, tags::producer, redirects); expected(msg, msgs::redirect);
+            for (auto& x : redirects)
+                all_redirects.push_back(x);
+        }
+
+        // request and receive data
+        std::set<int> blocks;
+        for (auto& y : all_redirects)
+        {
+            // TODO: make this asynchronous (isend + irecv, etc)
+
+            auto& gid = std::get<1>(y);
+            auto& ds  = std::get<0>(y);
+
+            if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
+            {
+                blocks.insert(gid);
+                send(intercomm, gid, tags::consumer, msgs::dataset_path, full_path);
+                send(intercomm, gid, tags::consumer, msgs::data, file_space);
+
+                diy::MemoryBuffer queue;
+                int msg = recv(intercomm, gid, tags::producer, queue); expected(msg, msgs::data);
+
+                while (queue)
+                {
+                    Dataspace ds;
+                    diy::load(queue, ds);
+
+                    if (!file_space.intersects(ds))
+                        throw MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
+
+                    Dataspace mem_dst(Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
+                    Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
+                    {
+                        std::memcpy((char*)buf + loc, queue.advance(len), len);
+                    });
+                }
+            }
+        }
+    }
+};
+
+}

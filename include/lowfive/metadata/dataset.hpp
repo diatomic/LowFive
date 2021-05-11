@@ -60,7 +60,7 @@ struct RemoteDataset : public Object
         Object(ObjectType::Dataset, name, false)    // false: remote datasets don't strip path from their name
     {}
 
-    void* index = nullptr;
+    void* query = nullptr;
 };
 
 }
