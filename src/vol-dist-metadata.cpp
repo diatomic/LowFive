@@ -19,6 +19,9 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
         Index* index = new Index(local, intercomm, remote_size);      // NB: because no dataset is provided will only build index based on the intercomm
 
+        // TODO: query id (index in serve_data), given the name; this requires
+        //       ids to be consistent across ranks
+
         auto* ds = new RemoteDataset(name);
         ds->index = index;
         result->mdata_obj = ds;
