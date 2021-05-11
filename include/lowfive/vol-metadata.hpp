@@ -54,7 +54,6 @@ struct MetadataVOL: public LowFive::VOLBase
 
     using Files     = std::map<std::string, File*>;
     using DataOwners    = std::vector<DataOwnership>;
-    using ServeData     = std::vector<Dataset*>;        // datasets producer is serving
 
     VOLProperties   vol_properties;
 
@@ -69,7 +68,6 @@ struct MetadataVOL: public LowFive::VOLBase
 
     Files           files;
     DataOwners      data_owners;
-    ServeData       serve_data;
 
                     MetadataVOL():
                         VOLBase(/* version = */ 0, /* value = */ 510, /* name = */ "metadata-vol")

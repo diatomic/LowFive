@@ -12,10 +12,13 @@ namespace LowFive
 struct DistMetadataVOL: public LowFive::MetadataVOL
 {
     using communicator = diy::mpi::communicator;
+    using ServeData    = Index::ServeData;
 
     communicator    local;
     communicator    intercomm;
     bool            shared;
+
+    ServeData       serve_data;
 
                     DistMetadataVOL(diy::mpi::communicator  local_,
                                     diy::mpi::communicator  intercomm_,

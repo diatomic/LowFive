@@ -17,12 +17,14 @@ struct Index
 
     using BoxLocations          = std::vector<std::tuple<LowFive::Dataspace, int>>;
 
+    using ServeData             = std::vector<LowFive::Dataset*>;        // datasets producer is serving
+
     using communicator          = diy::mpi::communicator;
 
     struct Block
     {
-        BoxLocations                            boxes;      // boxes we are responsible for under the regular decomposition (for redirects)
-        const LowFive::MetadataVOL::ServeData*  index_data; // local data for multiple datasets
+        BoxLocations            boxes;      // boxes we are responsible for under the regular decomposition (for redirects)
+        const ServeData*        index_data; // local data for multiple datasets
     };
 
     enum msgs   { dimension = 1, domain, redirect, data, done, ready, dataset_path };        // message type
@@ -36,7 +38,7 @@ struct Index
                 };
 
     // producer version of the constructor
-                        Index(communicator& local_, communicator& intercomm_, const LowFive::MetadataVOL::ServeData& serve_data):
+                        Index(communicator& local_, communicator& intercomm_, const ServeData& serve_data):
                             local(local_),
                             intercomm(intercomm_),
                             master(local, 1, -1),
@@ -112,7 +114,7 @@ struct Index
     // The bulk synchronous assumption means that each rank must have the same number of blocks (no remainders)
     // It also means that all ranks in a producer-consumer task pair need to index/query the same number of times
 
-    void                index(const LowFive::MetadataVOL::ServeData& serve_data)
+    void                index(const ServeData& serve_data)
     {
         // enqueue all file dataspaces available on local rank to the ranks
         // that are responsible for the boxes that (might) intersect them
