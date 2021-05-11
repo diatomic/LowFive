@@ -10,14 +10,9 @@ struct Index: public IndexQuery
 {
     using ServeData             = std::vector<Dataset*>;        // datasets producer is serving
 
-    struct Block
-    {
-        BoxLocations            boxes;      // boxes we are responsible for under the regular decomposition (for redirects)
-        const ServeData*        index_data; // local data for multiple datasets
-    };
+    BoxLocations            boxes;      // boxes we are responsible for under the regular decomposition (for redirects)
+    const ServeData*        index_data; // local data for multiple datasets
 
-    diy::Master                 master;
-    diy::ContiguousAssigner     assigner;
     int                         dim;
     Datatype                    type;
     Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
@@ -25,9 +20,7 @@ struct Index: public IndexQuery
 
     // producer version of the constructor
                         Index(communicator& local_, communicator& intercomm_, const ServeData& serve_data):
-                            IndexQuery(local_, intercomm_),
-                            master(local, 1, -1),
-                            assigner(local.size(), local.size())
+                            IndexQuery(local_, intercomm_)
     {
         // TODO: assuming all datasets have same size, space, type
         Dataset* dataset = serve_data[0];
@@ -39,18 +32,6 @@ struct Index: public IndexQuery
         domain.max = dataset->space.dims;
 
         decomposer = Decomposer(dim, domain, local.size());
-        decomposer.decompose(local.rank(), assigner,
-                             [&](int            gid,            // block global id
-                                 const  Bounds& core,           // block bounds without any ghost added
-                                 const  Bounds& bounds,         // block bounds including any ghost region added
-                                 const  Bounds& domain,         // global data bounds
-                                 const  Link&   link)           // neighborhood
-        {
-            Block*          b   = new Block;
-            Link*           l   = new Link(link);
-
-            master.add(gid, b, l);
-        });
 
         index(serve_data);
     }
@@ -62,13 +43,18 @@ struct Index: public IndexQuery
     // It also means that all ranks in a producer-consumer task pair need to index/query the same number of times
     void                index(const ServeData& serve_data)
     {
+        // helper for rexchange, no other purpose
+        diy::Master master(local, 1, -1);
+        int x = 1;      // dummy, to store non-null pointer, so master doesn't skip the block
+        master.add(local.rank(), &x, new Link);
+
         // enqueue all file dataspaces available on local rank to the ranks
         // that are responsible for the boxes that (might) intersect them
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+        master.foreach([&](void*, const diy::Master::ProxyWithLink& cp)
         {
-            b->index_data = &serve_data;
+            index_data = &serve_data;
             // TODO: assuming filespace is same for all datasets
-            Dataset* dset = (*b->index_data)[0];
+            Dataset* dset = (*index_data)[0];
 
             for (auto& x : dset->data)
             {
@@ -76,14 +62,14 @@ struct Index: public IndexQuery
                 b.min = Point(x.file.min);
                 b.max = Point(x.file.max);
                 for (int gid : bounds_to_gids(b, decomposer))
-                    cp.enqueue({ gid, assigner.rank(gid) }, x.file);
+                    cp.enqueue({ gid, gid }, x.file);
             }
         });
 
         master.exchange(true);      // rexchange
 
         // dequeue bounds and save them in boxes
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
+        master.foreach([&](void*, const diy::Master::ProxyWithLink& cp)
         {
             for (auto& x : *cp.incoming())
             {
@@ -93,7 +79,7 @@ struct Index: public IndexQuery
                 {
                     Dataspace ds(0);            // dummy to be filled
                     cp.dequeue(gid, ds);
-                    b->boxes.emplace_back(ds, gid);
+                    boxes.emplace_back(ds, gid);
                 }
             }
         });
@@ -144,9 +130,8 @@ struct Index: public IndexQuery
                 Dataspace ds(0);               // dummy to be filled
                 diy::load(b, ds);
 
-                auto* b = master.block<Block>(0);       // only one block per rank
                 BoxLocations redirects;
-                for (auto& y : b->boxes)
+                for (auto& y : boxes)
                 {
                     auto& ds2 = std::get<0>(y);
                     if (ds.intersects(ds2))
@@ -162,10 +147,9 @@ struct Index: public IndexQuery
                 Dataspace ds;
                 diy::load(b, ds);
 
-                auto* b = master.block<Block>(0);       // only one block per rank
                 diy::MemoryBuffer queue;
 
-                for (auto& dset : *b->index_data)
+                for (auto& dset : *index_data)
                 {
                     // serve the dataset if the full path matches the last queried path name
                     std::string full_path, unused;
@@ -210,19 +194,7 @@ struct Index: public IndexQuery
 
     void                print()
     {
-        master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-        {
-            if (master.communicator().rank() == 0)
-                print(master.communicator().rank(), b->boxes);
-
-            // debug: print the data
-//             for (auto& x : *(b->data))
-//             {
-//                 if (master.communicator().rank() == 0)
-//                     fmt::print("index has data ranging from {} to {}\n",
-//                         ((float*)x.data)[0], ((float*)x.data)[x.memory.size() - 1]);
-//             }
-        });
+            print(local.rank(), boxes);
     }
 };
 
