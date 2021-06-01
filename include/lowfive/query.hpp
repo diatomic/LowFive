@@ -7,29 +7,34 @@ namespace LowFive
 
 struct Query: public IndexQuery
 {
+    int                         id;
     int                         dim;
     Datatype                    type;
     Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
 
     // consumer version of the constructor
-                        Query(communicator& local_, communicator& intercomm_, int remote_size):
+                        Query(communicator& local_, communicator& intercomm_, int remote_size, std::string name):
                               IndexQuery(local_, intercomm_)
     {
         bool root = local.rank() == 0;
 
+        // TODO: the broadcasts necessitate collective open; they are not
+        //       necessary (or could be triggered by a hint from the execution framework)
+
         // query producer for dim
         if (root)
         {
-            int x;
             int msg;
 
-            // wait for the ready signal
-            msg = recv(intercomm, 0, tags::producer, x); expected(msg, msgs::ready);
+            // query id using name
+            send(intercomm, 0, tags::consumer, msgs::id, name);
+            msg = recv(intercomm, 0, tags::producer, id); expected(msg, msgs::id);
 
-            send(intercomm, 0, tags::consumer, msgs::dimension, 0);
+            send(intercomm, 0, tags::consumer, msgs::dimension, id, 0);
             msg = recv(intercomm, 0, tags::producer, dim);  expected(msg, msgs::dimension);
             msg = recv(intercomm, 0, tags::producer, type); expected(msg, msgs::dimension);
         }
+        diy::mpi::broadcast(local, id,  0);
         diy::mpi::broadcast(local, dim, 0);
         broadcast(local, type, 0);
 
@@ -37,7 +42,7 @@ struct Query: public IndexQuery
         Bounds domain { dim };
         if (root)
         {
-            send(intercomm, 0, tags::consumer, msgs::domain, 0);
+            send(intercomm, 0, tags::consumer, msgs::domain, id, 0);
             int msg = recv(intercomm, 0, tags::producer, domain);
             expected(msg, msgs::domain);
         }
@@ -51,11 +56,10 @@ struct Query: public IndexQuery
         local.barrier();
 
         if (local.rank() == 0)
-            send(intercomm, 0, tags::consumer, msgs::done, 0);
+            send(intercomm, 0, tags::consumer, msgs::done, id, 0);
     }
 
-    void                query(const std::string                    full_path,       // input: full path name of dataset
-                              const Dataspace&                     file_space,      // input: query in terms of file space
+    void                query(const Dataspace&                     file_space,      // input: query in terms of file space
                               const Dataspace&                     mem_space,       // ouput: memory space of resulting data
                               void*                                buf)             // output: resulting data, allocated by caller
     {
@@ -70,7 +74,7 @@ struct Query: public IndexQuery
         for (int gid : gids)
         {
             // TODO: make this asynchronous (isend + irecv, etc)
-            send(intercomm, gid, tags::consumer, msgs::redirect, file_space);
+            send(intercomm, gid, tags::consumer, msgs::redirect, id, file_space);
 
             BoxLocations redirects;
             int msg = recv(intercomm, gid, tags::producer, redirects); expected(msg, msgs::redirect);
@@ -90,8 +94,7 @@ struct Query: public IndexQuery
             if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
             {
                 blocks.insert(gid);
-                send(intercomm, gid, tags::consumer, msgs::dataset_path, full_path);
-                send(intercomm, gid, tags::consumer, msgs::data, file_space);
+                send(intercomm, gid, tags::consumer, msgs::data, id, file_space);
 
                 diy::MemoryBuffer queue;
                 int msg = recv(intercomm, gid, tags::producer, queue); expected(msg, msgs::data);

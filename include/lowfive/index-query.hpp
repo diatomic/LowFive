@@ -23,7 +23,7 @@ struct IndexQuery
 
     using communicator          = diy::mpi::communicator;
 
-    enum msgs   { dimension = 1, domain, redirect, data, done, ready, dataset_path };        // message type
+    enum msgs   { dimension = 1, domain, redirect, data, done, ready, id };        // message type
 
     // tags indicate the source of communication, so that in the threaded
     // regime, they can be used to correctly distinguish between senders and
@@ -43,6 +43,16 @@ struct IndexQuery
     static void         send(communicator& comm, int dest, int tag, int msg, const T& x)
     {
         diy::MemoryBuffer b;
+        diy::save(b, x);
+        send(comm, dest, tag, msg, b);
+    }
+
+    // serialize and send
+    template<class T>
+    static void         send(communicator& comm, int dest, int tag, int msg, int id, const T& x)
+    {
+        diy::MemoryBuffer b;
+        diy::save(b, id);
         diy::save(b, x);
         send(comm, dest, tag, msg, b);
     }

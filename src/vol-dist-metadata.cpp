@@ -17,12 +17,16 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         else
             MPI_Comm_remote_size(intercomm, &remote_size);
 
-        Query* query = new Query(local, intercomm, remote_size);      // NB: because no dataset is provided will only build index based on the intercomm
-
-        // TODO: query id (index in serve_data), given the name; this requires
-        //       ids to be consistent across ranks
-
         auto* ds = new RemoteDataset(name);
+
+        // check that the dataset name is the full path (the only mode supported for now)
+        // TODO: if only leaf name is given, could use backtrack_name to find full path
+        // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
+        if (ds->name[0] != '/')
+            throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
+
+        Query* query = new Query(local, intercomm, remote_size, ds->name);      // NB: because no dataset is provided will only build index based on the intercomm
+
         ds->query = query;
         result->mdata_obj = ds;
     }
@@ -61,15 +65,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         // consumer with the name of a remote dataset
         if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
         {
-            // check that the dataset name is the full path (the only mode supported for now)
-            // TODO: if only leaf name is given, could use backtrack_name to find full path
-            // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
-            if (ds->name[0] != '/')
-                throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
-
             // query to producer
             Query* query = (Query*) ds->query;
-            query->query(ds->name, Dataspace(file_space_id), Dataspace(mem_space_id), buf);
+            query->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         } else
         {
             // TODO: handle correctly

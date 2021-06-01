@@ -8,32 +8,52 @@ namespace LowFive
 
 struct Index: public IndexQuery
 {
-    using ServeData             = std::vector<Dataset*>;        // datasets producer is serving
+    struct IndexedDataset
+    {
+        IndexedDataset(Dataset* ds_, int comm_size):
+            ds(ds_)
+        {
+            dim = ds->space.dims.size();
+            type = ds->type;
 
-    BoxLocations            boxes;      // boxes we are responsible for under the regular decomposition (for redirects)
-    const ServeData*        index_data; // local data for multiple datasets
+            Bounds domain { dim };
+            domain.max = ds->space.dims;
 
-    int                         dim;
-    Datatype                    type;
-    Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
-    std::string                 serve_dset_path;                // full path of next dataset to serve
+            decomposer = Decomposer(dim, domain, comm_size);
+        }
+
+        Dataset*                ds;
+        int                     dim;
+        Datatype                type;
+        Decomposer              decomposer { 1, Bounds { { 0 }, { 1} }, 1 };
+        BoxLocations            boxes;
+    };
+    using IndexedDatasets       = std::map<std::string, IndexedDataset>;
+    using IDsMap                = std::map<std::string, int>;
+    using IDsVector             = std::vector<std::string>;
+    using ServeData             = std::vector<Dataset*>;            // datasets producer is serving
+
+    IndexedDatasets             index_data; // local data for multiple datasets
+    IDsMap                      ids_map;
+    IDsVector                   ids_vector;
 
     // producer version of the constructor
                         Index(communicator& local_, communicator& intercomm_, const ServeData& serve_data):
                             IndexQuery(local_, intercomm_)
     {
-        // TODO: assuming all datasets have same size, space, type
-        Dataset* dataset = serve_data[0];
+        // TODO: sort serve_data by name, to make sure the order is the same on all ranks
 
-        dim = dataset->space.dims.size();
-        type = dataset->type;
+        int id = 0;
+        for (auto* ds : serve_data)
+        {
+            std::string name = ds->name;            // FIXME: this should be the full name
+            auto it = index_data.emplace(name, IndexedDataset(ds, local.size())).first;
 
-        Bounds domain { dim };
-        domain.max = dataset->space.dims;
+            ids_map[name] = id++;
+            ids_vector.push_back(name);
 
-        decomposer = Decomposer(dim, domain, local.size());
-
-        index(serve_data);
+            index(it->second);
+        }
     }
 
     // TODO: index-query are written with the bulk-synchronous assumption;
@@ -41,7 +61,7 @@ struct Index: public IndexQuery
     // NB, index and query are called once for each (DIY) block of the user code, not once per rank
     // The bulk synchronous assumption means that each rank must have the same number of blocks (no remainders)
     // It also means that all ranks in a producer-consumer task pair need to index/query the same number of times
-    void                index(const ServeData& serve_data)
+    void                index(IndexedDataset& data)
     {
         // helper for rexchange, no other purpose
         diy::Master master(local, 1, -1);
@@ -52,16 +72,14 @@ struct Index: public IndexQuery
         // that are responsible for the boxes that (might) intersect them
         master.foreach([&](void*, const diy::Master::ProxyWithLink& cp)
         {
-            index_data = &serve_data;
-            // TODO: assuming filespace is same for all datasets
-            Dataset* dset = (*index_data)[0];
+            Dataset* dset = data.ds;
 
             for (auto& x : dset->data)
             {
-                Bounds b { dim };           // diy representation of the triplet's bounding box
+                Bounds b { data.dim };           // diy representation of the triplet's bounding box
                 b.min = Point(x.file.min);
                 b.max = Point(x.file.max);
-                for (int gid : bounds_to_gids(b, decomposer))
+                for (int gid : bounds_to_gids(b, data.decomposer))
                     cp.enqueue({ gid, gid }, x.file);
             }
         });
@@ -79,7 +97,7 @@ struct Index: public IndexQuery
                 {
                     Dataspace ds(0);            // dummy to be filled
                     cp.dequeue(gid, ds);
-                    boxes.emplace_back(ds, gid);
+                    data.boxes.emplace_back(ds, gid);
                 }
             }
         });
@@ -88,11 +106,11 @@ struct Index: public IndexQuery
     void                serve()
     {
         local.barrier();
-        if (local.rank() == 0)
-        {
-            // signal to consumer that we are ready
-            send(intercomm, 0, tags::producer, msgs::ready, 0);
-        }
+        //if (local.rank() == 0)
+        //{
+        //    // signal to consumer that we are ready
+        //    send(intercomm, 0, tags::producer, msgs::ready, 0);
+        //}
 
         diy::mpi::request all_done;
         bool all_done_active = false;
@@ -117,21 +135,34 @@ struct Index: public IndexQuery
             diy::MemoryBuffer b;
             int msg = recv(intercomm, source, tags::consumer, b);
 
+            if (msg == msgs::id)
+            {
+                std::string name;
+                diy::load(b, name);
+                send(intercomm, source, tags::producer, msgs::id, ids_map[name]);
+                continue;
+            }
+
+            int id;
+            diy::load(b, id);
+
+            IndexedDataset& data = index_data.find(ids_vector[id])->second;
+
             if (msg == msgs::dimension)
             {
                 diy::MemoryBuffer out;
-                send(intercomm, source, tags::producer, msgs::dimension, dim);
-                send(intercomm, source, tags::producer, msgs::dimension, type);
+                send(intercomm, source, tags::producer, msgs::dimension, data.dim);
+                send(intercomm, source, tags::producer, msgs::dimension, data.type);
             } else if (msg == msgs::domain)
             {
-                send(intercomm, source, tags::producer, msgs::domain, decomposer.domain);
+                send(intercomm, source, tags::producer, msgs::domain, data.decomposer.domain);
             } else if (msg == msgs::redirect)
             {
                 Dataspace ds(0);               // dummy to be filled
                 diy::load(b, ds);
 
                 BoxLocations redirects;
-                for (auto& y : boxes)
+                for (auto& y : data.boxes)
                 {
                     auto& ds2 = std::get<0>(y);
                     if (ds.intersects(ds2))
@@ -139,9 +170,6 @@ struct Index: public IndexQuery
                 }
 
                 send(intercomm, source, tags::producer, msgs::redirect, redirects);
-            } else if (msg == msgs::dataset_path)
-            {
-                diy::load(b, serve_dset_path);
             } else if (msg == msgs::data)
             {
                 Dataspace ds;
@@ -149,29 +177,20 @@ struct Index: public IndexQuery
 
                 diy::MemoryBuffer queue;
 
-                for (auto& dset : *index_data)
+                for (auto& y : data.ds->data)
                 {
-                    // serve the dataset if the full path matches the last queried path name
-                    std::string full_path, unused;
-                    MetadataVOL::backtrack_name(dset->name, dset->parent, unused, full_path);
-                    if (full_path == serve_dset_path)
+                    if (y.file.intersects(ds))
                     {
-                        for (auto& y : dset->data)
+                        Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
+                        Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
+                        diy::save(queue, file_src);
+                        Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                         {
-                            if (y.file.intersects(ds))
-                            {
-                                Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
-                                Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
-                                diy::save(queue, file_src);
-                                Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
-                                        {
-                                        diy::save(queue, (char*) y.data + loc, len);
-                                        });
-                            }
-                        }
-                        send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
+                            diy::save(queue, (char*) y.data + loc, len);
+                        });
                     }
                 }
+                send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
             } else if (msg == msgs::done)
             {
                 all_done = local.ibarrier();
@@ -194,7 +213,12 @@ struct Index: public IndexQuery
 
     void                print()
     {
-            print(local.rank(), boxes);
+        for (auto& x : index_data)
+        {
+            auto& data = x.second;
+            fmt::print("{}: {}\n", local.rank(), data.ds->name);
+            print(local.rank(), data.boxes);
+        }
     }
 };
 
