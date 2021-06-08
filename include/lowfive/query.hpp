@@ -28,6 +28,8 @@ struct Query: public IndexQuery
 
             // query id using name
             send(intercomm, 0, tags::consumer, msgs::id, name);
+            // TODO: the following never returns for the second dataset
+            // because Query::close() was called on dataset_close, which sent a done message to the server
             msg = recv(intercomm, 0, tags::producer, id); expected(msg, msgs::id);
 
             send(intercomm, 0, tags::consumer, msgs::dimension, id, 0);

@@ -46,7 +46,8 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
         else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
         {
             Query* query = (Query*) ds->query;
-            query->close();
+            // TODO: defer closing query until file close
+//             query->close();
             delete query;
         }
     }
@@ -93,6 +94,21 @@ file_close(void *file, hid_t dxpl_id, void **req)
     {
         Index index(local, intercomm, serve_data);
         index.serve();
+    }
+    else
+    {
+        // calling Query::close() in order to shut down the server on the producer
+        // TODO: multiple different consumer tasks accessing the same server will be a problem
+        // eventually need a different mechanism to shut down the server
+        int remote_size;
+        if (shared)
+            remote_size = intercomm.size();
+        else
+            MPI_Comm_remote_size(intercomm, &remote_size);
+
+        Query* query = new Query(local, intercomm, remote_size, std::string(""));
+        query->close();
+        delete query;
     }
 
     return MetadataVOL::file_close(file, dxpl_id, req);
