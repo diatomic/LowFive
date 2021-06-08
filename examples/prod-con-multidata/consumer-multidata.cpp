@@ -58,13 +58,6 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     // create a new file using default properties
     hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
 
-    std::vector<hsize_t> domain_cnts(DIM);
-    for (auto i = 0; i < DIM; i++)
-        domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
-
-    // create the file data space for the global grid
-    hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
-
     // open the grid dataset
     hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
 
@@ -80,7 +73,7 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
             &con_storage,
             &Block::save,
             &Block::load);
-    size_t local_num_points = global_num_points / con_nblocks;  // TODO: assumes global_num_points divides con_nblocks w/o remainder
+    size_t local_num_points = global_num_points / con_nblocks;
     AddBlock                        con_create(con_master, local_num_points, global_num_points, con_nblocks);
     diy::ContiguousAssigner         con_assigner(local.size(), con_nblocks);
     diy::RegularDecomposer<Bounds>  con_decomposer(dim, domain, con_nblocks);
@@ -92,12 +85,6 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     // clean up
     H5Dclose(dset);
-    H5Sclose(filespace);
-
-    // create the file data space for the particles
-    domain_cnts[0]  = global_num_points;             // same number of particles in each block
-    domain_cnts[1]  = DIM;
-    filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
 
     fmt::print(stderr, "consumer: local_num_points {} global_num_points {} con_nblocks {}\n",
             local_num_points, global_num_points, con_nblocks);
@@ -111,7 +98,6 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     // clean up
     H5Dclose(dset);
-    H5Sclose(filespace);
     H5Fclose(file);
     H5Pclose(plist);
 }       // consumer ranks
