@@ -47,7 +47,7 @@ struct Index: public IndexQuery
         for (auto* ds : serve_data)
         {
             std::string filename, name;
-            MetadataVOL::backtrack_name(ds->name, ds->parent, filename, name);
+            std::tie(filename,name) = ds->fullname();
             auto it = index_data.emplace(name, IndexedDataset(ds, local.size())).first;
 
             ids_map[name] = id++;

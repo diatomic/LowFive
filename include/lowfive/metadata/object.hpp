@@ -124,6 +124,21 @@ struct Object
         return nullptr;
     }
 
+    std::pair<std::string, std::string> fullname()     // returns filename, full path pair
+    {
+        std::string full_path;
+
+        Object* o = this;
+
+        while (o->type != ObjectType::File)
+        {
+            full_path = "/" + o->name + full_path;
+            o = o->parent;
+        }
+
+        return std::make_pair(o->name, full_path);
+    }
+
     Object* add_child(Object* object)
     {
         children.push_back(object);

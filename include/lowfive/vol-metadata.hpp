@@ -121,27 +121,8 @@ struct MetadataVOL: public LowFive::VOLBase
             std::string&    filename,               // (output) file name of enclosing file
             std::string&    full_path)              // full path name of object in file
     {
-        if (parent->type == ObjectType::File)
-            filename = parent->name;
-        else
-        {
-            full_path = parent->name + std::string("/") + name;
-            Object* p = parent->parent;
-            while (p)
-            {
-                if (p->type == ObjectType::File)
-                {
-                    filename    = p->name;
-                    full_path   = std::string("/") + full_path;
-                    break;
-                }
-                else
-                {
-                    full_path   = p->name + std::string("/") + full_path;
-                    p           = p->parent;
-                }
-            }
-        }
+        std::tie(filename,full_path) = parent->fullname();
+        full_path += "/" + name;
     }
 
     // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
