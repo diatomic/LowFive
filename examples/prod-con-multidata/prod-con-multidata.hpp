@@ -107,6 +107,20 @@ struct PointBlock
         recv_grid.resize(grid.size());
     }
 
+    // initialize a set of points in a block with values in a known sequence
+    void generate_sequenced_points(int      gid,
+                                   size_t   n)             // number of points
+    {
+        box = domain;
+        points.resize(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            for (unsigned j = 0; j < DIM; ++j)
+                points[i][j] = gid * n + i;
+//             fmt::print(stderr, "gid {} point [{}]\n", gid, points[i]);
+        }
+    }
+
     // initialize a set of points in a block
     void generate_points(const Bounds& domain, // overall data bounds
                          size_t n)             // number of points
@@ -114,9 +128,12 @@ struct PointBlock
         box = domain;
         points.resize(n);
         for (size_t i = 0; i < n; ++i)
+        {
             for (unsigned j = 0; j < DIM; ++j)
                 points[i][j] = domain.min[j] + float(rand() % 1024)/1024 *
                     (domain.max[j] - domain.min[j]);
+//             fmt::print(stderr, "Bounds [{} : {}] point [{}]\n", domain.min, domain.max, points[i]);
+        }
     }
 
     // write the block grid data in parallel to an HDF5 file using native HDF5 API
@@ -279,24 +296,25 @@ struct PointBlock
         hid_t filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
-        fmt::print(stderr, "read_block_points(): gid {} core_cnts {} domain_cnts {} ofst {}\n",
-                cp.gid(), core_cnts[0], domain_cnts[0], ofst[0]);
-
         // memspace = simple local number of particles
         hid_t memspace = H5Screate_simple (2, &core_cnts[0], NULL);
         status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_points[0]);
 
         // check that the values match
-        // TODO: need to create deterministic point values that can be checked
         bool success = true;
-        for (size_t i = 0; i < points.size(); ++i)
+        for (size_t i = 0; i < read_points.size(); ++i)
         {
-//             if (grid[i] != read_grid[i])
-//             {
-//                 success = false;
-//                 fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
-// //                 exit(0);
-//             }
+            for (auto j = 0; j < DIM; j++)
+            {
+                float min_val = cp.gid() * (global_num_pts / global_num_blks);
+                float max_val = min_val + read_points.size() - 1;
+                if (read_points[i][j] < min_val || read_points[i][j] > max_val)
+                {
+                    fmt::print(stderr, "Error: for gid {}, read_points[{}] = {} < {} or > {}\n", cp.gid(), i, read_points[i], min_val, max_val);
+                    success = false;
+//                     exit(0);
+                }
+            }
         }
 
         status = H5Sclose(filespace);
@@ -351,11 +369,17 @@ struct AddPointBlock
 
             m.add(gid, b, l);
 
+            // NB, only the producer really needs to generate the grid and the points because the
+            // consumer gets them from the workflow, but we are re-using the same AddPointBlock
+            // function for both producer and consumer in this example
+
             b->generate_grid();                     // initialize block with regular grid
+
             // adjust local number of points if global number of points does not divide global number of blocks evenly
             if (local_num_points * global_num_blocks < global_num_points && gid == global_num_blocks - 1)
                 local_num_points = global_num_points - local_num_points * (global_num_blocks - 1);
-            b->generate_points(domain, local_num_points); // initialize block with set of points
+
+            b->generate_sequenced_points(gid, local_num_points); // initialize block with set of points
         }
 
     diy::Master&    master;

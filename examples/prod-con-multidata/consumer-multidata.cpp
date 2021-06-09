@@ -86,9 +86,6 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     // clean up
     H5Dclose(dset);
 
-    fmt::print(stderr, "consumer: local_num_points {} global_num_points {} con_nblocks {}\n",
-            local_num_points, global_num_points, con_nblocks);
-
     // open the particle dataset
     dset = H5Dopen(file, "/group1/particles", H5P_DEFAULT);
 
