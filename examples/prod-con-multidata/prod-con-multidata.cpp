@@ -73,6 +73,12 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (!(metadata + passthru))
+    {
+        fmt::print(stderr, "Error: Either metadata or passthru must be enabled. Both cannot be disabled.\n");
+        abort();
+    }
+
     // ---  all ranks running workflow runtime system code ---
 
     size_t global_npoints = global_nblocks * local_npoints;         // all block have same number of points

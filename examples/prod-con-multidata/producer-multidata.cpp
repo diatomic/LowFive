@@ -40,9 +40,10 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     }
     fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), intercomm.size());
 
-    // Set up file access property list with mpi-io file driver
+    // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
-    //H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
+    if (passthru)
+        H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomm, shared, metadata, passthru);
@@ -71,7 +72,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     diy::RegularDecomposer<Bounds>  prod_decomposer(dim, domain, global_nblocks);
     prod_decomposer.decompose(local.rank(), prod_assigner, prod_create);
 
-    // create a new file using default properties
+    // create a new file and group using default properties
     hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
@@ -115,5 +116,5 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     // signal the consumer that data are ready
     if (passthru && !metadata)
         intercomm.barrier();
-}   // producer ranks
+}
 

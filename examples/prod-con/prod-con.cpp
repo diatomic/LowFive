@@ -70,6 +70,12 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (!(metadata + passthru))
+    {
+        fmt::print(stderr, "Error: Either metadata or passthru must be enabled. Both cannot be disabled.\n");
+        abort();
+    }
+
     // ---  all ranks running workflow runtime system code ---
 
     // consumer will read different block decomposition than the producer

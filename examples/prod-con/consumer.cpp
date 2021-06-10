@@ -42,9 +42,10 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     }
     fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), intercomm.size());
 
-    // Set up file access property list with mpi-io file driver
+    // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
-    //H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
+    if (passthru)
+        H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomm, shared, metadata, passthru);

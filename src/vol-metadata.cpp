@@ -36,15 +36,11 @@ file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **r
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
-    // TODO: why create a pointer that isn't used?
-    if (vol_properties.memory)
-        File* f = (File*) file_->mdata_obj;
-
     fmt::print(stderr, "file_optional: opt_type = {}\n", opt_type);
     // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
 
     herr_t res = 0;
-    if (vol_properties.passthru)
+    if (vol_properties.passthru && file_->h5_obj)
         res = VOLBase::file_optional(file_->h5_obj, opt_type, dxpl_id, req, arguments);
 
     return res;
@@ -65,7 +61,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         obj_ptrs->mdata_obj = f;
     }
 
-    if (vol_properties.passthru)
+    if (vol_properties.passthru && ! vol_properties.memory)
         obj_ptrs->h5_obj = VOLBase::file_open(name, flags, fapl_id, dxpl_id, req);
 
     return obj_ptrs;
@@ -77,13 +73,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
-    // TODO: why create a pointer that isn't used?
-    if (vol_properties.memory)
-        File* f = (File*) file_->mdata_obj;
-
     herr_t res = 0;
 
-    if (vol_properties.passthru)
+    if (vol_properties.passthru && file_->h5_obj)
         res = VOLBase::file_close(file_->h5_obj, dxpl_id, req);
 
     delete file_;

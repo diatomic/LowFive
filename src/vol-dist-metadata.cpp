@@ -89,26 +89,29 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
-    // serve datasets (producer only)
-    if (serve_data.size())              // only producer pushed any datasets to serve_data
+    if (vol_properties.memory)
     {
-        Index index(local, intercomm, serve_data);
-        index.serve();
-    }
-    else
-    {
-        // calling Query::close() in order to shut down the server on the producer
-        // TODO: multiple different consumer tasks accessing the same server will be a problem
-        // eventually need a different mechanism to shut down the server
-        int remote_size;
-        if (shared)
-            remote_size = intercomm.size();
+        // serve datasets (producer only)
+        if (serve_data.size())              // only producer pushed any datasets to serve_data
+        {
+            Index index(local, intercomm, serve_data);
+            index.serve();
+        }
         else
-            MPI_Comm_remote_size(intercomm, &remote_size);
+        {
+            // calling Query::close() in order to shut down the server on the producer
+            // TODO: multiple different consumer tasks accessing the same server will be a problem
+            // eventually need a different mechanism to shut down the server
+            int remote_size;
+            if (shared)
+                remote_size = intercomm.size();
+            else
+                MPI_Comm_remote_size(intercomm, &remote_size);
 
-        Query* query = new Query(local, intercomm, remote_size, std::string(""));
-        query->close();
-        delete query;
+            Query* query = new Query(local, intercomm, remote_size, std::string(""));
+            query->close();
+            delete query;
+        }
     }
 
     return MetadataVOL::file_close(file, dxpl_id, req);

@@ -42,9 +42,10 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     }
     fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), intercomm.size());
 
-    // Set up file access property list with mpi-io file driver
+    // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
-    //H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
+    if (passthru)
+        H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomm, shared, metadata, passthru);
@@ -54,12 +55,6 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     // wait for data to be ready
     if (passthru && !metadata)
         intercomm.barrier();
-
-    // create a new file using default properties
-    hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
-
-    // open the grid dataset
-    hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
 
     // --- consumer ranks running user task code ---
 
@@ -79,6 +74,10 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     diy::RegularDecomposer<Bounds>  con_decomposer(dim, domain, con_nblocks);
     con_decomposer.decompose(local.rank(), con_assigner, con_create);
 
+    // open the file and the dataset
+    hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
+    hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
+
     // read the grid data
     con_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->read_block_grid(cp, dset); });
@@ -97,5 +96,5 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     H5Dclose(dset);
     H5Fclose(file);
     H5Pclose(plist);
-}       // consumer ranks
+}
 
