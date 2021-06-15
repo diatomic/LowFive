@@ -23,8 +23,8 @@ int main(int argc, char* argv[])
     // opts does not handle bool correctly, using int instead
     int                       metadata          = 1;              // build in-memory metadata
     int                       passthru          = 0;              // write file to disk
-    float                     prod_frac         = 0.5;            // fraction of world ranks in producer
     bool                      shared            = false;          // producer and consumer run on the same ranks
+    float                     prod_frac         = 0.5;            // fraction of world ranks in producer
     size_t                    local_npoints     = 100;            // points per block
 
 

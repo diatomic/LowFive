@@ -28,10 +28,8 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     diy::mpi::communicator intercomm;
     if (shared)
-    {
-        fmt::print("Consumer local comm = {}\n", static_cast<intptr_t>(local.handle()));
         intercomm = world;
-    } else
+    else
     {
         // split the world into producer and consumer
         local = world.split(producer);

@@ -27,9 +27,8 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     //  --- producer ranks running workflow runtime system code ---
     diy::mpi::communicator intercomm;
     if (shared)
-    {
         intercomm = world;
-    } else
+    else
     {
         // split the world into producer and consumer
         local = world.split(producer);
