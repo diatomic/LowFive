@@ -33,7 +33,7 @@ add_test                    (NAME prod-con-multidata-no-shared-metadata-file-p${
 endforeach                  (p)
 
 # space sharing only works under LINUX, not Mac
-if (LINUX)
+if(UNIX AND NOT APPLE)
     # space sharing communicating through metadata
     foreach                 (p 2 4 8)
     add_test                (NAME prod-con-multidata-shared-metadata-p${p}
