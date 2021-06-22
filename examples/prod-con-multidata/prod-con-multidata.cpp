@@ -26,6 +26,8 @@ int main(int argc, char* argv[])
     bool                      shared            = false;          // producer and consumer run on the same ranks
     float                     prod_frac         = 0.5;            // fraction of world ranks in producer
     size_t                    local_npoints     = 100;            // points per block
+    std::string               producer_exec     = "./producer-multidata.hx";    // name of producer executable
+    std::string               consumer_exec     = "./consumer-multidata.hx";    // name of consumer executable
 
 
     // default global data bounds
@@ -40,26 +42,28 @@ int main(int argc, char* argv[])
     using namespace opts;
     Options ops;
     ops
-        >> Option('n', "number",  local_npoints,  "number of points per block")
-        >> Option('b', "blocks",  global_nblocks, "number of blocks")
-        >> Option('t', "thread",  threads,        "number of threads")
-        >> Option(     "memblks", mem_blocks,     "number of blocks to keep in memory")
-        >> Option(     "prefix",  prefix,         "prefix for external storage")
-        >> Option('m', "memory",  metadata,       "build and use in-memory metadata")
-        >> Option('f', "file",    passthru,       "write file to disk")
-        >> Option('p', "p_frac",  prod_frac,      "fraction of world ranks in producer")
-        >> Option('s', "shared",  shared,         "share ranks between producer and consumer (-p ignored)")
+        >> Option('n', "number",    local_npoints,  "number of points per block")
+        >> Option('b', "blocks",    global_nblocks, "number of blocks")
+        >> Option('t', "thread",    threads,        "number of threads")
+        >> Option(     "memblks",   mem_blocks,     "number of blocks to keep in memory")
+        >> Option(     "prefix",    prefix,         "prefix for external storage")
+        >> Option('m', "memory",    metadata,       "build and use in-memory metadata")
+        >> Option('f', "file",      passthru,       "write file to disk")
+        >> Option('p', "p_frac",    prod_frac,      "fraction of world ranks in producer")
+        >> Option('s', "shared",    shared,         "share ranks between producer and consumer (-p ignored)")
+        >> Option('r', "prod_exec", producer_exec,  "name of producer executable")
+        >> Option('c', "con_exec",  consumer_exec,  "name of consumer executable")
         ;
     ops
-        >> Option('x',  "max-x",  domain.max[0],  "domain max x")
-        >> Option('y',  "max-y",  domain.max[1],  "domain max y")
-        >> Option('z',  "max-z",  domain.max[2],  "domain max z")
+        >> Option('x',  "max-x",    domain.max[0],  "domain max x")
+        >> Option('y',  "max-y",    domain.max[1],  "domain max y")
+        >> Option('z',  "max-z",    domain.max[2],  "domain max z")
         ;
 
     bool verbose, help;
     ops
-        >> Option('v', "verbose", verbose,  "print the block contents")
-        >> Option('h', "help",    help,     "show help")
+        >> Option('v', "verbose",   verbose,        "print the block contents")
+        >> Option('h', "help",      help,           "show help")
         ;
 
     if (!ops.parse(argc,argv) || help)
@@ -91,11 +95,11 @@ int main(int argc, char* argv[])
     bool producer = world.rank() < producer_ranks;
     fmt::print("producer_ranks: {}\n", producer_ranks);
 
-    void* lib_producer = dlopen("./producer-multidata.hx", RTLD_LAZY);
+    void* lib_producer = dlopen(producer_exec.c_str(), RTLD_LAZY);
     if (!lib_producer)
         fmt::print(stderr, "Couldn't open producer.hx\n");
 
-    void* lib_consumer = dlopen("./consumer-multidata.hx", RTLD_LAZY);
+    void* lib_consumer = dlopen(consumer_exec.c_str(), RTLD_LAZY);
     if (!lib_consumer)
         fmt::print(stderr, "Couldn't open consumer.hx\n");
 
