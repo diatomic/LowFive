@@ -13,9 +13,9 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         int remote_size;
 
         if (shared)
-            remote_size = intercomm.size();
+            remote_size = intercomms[0].size();
         else
-            MPI_Comm_remote_size(intercomm, &remote_size);
+            MPI_Comm_remote_size(intercomms[0], &remote_size);
 
         auto* ds = new RemoteDataset(name);
 
@@ -25,7 +25,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         if (ds->name[0] != '/')
             throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
 
-        Query* query = new Query(local, intercomm, remote_size, ds->name);      // NB: because no dataset is provided will only build index based on the intercomm
+        Query* query = new Query(local, intercomms, remote_size, ds->name);      // NB: because no dataset is provided will only build index based on the intercomm
 
         ds->query = query;
         result->mdata_obj = ds;
@@ -94,7 +94,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
         // serve datasets (producer only)
         if (serve_data.size())              // only producer pushed any datasets to serve_data
         {
-            Index index(local, intercomm, serve_data);
+            Index index(local, intercomms, serve_data);
             index.serve();
         }
         else
@@ -104,11 +104,11 @@ file_close(void *file, hid_t dxpl_id, void **req)
             // eventually need a different mechanism to shut down the server
             int remote_size;
             if (shared)
-                remote_size = intercomm.size();
+                remote_size = intercomms[0].size();
             else
-                MPI_Comm_remote_size(intercomm, &remote_size);
+                MPI_Comm_remote_size(intercomms[0], &remote_size);
 
-            Query* query = new Query(local, intercomm, remote_size, std::string(""));
+            Query* query = new Query(local, intercomms, remote_size, std::string(""));
             query->close();
             delete query;
         }

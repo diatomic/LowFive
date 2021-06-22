@@ -38,8 +38,8 @@ struct Index: public IndexQuery
     IDsVector                   ids_vector;
 
     // producer version of the constructor
-                        Index(communicator& local_, communicator& intercomm_, const ServeData& serve_data):
-                            IndexQuery(local_, intercomm_)
+                        Index(communicator& local_, communicators& intercomms_, const ServeData& serve_data):
+                            IndexQuery(local_, intercomms_)
     {
         // TODO: sort serve_data by name, to make sure the order is the same on all ranks
 
@@ -115,6 +115,7 @@ struct Index: public IndexQuery
 
         diy::mpi::request all_done;
         bool all_done_active = false;
+        int  done_count  = 0;
         if (local.rank() != 0)
         {
             all_done = local.ibarrier();
@@ -126,9 +127,23 @@ struct Index: public IndexQuery
             if (all_done_active && all_done.test())
                 break;
 
-            diy::mpi::optional<diy::mpi::status> ostatus = intercomm.iprobe(diy::mpi::any_source, tags::consumer);
-            if (!ostatus)
+            bool found_request = false;
+            communicator* p_intercomm = nullptr;
+            diy::mpi::optional<diy::mpi::status> ostatus;
+            for (auto& intercomm : intercomms)
+            {
+                ostatus = intercomm.iprobe(diy::mpi::any_source, tags::consumer);
+                if (ostatus)
+                {
+                    found_request = true;
+                    p_intercomm = &intercomm;
+                    break;
+                }
+            }
+            if (!found_request)
                 continue;
+
+            communicator& intercomm = *p_intercomm;
 
             int tag    = ostatus->tag();
             int source = ostatus->source();
@@ -194,8 +209,13 @@ struct Index: public IndexQuery
                 send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
             } else if (msg == msgs::done)
             {
-                all_done = local.ibarrier();
-                all_done_active = true;
+                ++done_count;
+
+                if (done_count == intercomms.size())
+                {
+                    all_done = local.ibarrier();
+                    all_done_active = true;
+                }
             }
 
             // TODO: add other potential queries (e.g., datatype)

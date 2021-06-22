@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include <diy/decomposition.hpp>
 #include <diy/types.hpp>
 
@@ -22,6 +24,7 @@ struct IndexQuery
     using BoxLocations          = std::vector<std::tuple<Dataspace, int>>;
 
     using communicator          = diy::mpi::communicator;
+    using communicators         = std::vector<communicator>;
 
     enum msgs   { dimension = 1, domain, redirect, data, done, ready, id };        // message type
 
@@ -33,9 +36,9 @@ struct IndexQuery
                     consumer            // communication from consumer
                 };
 
-                        IndexQuery(communicator& local_, communicator& intercomm_):
+                        IndexQuery(communicator& local_, communicators& intercomms_):
                             local(local_),
-                            intercomm(intercomm_)
+                            intercomms(intercomms_)
     {}
 
     // serialize and send
@@ -107,7 +110,10 @@ struct IndexQuery
             throw std::runtime_error(fmt::format("Message mismatch: expected = {}, received {}", expected_, received_));
     }
 
-    communicator                local, intercomm;
+    communicator&       intercomm()         { return intercomms[0]; }
+
+    communicator        local;
+    communicators       intercomms;
 
     // TODO: move this into RegularDecomposer itself (this is a slightly modified point_to_gids)
     std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer) const

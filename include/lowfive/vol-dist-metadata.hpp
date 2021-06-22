@@ -1,5 +1,6 @@
 #pragma     once
 
+#include    <vector>
 #include    <fmt/core.h>
 #include    "vol-metadata.hpp"
 #include    "index.hpp"
@@ -12,11 +13,12 @@ namespace LowFive
 // custom VOL object for distributed metadata
 struct DistMetadataVOL: public LowFive::MetadataVOL
 {
-    using communicator = diy::mpi::communicator;
-    using ServeData    = Index::ServeData;
+    using communicator  = diy::mpi::communicator;
+    using communicators = std::vector<communicator>;
+    using ServeData     = Index::ServeData;
 
     communicator    local;
-    communicator    intercomm;
+    communicators   intercomms;
     bool            shared;
 
     ServeData       serve_data;
@@ -27,7 +29,16 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
                                     bool                    memory_,
                                     bool                    passthru_,
                                     bool                    copy_ = true):
-                        local(local_), intercomm(intercomm_), shared(shared_)
+                        DistMetadataVOL(local_, communicators { std::move(intercomm_) }, shared_, memory_, passthru_, copy_)
+                    {}
+
+                    DistMetadataVOL(communicator            local_,
+                                    communicators           intercomms_,
+                                    bool                    shared_,
+                                    bool                    memory_,
+                                    bool                    passthru_,
+                                    bool                    copy_ = true):
+                        local(local_), intercomms(std::move(intercomms_)), shared(shared_)
                     {
                         vol_properties.memory   = memory_;
                         vol_properties.passthru = passthru_;
