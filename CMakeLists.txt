@@ -66,12 +66,13 @@ set                         (libraries
                              ${CMAKE_THREAD_LIBS_INIT}
                              ${CMAKE_DL_LIBS})
 
+add_subdirectory            (src)
+set                         (libraries ${libraries} lowfive)
+
 # Testing
 # NB testing must be enabled before adding tests subdirectory, otherwise no tests will be found
 enable_testing              ()
 include                     (CTest)
-
-add_subdirectory            (src)
-set                         (libraries ${libraries} lowfive)
+add_subdirectory            (tests)
 
 add_subdirectory            (examples)
