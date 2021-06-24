@@ -113,7 +113,14 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     H5Pclose(plist);
 
     // signal the consumer that data are ready
-    if (passthru && !metadata)
+    if (passthru && !metadata && !shared)
         intercomm.barrier();
+
+    else if (passthru && !metadata && shared)
+    {
+        local.barrier();
+        int a = 0;      // it doesn't matter what we send, for synchronization only
+        local.send(local.rank(), 0, a);
+    }
 }
 

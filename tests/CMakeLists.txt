@@ -13,31 +13,58 @@ set_target_properties       (consumer-multidata-test PROPERTIES SUFFIX ".hx")
 
 # space partitioning communicating through metadata
 foreach                     (p 2 4 8)
-add_test                    (NAME prod-con-multidata-no-shared-metadata-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -r ./producer-multidata-test.hx -c ./consumer-multidata-test.hx
+    add_test                (NAME prod-con-multidata-no-shared-metadata-p${p}
+                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -r ./producer-multidata-test.hx
+                            -c ./consumer-multidata-test.hx
                             )
 endforeach                  (p)
 
 # space partitioning communicating through a file
 foreach                     (p 2 4 8)
-add_test                    (NAME prod-con-multidata-no-shared-file-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 0 -f 1 -r ./producer-multidata-test.hx -c ./consumer-multidata-test.hx
+    add_test                (NAME prod-con-multidata-no-shared-file-p${p}
+                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 0 -f 1 -r ./producer-multidata-test.hx
+                            -c ./consumer-multidata-test.hx
                             )
+    # NB, the only way I could find to remove the file is to make that command a test; not ideal
+    add_test                (NAME cleanup1-p${p} COMMAND rm outfile.h5)
 endforeach                  (p)
 
 # space partitioning communicating through metadata but also writing a file
 foreach                     (p 2 4 8)
-add_test                    (NAME prod-con-multidata-no-shared-metadata-file-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 1 -f 1 -r ./producer-multidata-test.hx -c ./consumer-multidata-test.hx
+    add_test                (NAME prod-con-multidata-no-shared-metadata-file-p${p}
+                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 1 -f 1 -r ./producer-multidata-test.hx
+                            -c ./consumer-multidata-test.hx
                             )
+    add_test                (NAME cleanup2-p${p} COMMAND rm outfile.h5)
 endforeach                  (p)
 
 # space sharing only works under LINUX, not Mac
 if(UNIX AND NOT APPLE)
+
     # space sharing communicating through metadata
     foreach                 (p 2 4 8)
-    add_test                (NAME prod-con-multidata-shared-metadata-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -s -r ./producer-multidata-test.hx -c ./consumer-multidata-test.hx
+        add_test            (NAME prod-con-multidata-shared-metadata-p${p}
+                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -s -r ./producer-multidata-test.hx
+                            -c ./consumer-multidata-test.hx
                             )
     endforeach              (p)
+
+    # space sharing communicating through a file
+    foreach                 (p 2 4 8)
+        add_test            (NAME prod-con-multidata-shared-metadata-p${p}
+                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 0 -f 1 -s -r ./producer-multidata-test.hx
+                            -c ./consumer-multidata-test.hx
+                            )
+        add_test            (NAME cleanup3-p${p} COMMAND rm outfile.h5)
+    endforeach              (p)
+
+    # space sharing communicating through metadata but also writing a file
+    foreach                 (p 2 4 8)
+        add_test            (NAME prod-con-multidata-shared-metadata-p${p}
+                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 1 -f 1 -s -r ./producer-multidata-test.hx
+                            -c ./consumer-multidata-test.hx
+                            )
+        add_test            (NAME cleanup4-p${p} COMMAND rm outfile.h5)
+    endforeach              (p)
+
 endif()

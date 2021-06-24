@@ -51,8 +51,14 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     vol_prop.apply(plist);
 
     // wait for data to be ready
-    if (passthru && !metadata)
+    if (passthru && !metadata && !shared)
         intercomm.barrier();
+
+    else if (passthru && !metadata && shared)
+    {
+        int a;      // it doesn't matter what we receive, for synchronization only
+        local.recv(local.rank(), 0, a);
+    }
 
     // --- consumer ranks running user task code ---
 
