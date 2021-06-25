@@ -12,9 +12,9 @@ struct Serialization<::LowFive::Dataspace>
     {
         // encode the destination space
         size_t nalloc = 0;
-        H5Sencode(ds.id, NULL, &nalloc, NULL);                  // first time sets nalloc to the required size
+        H5Sencode(ds.id, NULL, &nalloc, 0);                 // first time sets nalloc to the required size
         diy::save(bb, nalloc);
-        H5Sencode(ds.id, bb.grow(nalloc), &nalloc, NULL);       // second time actually encodes the data
+        H5Sencode(ds.id, bb.grow(nalloc), &nalloc, 0);      // second time actually encodes the data
     }
 
     static void         load(BinaryBuffer& bb, Dataspace& ds)

@@ -28,7 +28,10 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     diy::mpi::communicator intercomm;
     if (shared)
-        intercomm = world;
+    {
+        intercomm   = world;
+//         local       = world;
+    }
     else
     {
         // split the world into producer and consumer
@@ -56,8 +59,8 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     else if (passthru && !metadata && shared)
     {
-        int a;      // it doesn't matter what we receive, for synchronization only
-        local.recv(local.rank(), 0, a);
+        int a;                                  // it doesn't matter what we receive, for synchronization only
+        world.recv(local.rank(), 0, a);
     }
 
     // --- consumer ranks running user task code ---

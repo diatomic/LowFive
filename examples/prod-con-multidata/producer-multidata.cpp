@@ -27,7 +27,10 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     //  --- producer ranks running workflow runtime system code ---
     diy::mpi::communicator intercomm;
     if (shared)
-        intercomm = world;
+    {
+        intercomm   = world;
+//         local       = world;
+    }
     else
     {
         // split the world into producer and consumer
@@ -118,9 +121,9 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     else if (passthru && !metadata && shared)
     {
-        local.barrier();
-        int a = 0;      // it doesn't matter what we send, for synchronization only
-        local.send(local.rank(), 0, a);
+        world.barrier();
+        int a = 0;                          // it doesn't matter what we send, for synchronization only
+        world.send(local.rank(), 0, a);
     }
 }
 
