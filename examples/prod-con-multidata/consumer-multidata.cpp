@@ -28,10 +28,7 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     diy::mpi::communicator intercomm;
     if (shared)
-    {
         intercomm   = world;
-//         local       = world;
-    }
     else
     {
         // split the world into producer and consumer

@@ -27,10 +27,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     //  --- producer ranks running workflow runtime system code ---
     diy::mpi::communicator intercomm;
     if (shared)
-    {
         intercomm   = world;
-//         local       = world;
-    }
     else
     {
         // split the world into producer and consumer
@@ -54,7 +51,8 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
-    vol_plugin.data_ownership("outfile.h5", "/group1/*", l5::Dataset::Ownership::lowfive);
+    vol_plugin.data_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
+    vol_plugin.data_ownership("outfile.h5", "/group1/particles", l5::Dataset::Ownership::user);
 
     // --- producer ranks running user task code  ---
 
