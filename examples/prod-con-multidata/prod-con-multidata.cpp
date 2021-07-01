@@ -77,9 +77,22 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (metadata && !passthru)
+        if (world.rank() == 0)
+            fmt::print(stderr, "Using metadata (memory) communication\n");
+
+    if (!metadata && passthru)
+        if (world.rank() == 0)
+            fmt::print(stderr, "Using passthru (file) communication\n");
+
+    if (metadata && passthru)
+        if (world.rank() == 0)
+            fmt::print(stderr, "Using metadata (memory) communication and also writing a file\n");
+
     if (!(metadata + passthru))
     {
-        fmt::print(stderr, "Error: Either metadata or passthru must be enabled. Both cannot be disabled.\n");
+        if (world.rank() == 0)
+            fmt::print(stderr, "Error: Either metadata or passthru must be enabled. Both cannot be disabled.\n");
         abort();
     }
 
@@ -93,7 +106,10 @@ int main(int argc, char* argv[])
 
     int producer_ranks = world.size() * prod_frac;
     bool producer = world.rank() < producer_ranks;
-    fmt::print("producer_ranks: {}\n", producer_ranks);
+    if (!shared && world.rank() == 0)
+        fmt::print("space partitioning: producer_ranks: {} consumer_ranks: {}\n", producer_ranks, world.size() - producer_ranks);
+    if (shared && world.rank() == 0)
+        fmt::print("space sharing: producer_ranks = consumer_ranks = world: {}\n", world.size());
 
     void* lib_producer = dlopen(producer_exec.c_str(), RTLD_LAZY);
     if (!lib_producer)

@@ -11,60 +11,56 @@ target_link_libraries       (consumer-multidata-test ${libraries})
 set_target_properties       (consumer-multidata-test PROPERTIES PREFIX "")
 set_target_properties       (consumer-multidata-test PROPERTIES SUFFIX ".hx")
 
+
 # space partitioning communicating through metadata
 foreach                     (p 2 4 8)
     add_test                (NAME prod-con-multidata-no-shared-metadata-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -r ./producer-multidata-test.hx
-                            -c ./consumer-multidata-test.hx
+                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+                            consumer-multidata-test.hx 1 0 0 # 1 0 0: memory file shared
                             )
 endforeach                  (p)
 
 # space partitioning communicating through a file
 foreach                     (p 2 4 8)
     add_test                (NAME prod-con-multidata-no-shared-file-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 0 -f 1 -r ./producer-multidata-test.hx
-                            -c ./consumer-multidata-test.hx
+                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+                            consumer-multidata-test.hx 0 1 0 # 0 1 0: memory file shared
                             )
-    # NB, the only way I could find to remove the file is to make that command a test; not ideal
-    add_test                (NAME cleanup1-p${p} COMMAND rm outfile.h5)
 endforeach                  (p)
 
 # space partitioning communicating through metadata but also writing a file
 foreach                     (p 2 4 8)
     add_test                (NAME prod-con-multidata-no-shared-metadata-file-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 1 -f 1 -r ./producer-multidata-test.hx
-                            -c ./consumer-multidata-test.hx
+                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+                            consumer-multidata-test.hx 1 1 0 # 1 1 0: memory file shared
                             )
-    add_test                (NAME cleanup2-p${p} COMMAND rm outfile.h5)
 endforeach                  (p)
 
-# space sharing only works under LINUX, not Mac
+# space sharing only works under Linux, not Mac
 if(UNIX AND NOT APPLE)
 
     # space sharing communicating through metadata
     foreach                 (p 2 4 8)
         add_test            (NAME prod-con-multidata-shared-metadata-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -s -r ./producer-multidata-test.hx
-                            -c ./consumer-multidata-test.hx
+                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+                            consumer-multidata-test.hx 1 0 1 # 1 0 1: memory file shared
                             )
     endforeach              (p)
 
     # space sharing communicating through a file
     foreach                 (p 2 4 8)
         add_test            (NAME prod-con-multidata-shared-file-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 0 -f 1 -s -r ./producer-multidata-test.hx
-                            -c ./consumer-multidata-test.hx
+                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+                            consumer-multidata-test.hx 0 1 1 # 0 1 1: memory file shared
                             )
-        add_test            (NAME cleanup3-p${p} COMMAND rm outfile.h5)
     endforeach              (p)
 
     # space sharing communicating through metadata but also writing a file
     foreach                 (p 2 4 8)
         add_test            (NAME prod-con-multidata-shared-metadata-file-p${p}
-                            COMMAND ${MPIEXEC} -np ${p} $<TARGET_FILE:prod-con-multidata-test> -m 1 -f 1 -s -r ./producer-multidata-test.hx
-                            -c ./consumer-multidata-test.hx
+                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+                            consumer-multidata-test.hx 1 1 1 # 1 1 1: memory file shared
                             )
-        add_test            (NAME cleanup4-p${p} COMMAND rm outfile.h5)
     endforeach              (p)
 
 endif()
