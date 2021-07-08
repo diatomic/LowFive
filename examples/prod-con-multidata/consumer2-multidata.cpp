@@ -6,7 +6,8 @@ using communicator = diy::mpi::communicator;
 
 extern "C"
 {
-void consumer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
+void consumer2_f (communicator& world,
+                 communicator local, std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
@@ -14,17 +15,17 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
                  int con_nblocks, int dim, size_t global_num_points);
 }
 
-// --- ranks of consumer task ---
-void consumer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
+void consumer2_f (communicator& world,
+                 communicator local, std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int con_nblocks, int dim, size_t global_num_points)
 {
-    fmt::print("Entered consumer\n");
+    fmt::print("Entered consumer2\n");
 
-    bool producer = false;
+    int task = consumer2_task;                                      // for splitting communicator
 
     MPI_Comm intercomm_;
     diy::mpi::communicator intercomm;
@@ -34,12 +35,12 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
     else
     {
         // split the world into producer and consumer
-        local = world.split(producer);
+        local = world.split(task);
 
-        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer ? producer_ranks : 0, /* tag = */ 0, &intercomm_);
+        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm_);
         intercomm = diy::mpi::communicator(intercomm_);
     }
-    fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), intercomm.size());
+    fmt::print("consumer2: shared {} local size {}, intercomm size {}\n", shared, local.size(), intercomm.size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
@@ -61,8 +62,6 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
         world.recv(local.rank(), 0, a);
     }
 
-    // --- consumer ranks running user task code ---
-
     // diy setup for the consumer task on the consumer side
     diy::FileStorage                con_storage(prefix);
     diy::Master                     con_master(local,
@@ -81,17 +80,7 @@ void consumer_f (communicator& world, communicator local, std::mutex& exclusive,
 
     // open the file and the dataset
     hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
-    hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
-
-    // read the grid data
-    con_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->read_block_grid(cp, dset); });
-
-    // clean up
-    H5Dclose(dset);
-
-    // open the particle dataset
-    dset = H5Dopen(file, "/group1/particles", H5P_DEFAULT);
+    hid_t dset = H5Dopen(file, "/group1/particles", H5P_DEFAULT);
 
     // read the particle data
     con_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)

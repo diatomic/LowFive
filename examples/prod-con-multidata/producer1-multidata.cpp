@@ -5,16 +5,15 @@ using communicator = diy::mpi::communicator;
 
 extern "C" {
 void producer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-// --- ranks of producer task ---
 void producer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
@@ -22,22 +21,27 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
 {
     fmt::print("Entered producer\n");
 
-    bool producer = true;
+    int task = producer_task;                       // for splitting communicator
 
-    MPI_Comm intercomm_;
-    diy::mpi::communicator intercomm;
+
+    using communicator = diy::mpi::communicator;
+    MPI_Comm intercomm1_, intercomm2_;
+    std::vector<communicator> communicators;
 
     if (shared)
-        intercomm   = world;
+        communicators.push_back(world);
     else
     {
         // split the world into producer and consumer
-        local = world.split(producer);
+        local = world.split(task);
 
-        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer ? producer_ranks : 0, /* tag = */ 0, &intercomm_);
-        intercomm = diy::mpi::communicator(intercomm_);
+        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks, /* tag = */ 0, &intercomm1_);
+        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks + consumer1_ranks, /* tag = */ 0, &intercomm2_);
+        communicators.push_back(communicator(intercomm1_));
+        communicators.push_back(communicator(intercomm2_));
     }
-    fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), intercomm.size());
+    fmt::print("producer: shared {} local size {}, intercomm1 size {} intercomm2 size {}\n",
+            shared, local.size(), communicators[0].size(), communicators[1].size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
@@ -45,7 +49,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomm, shared, metadata, passthru);
+    l5::DistMetadataVOL vol_plugin(local, communicators, shared, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
@@ -53,8 +57,6 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
     vol_plugin.data_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
     vol_plugin.data_ownership("outfile.h5", "/group1/particles", l5::Dataset::Ownership::user);
-
-    // --- producer ranks running user task code  ---
 
     // diy setup for the producer
     diy::FileStorage                prod_storage(prefix);
@@ -106,16 +108,12 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_points(cp, dset, global_nblocks); });
 
-    // clean up
-    H5Dclose(dset);
-    H5Sclose(filespace);
-    H5Gclose(group);
-    H5Fclose(file);
-    H5Pclose(plist);
-
     // signal the consumer that data are ready
     if (passthru && !metadata && !shared)
+    {
+        for (auto& intercomm: communicators)
         intercomm.barrier();
+    }
 
     else if (passthru && !metadata && shared)
     {
@@ -124,7 +122,17 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
         world.send(local.rank(), 0, a);
     }
 
+    // clean up
+    H5Dclose(dset);
+    H5Sclose(filespace);
+    H5Gclose(group);
+    H5Fclose(file);
+    H5Pclose(plist);
+
     if (!shared)
-        MPI_Comm_free(&intercomm_);
+    {
+        MPI_Comm_free(&intercomm1_);
+        MPI_Comm_free(&intercomm2_);
+    }
 }
 

@@ -25,6 +25,8 @@ typedef     diy::RegularGridLink                                Link;
 typedef     diy::RegularDecomposer<Bounds>::BoolVector          BoolVector;
 typedef     diy::RegularDecomposer<Bounds>::CoordinateVector    CoordinateVector;
 
+enum {producer_task, consumer1_task, consumer2_task};
+
 // block structure
 // the contents of a block are completely user-defined
 // however, a block must have functions defined to create, destroy, save, and load it
