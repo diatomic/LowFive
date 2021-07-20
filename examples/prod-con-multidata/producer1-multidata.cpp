@@ -49,7 +49,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, communicators, shared, metadata, passthru);
+    l5::DistMetadataVOL vol_plugin(local, communicators, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 

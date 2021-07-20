@@ -19,26 +19,23 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     communicator    local;
     communicators   intercomms;
-    bool            shared;
 
     ServeData       serve_data;
 
                     DistMetadataVOL(diy::mpi::communicator  local_,
                                     diy::mpi::communicator  intercomm_,
-                                    bool                    shared_,
                                     bool                    memory_,
                                     bool                    passthru_,
                                     bool                    copy_ = true):
-                        DistMetadataVOL(local_, communicators { std::move(intercomm_) }, shared_, memory_, passthru_, copy_)
+                        DistMetadataVOL(local_, communicators { std::move(intercomm_) }, memory_, passthru_, copy_)
                     {}
 
                     DistMetadataVOL(communicator            local_,
                                     communicators           intercomms_,
-                                    bool                    shared_,
                                     bool                    memory_,
                                     bool                    passthru_,
                                     bool                    copy_ = true):
-                        local(local_), intercomms(std::move(intercomms_)), shared(shared_)
+                        local(local_), intercomms(std::move(intercomms_))
                     {
                         vol_properties.memory   = memory_;
                         vol_properties.passthru = passthru_;

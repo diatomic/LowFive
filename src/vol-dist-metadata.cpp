@@ -12,7 +12,8 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         // build and record the index to be used in read
         int remote_size;
 
-        if (shared)
+        int is_inter; MPI_Comm_test_inter(intercomms[0], &is_inter);
+        if (!is_inter)
             remote_size = intercomms[0].size();
         else
             MPI_Comm_remote_size(intercomms[0], &remote_size);
@@ -102,8 +103,10 @@ file_close(void *file, hid_t dxpl_id, void **req)
             // calling Query::close() in order to shut down the server on the producer
             // TODO: multiple different consumer tasks accessing the same server will be a problem
             // eventually need a different mechanism to shut down the server
+            //
             int remote_size;
-            if (shared)
+            int is_inter; MPI_Comm_test_inter(intercomms[0], &is_inter);
+            if (!is_inter)
                 remote_size = intercomms[0].size();
             else
                 MPI_Comm_remote_size(intercomms[0], &remote_size);
