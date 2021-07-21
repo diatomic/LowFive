@@ -100,8 +100,6 @@ int main(int argc, char* argv[])
         abort();
     }
 
-    // ---  all ranks running workflow runtime system code ---
-
     size_t global_npoints = global_nblocks * local_npoints;         // all block have same number of points
 
     // consumer will read different block decomposition than the producer
@@ -113,9 +111,15 @@ int main(int argc, char* argv[])
     int producer_ranks  = world.size() * prod_frac;
     int consumer1_ranks = world.size() * con1_frac;
     int consumer2_ranks = world.size() - producer_ranks - consumer1_ranks;
-    bool producer       = (world.rank() < producer_ranks);
-    bool consumer1      = (world.rank() >= producer_ranks && world.rank() < producer_ranks + consumer1_ranks);
-    bool consumer2      = (!producer && !consumer1);
+    int task;                       // enum: producer_task, consumer1_task, consumer2_task
+    if (world.rank() < producer_ranks)
+        task = producer_task;
+    else if (world.rank() >= producer_ranks && world.rank() < producer_ranks + consumer1_ranks)
+        task = consumer1_task;
+    else
+        task = consumer2_task;
+
+    fmt::print(stderr, "rank = {} task = {}\n", world.rank(), task);
 
     if (!shared && world.rank() == 0)
         fmt::print("space partitioning: producer_ranks: {} consumer1_ranks: {} consumer2_ranks: {}\n",
@@ -147,23 +151,48 @@ int main(int argc, char* argv[])
     if (!consumer2_f_)
         fmt::print(stderr, "Couldn't find consumer2_f\n");
 
+    // communicator management
     using communicator = diy::mpi::communicator;
+    MPI_Comm intercomm1_, intercomm2_;
+    std::vector<communicator> intercomms;
+    communicator local;
+
+    if (shared)
+    {
+        local = world;
+        intercomms.push_back(world);
+    }
+    else
+    {
+        local = world.split(task);
+
+        if (task == producer_task)
+        {
+            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks, /* tag = */ 0, &intercomm1_);
+            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks + consumer1_ranks, /* tag = */ 0, &intercomm2_);
+            intercomms.push_back(communicator(intercomm1_));
+            intercomms.push_back(communicator(intercomm2_));
+        }
+        else
+        {
+            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm1_);
+            intercomms.push_back(communicator(intercomm1_));
+        }
+    }
 
     std::mutex exclusive;
 
-    communicator producer_comm, consumer1_comm, consumer2_comm;
-    producer_comm.duplicate(world);
-    consumer1_comm.duplicate(world);
-    consumer2_comm.duplicate(world);
+    // declare lambdas for the tasks
 
     auto producer_f = [&]()
     {
-        ((void (*) (communicator&, communicator, std::mutex&, bool,
+        ((void (*) (communicator&, communicator, std::vector<communicator>, std::mutex&, bool,
                               std::string, int, int,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (producer_f_))(world,
-                                                                producer_comm,
+                                                                local,
+                                                                intercomms,
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
@@ -181,12 +210,14 @@ int main(int argc, char* argv[])
 
     auto consumer1_f = [&]()
     {
-        ((void (*) (communicator&, communicator, std::mutex&, bool,
+        ((void (*) (communicator&, communicator, std::vector<communicator>,
+                              std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (consumer1_f_))(world,
-                                                                consumer1_comm,
+                                                                local,
+                                                                intercomms,
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
@@ -203,12 +234,14 @@ int main(int argc, char* argv[])
 
     auto consumer2_f = [&]()
     {
-        ((void (*) (communicator&, communicator, std::mutex&, bool,
+        ((void (*) (communicator&, communicator, std::vector<communicator>,
+                              std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (consumer2_f_))(world,
-                                                                consumer2_comm,
+                                                                local,
+                                                                intercomms,
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
@@ -223,11 +256,12 @@ int main(int argc, char* argv[])
                                                                 global_npoints);
     };
 
+    // run the task to which this rank belongs
     if (!shared)
     {
-        if (producer)
+        if (task == producer_task)
             producer_f();
-        else if (consumer1)
+        else if (task == consumer1_task)
             consumer1_f();
         else
             consumer2_f();

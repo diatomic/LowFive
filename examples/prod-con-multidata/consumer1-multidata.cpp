@@ -6,8 +6,8 @@ using communicator = diy::mpi::communicator;
 
 extern "C"
 {
-void consumer1_f (communicator& world,
-                 communicator local, std::mutex& exclusive, bool shared,
+void consumer1_f (communicator& world, communicator local, std::vector<communicator> intercomms,
+                 std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
@@ -15,31 +15,15 @@ void consumer1_f (communicator& world,
                  int con_nblocks, int dim, size_t global_num_points);
 }
 
-void consumer1_f (communicator& world,
-                 communicator local, std::mutex& exclusive, bool shared,
+void consumer1_f (communicator& world, communicator local, std::vector<communicator> intercomms,
+                 std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int con_nblocks, int dim, size_t global_num_points)
 {
-    fmt::print("Entered consumer1\n");
-
-    int task = consumer1_task;                          // for splitting communicator
-
-    MPI_Comm intercomm_;
-    diy::mpi::communicator intercomm;
-
-    if (shared)
-        intercomm   = world;
-    else
-    {
-        // split the world into producer and consumer
-        local = world.split(task);
-
-        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm_);
-        intercomm = diy::mpi::communicator(intercomm_);
-    }
+    diy::mpi::communicator intercomm = shared ? world : intercomms[0];
     fmt::print("consumer1: shared {} local size {}, intercomm size {}\n", shared, local.size(), intercomm.size());
 
     // set up file access property list
@@ -90,8 +74,5 @@ void consumer1_f (communicator& world,
     H5Dclose(dset);
     H5Fclose(file);
     H5Pclose(plist);
-
-    if (!shared)
-        MPI_Comm_free(&intercomm_);
 }
 

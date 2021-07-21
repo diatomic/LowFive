@@ -4,7 +4,8 @@
 using communicator = diy::mpi::communicator;
 
 extern "C" {
-void producer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
+void producer_f (communicator& world, communicator local, std::vector<communicator> intercomms,
+                 std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
@@ -12,36 +13,16 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-void producer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
+void producer_f (communicator& world, communicator local, std::vector<communicator> intercomms,
+                 std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points)
 {
-    fmt::print("Entered producer\n");
-
-    int task = producer_task;                       // for splitting communicator
-
-
-    using communicator = diy::mpi::communicator;
-    MPI_Comm intercomm1_, intercomm2_;
-    std::vector<communicator> communicators;
-
-    if (shared)
-        communicators.push_back(world);
-    else
-    {
-        // split the world into producer and consumer
-        local = world.split(task);
-
-        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks, /* tag = */ 0, &intercomm1_);
-        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks + consumer1_ranks, /* tag = */ 0, &intercomm2_);
-        communicators.push_back(communicator(intercomm1_));
-        communicators.push_back(communicator(intercomm2_));
-    }
     fmt::print("producer: shared {} local size {}, intercomm1 size {} intercomm2 size {}\n",
-            shared, local.size(), communicators[0].size(), communicators[1].size());
+            shared, local.size(), intercomms[0].size(), intercomms[1].size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
@@ -49,7 +30,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, communicators, metadata, passthru);
+    l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
@@ -111,7 +92,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     // signal the consumer that data are ready
     if (passthru && !metadata && !shared)
     {
-        for (auto& intercomm: communicators)
+        for (auto& intercomm: intercomms)
         intercomm.barrier();
     }
 
@@ -128,11 +109,5 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     H5Gclose(group);
     H5Fclose(file);
     H5Pclose(plist);
-
-    if (!shared)
-    {
-        MPI_Comm_free(&intercomm1_);
-        MPI_Comm_free(&intercomm2_);
-    }
 }
 
