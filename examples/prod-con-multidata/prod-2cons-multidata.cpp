@@ -119,8 +119,6 @@ int main(int argc, char* argv[])
     else
         task = consumer2_task;
 
-    fmt::print(stderr, "rank = {} task = {}\n", world.rank(), task);
-
     if (!shared && world.rank() == 0)
         fmt::print("space partitioning: producer_ranks: {} consumer1_ranks: {} consumer2_ranks: {}\n",
                 producer_ranks, consumer1_ranks, consumer2_ranks);
@@ -186,7 +184,8 @@ int main(int argc, char* argv[])
 
     auto producer_f = [&]()
     {
-        ((void (*) (communicator&, communicator, std::vector<communicator>, std::mutex&, bool,
+        ((void (*) (communicator&, communicator, const std::vector<communicator>&,
+                              std::mutex&, bool,
                               std::string, int, int,
                               int, int, int, int,
                               Bounds,
@@ -210,7 +209,7 @@ int main(int argc, char* argv[])
 
     auto consumer1_f = [&]()
     {
-        ((void (*) (communicator&, communicator, std::vector<communicator>,
+        ((void (*) (communicator&, communicator, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
@@ -234,7 +233,7 @@ int main(int argc, char* argv[])
 
     auto consumer2_f = [&]()
     {
-        ((void (*) (communicator&, communicator, std::vector<communicator>,
+        ((void (*) (communicator&, communicator, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,

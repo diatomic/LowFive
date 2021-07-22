@@ -107,21 +107,21 @@ if(UNIX AND NOT APPLE)
 
     # space sharing communicating through metadata
     foreach                 (p 6 7 8)
-        add_test            (NAME prod-2cons-multidata-no-shared-metadata-p${p}
+        add_test            (NAME prod-2cons-multidata-shared-metadata-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
                             producer1-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
     endforeach()
 
     # space sharing communicating through a file
     foreach                 (p 6 7 8)
-        add_test            (NAME prod-2cons-multidata-no-shared-file-p${p}
+        add_test            (NAME prod-2cons-multidata-shared-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
                             producer1-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
     endforeach()
 
     # space sharing communicating through metadata but also writing a file
     foreach                 (p 6 7 8)
-        add_test            (NAME prod-2cons-multidata-no-shared-metadata-file-p${p}
+        add_test            (NAME prod-2cons-multidata-shared-metadata-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
                             producer1-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
     endforeach()

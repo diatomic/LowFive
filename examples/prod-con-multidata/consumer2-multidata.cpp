@@ -6,7 +6,7 @@ using communicator = diy::mpi::communicator;
 
 extern "C"
 {
-void consumer2_f (communicator& world, communicator local, std::vector<communicator> intercomms,
+void consumer2_f (communicator& world, communicator local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
@@ -15,7 +15,7 @@ void consumer2_f (communicator& world, communicator local, std::vector<communica
                  int con_nblocks, int dim, size_t global_num_points);
 }
 
-void consumer2_f (communicator& world, communicator local, std::vector<communicator> intercomms,
+void consumer2_f (communicator& world, communicator local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
