@@ -4,7 +4,7 @@
 using communicator = diy::mpi::communicator;
 
 extern "C" {
-void producer_f (communicator& world, communicator& local, const std::vector<communicator>& intercomms,
+void producer_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
@@ -13,7 +13,7 @@ void producer_f (communicator& world, communicator& local, const std::vector<com
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-void producer_f (communicator& world, communicator& local, const std::vector<communicator>& intercomms,
+void producer_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
@@ -102,9 +102,10 @@ void producer_f (communicator& world, communicator& local, const std::vector<com
 
     else if (passthru && !metadata && shared)
     {
-        world.barrier();
+        local.barrier();
         int a = 0;                          // it doesn't matter what we send, for synchronization only
-        world.send(local.rank(), 0, a);
+        for (const communicator& intercomm : intercomms)
+            intercomm.send(local.rank(), 0, a);
     }
 
     // clean up

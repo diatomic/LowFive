@@ -6,7 +6,7 @@ using communicator = diy::mpi::communicator;
 
 extern "C"
 {
-void consumer1_f (communicator& world, communicator& local, const std::vector<communicator>& intercomms,
+void consumer1_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
@@ -15,7 +15,7 @@ void consumer1_f (communicator& world, communicator& local, const std::vector<co
                  int con_nblocks, int dim, size_t global_num_points);
 }
 
-void consumer1_f (communicator& world, communicator& local, const std::vector<communicator>& intercomms,
+void consumer1_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
@@ -42,7 +42,7 @@ void consumer1_f (communicator& world, communicator& local, const std::vector<co
     else if (passthru && !metadata && shared)
     {
         int a;                                  // it doesn't matter what we receive, for synchronization only
-        world.recv(local.rank(), 0, a);
+        intercomms[0].recv(local.rank(), 0, a);
     }
 
     // diy setup for the consumer task on the consumer side

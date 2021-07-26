@@ -152,18 +152,25 @@ int main(int argc, char* argv[])
     // communicator management
     using communicator = diy::mpi::communicator;
     MPI_Comm intercomm1_, intercomm2_;
-    std::vector<communicator> intercomms;
+    std::vector<communicator> producer_intercomms, consumer1_intercomms, consumer2_intercomms;
+    communicator p2c1_intercomm, p2c2_intercomm;
     communicator local, intercomm;
     communicator producer_comm, consumer1_comm, consumer2_comm;
 
     if (shared)
     {
-        local.duplicate(world);
-        intercomm.duplicate(world);
-        intercomms.push_back(intercomm);
         producer_comm.duplicate(world);
         consumer1_comm.duplicate(world);
         consumer2_comm.duplicate(world);
+
+        p2c1_intercomm.duplicate(world);
+        p2c2_intercomm.duplicate(world);
+
+        producer_intercomms.push_back(p2c1_intercomm);
+        producer_intercomms.push_back(p2c2_intercomm);
+
+        consumer1_intercomms.push_back(p2c1_intercomm);
+        consumer2_intercomms.push_back(p2c2_intercomm);
     }
     else
     {
@@ -173,13 +180,25 @@ int main(int argc, char* argv[])
         {
             MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks, /* tag = */ 0, &intercomm1_);
             MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks + consumer1_ranks, /* tag = */ 0, &intercomm2_);
-            intercomms.push_back(communicator(intercomm1_));
-            intercomms.push_back(communicator(intercomm2_));
+
+            producer_intercomms.push_back(communicator(intercomm1_));
+            producer_intercomms.push_back(communicator(intercomm2_));
+
+            producer_comm = local;
         }
         else
         {
             MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm1_);
-            intercomms.push_back(communicator(intercomm1_));
+
+            if (task == consumer1_task)
+            {
+                consumer1_comm = local;
+                consumer1_intercomms.push_back(communicator(intercomm1_));
+            } else // task == consumer2_task
+            {
+                consumer2_comm = local;
+                consumer2_intercomms.push_back(communicator(intercomm1_));
+            }
         }
     }
 
@@ -189,14 +208,13 @@ int main(int argc, char* argv[])
 
     auto producer_f = [&]()
     {
-        ((void (*) (communicator&, communicator&, const std::vector<communicator>&,
+        ((void (*) (communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int, int,
                               int, int, int, int,
                               Bounds,
-                              int, int, size_t)) (producer_f_))(world,
-                                                                producer_comm,
-                                                                intercomms,
+                              int, int, size_t)) (producer_f_))(producer_comm,
+                                                                producer_intercomms,
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
@@ -214,14 +232,13 @@ int main(int argc, char* argv[])
 
     auto consumer1_f = [&]()
     {
-        ((void (*) (communicator&, communicator&, const std::vector<communicator>&,
+        ((void (*) (communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
                               Bounds,
-                              int, int, size_t)) (consumer1_f_))(world,
-                                                                consumer1_comm,
-                                                                intercomms,
+                              int, int, size_t)) (consumer1_f_))(consumer1_comm,
+                                                                consumer1_intercomms,
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
@@ -238,14 +255,13 @@ int main(int argc, char* argv[])
 
     auto consumer2_f = [&]()
     {
-        ((void (*) (communicator&, communicator&, const std::vector<communicator>&,
+        ((void (*) (communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
                               Bounds,
-                              int, int, size_t)) (consumer2_f_))(world,
-                                                                consumer2_comm,
-                                                                intercomms,
+                              int, int, size_t)) (consumer2_f_))(consumer2_comm,
+                                                                consumer2_intercomms,
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
@@ -264,20 +280,11 @@ int main(int argc, char* argv[])
     if (!shared)
     {
         if (task == producer_task)
-        {
-            producer_comm = world.split(task);
             producer_f();
-        }
         else if (task == consumer1_task)
-        {
-            consumer1_comm = world.split(task);
             consumer1_f();
-        }
         else
-        {
-            consumer2_comm = world.split(task);
             consumer2_f();
-        }
     } else
     {
         auto producer_thread = std::thread(producer_f);
