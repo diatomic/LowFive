@@ -4,7 +4,7 @@
 using communicator = diy::mpi::communicator;
 
 extern "C" {
-void producer_f (communicator& world, communicator local, const std::vector<communicator>& intercomms,
+void producer_f (communicator& world, communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
@@ -13,7 +13,7 @@ void producer_f (communicator& world, communicator local, const std::vector<comm
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-void producer_f (communicator& world, communicator local, const std::vector<communicator>& intercomms,
+void producer_f (communicator& world, communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks, int consumer1_ranks,
                  int metadata, int passthru,
@@ -97,7 +97,7 @@ void producer_f (communicator& world, communicator local, const std::vector<comm
     if (passthru && !metadata && !shared)
     {
         for (auto& intercomm: intercomms)
-        intercomm.barrier();
+            intercomm.barrier();
     }
 
     else if (passthru && !metadata && shared)

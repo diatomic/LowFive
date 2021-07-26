@@ -28,8 +28,6 @@ struct Query: public IndexQuery
 
             // query id using name
             send(intercomm(), 0, tags::consumer, msgs::id, name);
-            // TODO: the following never returns for the second dataset
-            // because Query::close() was called on dataset_close, which sent a done message to the server
             msg = recv(intercomm(), 0, tags::producer, id); expected(msg, msgs::id);
 
             send(intercomm(), 0, tags::consumer, msgs::dimension, id, 0);
@@ -99,7 +97,11 @@ struct Query: public IndexQuery
                 send(intercomm(), gid, tags::consumer, msgs::data, id, file_space);
 
                 diy::MemoryBuffer queue;
-                int msg = recv(intercomm(), gid, tags::producer, queue); expected(msg, msgs::data);
+                int msg = recv(intercomm(), gid, tags::producer, queue); // expected(msg, msgs::data);
+                // debug
+                if (msg != msgs::data)
+                    fmt::print(stderr, "FIXME: following causes message mismatch, expected {} and received {}:\n", msgs::data, msg);
+                expected(msg, msgs::data);
 
                 while (queue)
                 {

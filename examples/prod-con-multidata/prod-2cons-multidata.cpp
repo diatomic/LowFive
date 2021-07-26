@@ -153,12 +153,17 @@ int main(int argc, char* argv[])
     using communicator = diy::mpi::communicator;
     MPI_Comm intercomm1_, intercomm2_;
     std::vector<communicator> intercomms;
-    communicator local;
+    communicator local, intercomm;
+    communicator producer_comm, consumer1_comm, consumer2_comm;
 
     if (shared)
     {
-        local = world;
-        intercomms.push_back(world);
+        local.duplicate(world);
+        intercomm.duplicate(world);
+        intercomms.push_back(intercomm);
+        producer_comm.duplicate(world);
+        consumer1_comm.duplicate(world);
+        consumer2_comm.duplicate(world);
     }
     else
     {
@@ -184,13 +189,13 @@ int main(int argc, char* argv[])
 
     auto producer_f = [&]()
     {
-        ((void (*) (communicator&, communicator, const std::vector<communicator>&,
+        ((void (*) (communicator&, communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int, int,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (producer_f_))(world,
-                                                                local,
+                                                                producer_comm,
                                                                 intercomms,
                                                                 exclusive,
                                                                 shared,
@@ -209,13 +214,13 @@ int main(int argc, char* argv[])
 
     auto consumer1_f = [&]()
     {
-        ((void (*) (communicator&, communicator, const std::vector<communicator>&,
+        ((void (*) (communicator&, communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (consumer1_f_))(world,
-                                                                local,
+                                                                consumer1_comm,
                                                                 intercomms,
                                                                 exclusive,
                                                                 shared,
@@ -233,13 +238,13 @@ int main(int argc, char* argv[])
 
     auto consumer2_f = [&]()
     {
-        ((void (*) (communicator&, communicator, const std::vector<communicator>&,
+        ((void (*) (communicator&, communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
                               std::string, int,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (consumer2_f_))(world,
-                                                                local,
+                                                                consumer2_comm,
                                                                 intercomms,
                                                                 exclusive,
                                                                 shared,
@@ -259,11 +264,20 @@ int main(int argc, char* argv[])
     if (!shared)
     {
         if (task == producer_task)
+        {
+            producer_comm = world.split(task);
             producer_f();
+        }
         else if (task == consumer1_task)
+        {
+            consumer1_comm = world.split(task);
             consumer1_f();
+        }
         else
+        {
+            consumer2_comm = world.split(task);
             consumer2_f();
+        }
     } else
     {
         auto producer_thread = std::thread(producer_f);
