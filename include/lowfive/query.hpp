@@ -97,11 +97,7 @@ struct Query: public IndexQuery
                 send(intercomm(), gid, tags::consumer, msgs::data, id, file_space);
 
                 diy::MemoryBuffer queue;
-                int msg = recv(intercomm(), gid, tags::producer, queue); // expected(msg, msgs::data);
-                // debug
-                if (msg != msgs::data)
-                    fmt::print(stderr, "FIXME: following causes message mismatch, expected {} and received {}:\n", msgs::data, msg);
-                expected(msg, msgs::data);
+                int msg = recv(intercomm(), gid, tags::producer, queue); expected(msg, msgs::data);
 
                 while (queue)
                 {

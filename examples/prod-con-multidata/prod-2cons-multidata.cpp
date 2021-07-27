@@ -153,8 +153,8 @@ int main(int argc, char* argv[])
     using communicator = diy::mpi::communicator;
     MPI_Comm intercomm1_, intercomm2_;
     std::vector<communicator> producer_intercomms, consumer1_intercomms, consumer2_intercomms;
-    communicator p2c1_intercomm, p2c2_intercomm;
-    communicator local, intercomm;
+    communicator p_c1_intercomm, p_c2_intercomm;
+    communicator local;
     communicator producer_comm, consumer1_comm, consumer2_comm;
 
     if (shared)
@@ -163,14 +163,14 @@ int main(int argc, char* argv[])
         consumer1_comm.duplicate(world);
         consumer2_comm.duplicate(world);
 
-        p2c1_intercomm.duplicate(world);
-        p2c2_intercomm.duplicate(world);
+        p_c1_intercomm.duplicate(world);
+        p_c2_intercomm.duplicate(world);
 
-        producer_intercomms.push_back(p2c1_intercomm);
-        producer_intercomms.push_back(p2c2_intercomm);
+        producer_intercomms.push_back(p_c1_intercomm);
+        producer_intercomms.push_back(p_c2_intercomm);
 
-        consumer1_intercomms.push_back(p2c1_intercomm);
-        consumer2_intercomms.push_back(p2c2_intercomm);
+        consumer1_intercomms.push_back(p_c1_intercomm);
+        consumer2_intercomms.push_back(p_c2_intercomm);
     }
     else
     {
