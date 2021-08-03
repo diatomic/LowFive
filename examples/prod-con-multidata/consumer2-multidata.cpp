@@ -45,7 +45,7 @@ void consumer2_f (communicator& local, const std::vector<communicator>& intercom
         intercomms[0].recv(local.rank(), 0, a);
     }
 
-    // diy setup for the consumer task on the consumer side
+    // diy setup for the consumer
     diy::FileStorage                con_storage(prefix);
     diy::Master                     con_master(local,
             threads,

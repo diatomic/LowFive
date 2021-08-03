@@ -4,7 +4,8 @@
 using communicator = diy::mpi::communicator;
 
 extern "C" {
-void producer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
+void producer_f (communicator& local, const std::vector<communicator>& intercomms,
+                 std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
@@ -13,31 +14,15 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
 }
 
 // --- ranks of producer task ---
-void producer_f (communicator& world, communicator local, std::mutex& exclusive, bool shared,
+void producer_f (communicator& local, const std::vector<communicator>& intercomms,
+                 std::mutex& exclusive, bool shared,
                  std::string prefix, int producer_ranks,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points)
 {
-    fmt::print("Entered producer\n");
-
-    bool producer = true;
-
-    MPI_Comm intercomm_;
-    diy::mpi::communicator intercomm;
-
-    if (shared)
-        intercomm   = world;
-    else
-    {
-        // split the world into producer and consumer
-        local = world.split(producer);
-
-        MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer ? producer_ranks : 0, /* tag = */ 0, &intercomm_);
-        intercomm = diy::mpi::communicator(intercomm_);
-    }
-    fmt::print("local.size() = {}, intercomm.size() = {}\n", local.size(), intercomm.size());
+    fmt::print("producer: shared {} local size {}, intercomm size {}\n", shared, local.size(), intercomms[0].size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
@@ -45,7 +30,7 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomm, metadata, passthru);
+    l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
@@ -53,8 +38,6 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
     vol_plugin.data_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
     vol_plugin.data_ownership("outfile.h5", "/group1/particles", l5::Dataset::Ownership::user);
-
-    // --- producer ranks running user task code  ---
 
     // diy setup for the producer
     diy::FileStorage                prod_storage(prefix);
@@ -106,25 +89,26 @@ void producer_f (communicator& world, communicator local, std::mutex& exclusive,
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_points(cp, dset, global_nblocks); });
 
+    // signal the consumer that data are ready
+    if (passthru && !metadata && !shared)
+    {
+        for (auto& intercomm: intercomms)
+            intercomm.barrier();
+    }
+
+    else if (passthru && !metadata && shared)
+    {
+        local.barrier();
+        int a = 0;                          // it doesn't matter what we send, for synchronization only
+        for (const communicator& intercomm : intercomms)
+            intercomm.send(local.rank(), 0, a);
+    }
+
     // clean up
     H5Dclose(dset);
     H5Sclose(filespace);
     H5Gclose(group);
     H5Fclose(file);
     H5Pclose(plist);
-
-    // signal the consumer that data are ready
-    if (passthru && !metadata && !shared)
-        intercomm.barrier();
-
-    else if (passthru && !metadata && shared)
-    {
-        world.barrier();
-        int a = 0;                          // it doesn't matter what we send, for synchronization only
-        world.send(local.rank(), 0, a);
-    }
-
-    if (!shared)
-        MPI_Comm_free(&intercomm_);
 }
 
