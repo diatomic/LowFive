@@ -4,7 +4,7 @@
 using communicator = diy::mpi::communicator;
 
 extern "C" {
-void producer1_f (communicator& local, const std::vector<communicator>& intercomms,
+void producer2_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared, std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
@@ -12,7 +12,7 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-void producer1_f (communicator& local, const std::vector<communicator>& intercomms,
+void producer2_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared, std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
@@ -62,18 +62,18 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     std::vector<hsize_t> domain_cnts(DIM);
-    for (auto i = 0; i < DIM; i++)
-        domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
+    domain_cnts[0]  = global_num_points;
+    domain_cnts[1]  = DIM;
 
-    // create the file data space for the global grid
-    hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
+    // create the file data space for the particles
+    hid_t filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
 
-    // create the grid dataset with default properties
-    hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    // create the particle dataset with default properties
+    hid_t dset = H5Dcreate2(group, "particles", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-    // write the grid data
+    // write the particle data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->write_block_grid(cp, dset); });
+            { b->write_block_points(cp, dset, global_nblocks); });
 
     // signal the consumer that data are ready
     if (passthru && !metadata && !shared)

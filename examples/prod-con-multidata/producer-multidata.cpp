@@ -5,24 +5,26 @@ using communicator = diy::mpi::communicator;
 
 extern "C" {
 void producer_f (communicator& local, const std::vector<communicator>& intercomms,
-                 std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::mutex& exclusive, bool shared, std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-// --- ranks of producer task ---
 void producer_f (communicator& local, const std::vector<communicator>& intercomms,
-                 std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::mutex& exclusive, bool shared, std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points)
 {
-    fmt::print("producer: shared {} local size {}, intercomm size {}\n", shared, local.size(), intercomms[0].size());
+    if (intercomms.size() == 2)
+        fmt::print("producer: shared {} local size {}, intercomm1 size {} intercomm2 size {}\n",
+                shared, local.size(), intercomms[0].size(), intercomms[1].size());
+    else
+        fmt::print("producer: shared {} local size {}, intercomm1 size {}\n",
+                shared, local.size(), intercomms[0].size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);

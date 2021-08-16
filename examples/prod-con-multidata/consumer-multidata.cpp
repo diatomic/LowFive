@@ -8,7 +8,7 @@ extern "C"
 {
 void consumer_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
@@ -18,7 +18,7 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
 // --- ranks of consumer task ---
 void consumer_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
