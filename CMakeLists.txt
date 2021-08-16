@@ -67,6 +67,7 @@ set                         (libraries
                              ${CMAKE_DL_LIBS})
 
 add_subdirectory            (src)
+target_include_directories  (lowfive INTERFACE include)
 set                         (libraries ${libraries} lowfive)
 
 # Testing

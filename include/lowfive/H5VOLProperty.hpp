@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vol-base.hpp"
+#include <cassert>
 
 namespace LowFive
 {
