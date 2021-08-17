@@ -11,4 +11,5 @@ add_library             (lowfive
                             metadata/save-h5.cpp
                         )
 target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY} diy)
+target_include_directories  (lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 target_compile_definitions(lowfive PRIVATE LOWFIVE_ENABLE_PASSTHRU_LOGGING)
