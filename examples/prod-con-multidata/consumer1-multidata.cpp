@@ -31,7 +31,7 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomms[0], metadata, passthru);
+    l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
