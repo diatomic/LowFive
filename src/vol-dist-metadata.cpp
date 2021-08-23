@@ -9,16 +9,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     if (vol_properties.memory && !result->mdata_obj)
     {
         // assume we are the consumer, since nothing stored in memory (open also implies that)
-        // build and record the index to be used in read
-        int remote_size;
-
-        int is_inter; MPI_Comm_test_inter(intercomms[0], &is_inter);
-        if (!is_inter)
-            remote_size = intercomms[0].size();
-        else
-            MPI_Comm_remote_size(intercomms[0], &remote_size);
-
-        auto* ds = new RemoteDataset(name);
+        auto* ds = new RemoteDataset(name);     // build and record the index to be used in read
 
         // check that the dataset name is the full path (the only mode supported for now)
         // TODO: if only leaf name is given, could use backtrack_name to find full path
@@ -26,7 +17,35 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         if (ds->name[0] != '/')
             throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
 
-        Query* query = new Query(local, intercomms, remote_size, ds->name);      // NB: because no dataset is provided will only build index based on the intercomm
+        // check the intercomms for the full path name and file name for this dataset
+        int intercomm_index;
+        bool intercomm_found = false;
+        auto it = files.end();                  // assume last-opened file is the one we are reading
+        it--;
+        std::string filename = it->first;
+        for (auto& c : data_intercomms)
+        {
+            // o.filename and o.full_path can have wildcards '*' and '?'
+            if (match(c.filename.c_str(), filename.c_str()) && match(c.full_path.c_str(), ds->name.c_str()))
+            {
+                intercomm_index = c.intercomm_index;
+                intercomm_found = true;
+                break;
+            }
+        }
+
+        if (!intercomm_found)
+            throw MetadataError(fmt::format("Error dataset_read(): no intercomm found for dataset {}", ds->name));
+
+        int remote_size;
+
+        int is_inter; MPI_Comm_test_inter(intercomms[intercomm_index], &is_inter);
+        if (!is_inter)
+            remote_size = intercomms[intercomm_index].size();
+        else
+            MPI_Comm_remote_size(intercomms[intercomm_index], &remote_size);
+
+        Query* query = new Query(local, intercomms, remote_size, ds->name, intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
 
         ds->query = query;
         result->mdata_obj = ds;

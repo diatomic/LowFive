@@ -39,7 +39,6 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
     // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
     vol_plugin.data_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
-    vol_plugin.data_ownership("outfile.h5", "/group1/particles", l5::Dataset::Ownership::user);
 
     // diy setup for the producer
     diy::FileStorage                prod_storage(prefix);
@@ -86,7 +85,7 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
     {
         local.barrier();
         int a = 0;                          // it doesn't matter what we send, for synchronization only
-        for (const communicator& intercomm : intercomms)
+        for (auto& intercomm : intercomms)
             intercomm.send(local.rank(), 0, a);
     }
 

@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
 
     // communicator management
     using communicator = diy::mpi::communicator;
-    MPI_Comm intercomm1_, intercomm2_;
+    MPI_Comm intercomm_, intercomm1_, intercomm2_;
     std::vector<communicator> producer_intercomms, consumer1_intercomms, consumer2_intercomms;
     communicator p_c1_intercomm, p_c2_intercomm;
     communicator local;
@@ -189,16 +189,16 @@ int main(int argc, char* argv[])
         }
         else
         {
-            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm1_);
+            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm_);
 
             if (task == consumer1_task)
             {
                 consumer1_comm = local;
-                consumer1_intercomms.push_back(communicator(intercomm1_));
+                consumer1_intercomms.push_back(communicator(intercomm_));
             } else // task == consumer2_task
             {
                 consumer2_comm = local;
-                consumer2_intercomms.push_back(communicator(intercomm1_));
+                consumer2_intercomms.push_back(communicator(intercomm_));
             }
         }
     }

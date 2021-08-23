@@ -35,14 +35,22 @@ void consumer2_f (communicator& local, const std::vector<communicator>& intercom
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
+    // set intercomms of dataset
+    // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
+    vol_plugin.data_communication("outfile.h5", "/group1/particles", 0);
+
     // wait for data to be ready
     if (passthru && !metadata && !shared)
-        intercomms[0].barrier();
+    {
+        for (auto& intercomm: intercomms)
+            intercomm.barrier();
+    }
 
     else if (passthru && !metadata && shared)
     {
         int a;                                  // it doesn't matter what we receive, for synchronization only
-        intercomms[0].recv(local.rank(), 0, a);
+        for (auto& intercomm: intercomms)
+            intercomm.recv(local.rank(), 0, a);
     }
 
     // diy setup for the consumer

@@ -4,6 +4,7 @@
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
 #include    "metadata.hpp"
+#include    <diy/mpi.hpp>
 
 namespace LowFive
 {
@@ -31,12 +32,21 @@ struct DatasetProperties: public FileProperties
 {
 };
 
-// dataset ownership
+// dataset ownership (relevant for producer only)
 struct DataOwnership
 {
     std::string         filename;
     std::string         full_path;
     Dataset::Ownership  ownership;
+};
+
+// dataset communication (relevant for consumer only)
+using communicator      = diy::mpi::communicator;
+struct DataCommunication
+{
+    std::string         filename;
+    std::string         full_path;
+    int                 intercomm_index;            // the intercomm to use for this dataset
 };
 
 // custom VOL object
@@ -46,14 +56,15 @@ struct MetadataVOL: public LowFive::VOLBase
 {
     using VOLBase::VOLBase;
 
-    using File      = LowFive::File;
-    using Object    = LowFive::Object;
-    using Dataset   = LowFive::Dataset;
-    using Dataspace = LowFive::Dataspace;
-    using Group     = LowFive::Group;
+    using File              = LowFive::File;
+    using Object            = LowFive::Object;
+    using Dataset           = LowFive::Dataset;
+    using Dataspace         = LowFive::Dataspace;
+    using Group             = LowFive::Group;
 
-    using Files     = std::map<std::string, File*>;
-    using DataOwners    = std::vector<DataOwnership>;
+    using Files             = std::map<std::string, File*>;
+    using DataOwners        = std::vector<DataOwnership>;
+    using DataIntercomms    = std::vector<DataCommunication>;
 
     VOLProperties   vol_properties;
 
@@ -68,6 +79,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     Files           files;
     DataOwners      data_owners;
+    DataIntercomms  data_intercomms;
 
                     MetadataVOL():
                         VOLBase(/* version = */ 0, /* value = */ 510, /* name = */ "metadata-vol")
@@ -111,6 +123,12 @@ struct MetadataVOL: public LowFive::VOLBase
     void data_ownership(std::string filename, std::string full_path, Dataset::Ownership own)
     {
         data_owners.emplace_back(DataOwnership { filename, full_path, own });
+    }
+
+    // record intended communication of a dataset
+    void data_communication(std::string filename, std::string full_path, int intercomm_index)
+    {
+        data_intercomms.emplace_back(DataCommunication { filename, full_path, intercomm_index });
     }
 
     // trace object back to root to build full path and file name

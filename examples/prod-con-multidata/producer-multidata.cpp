@@ -102,7 +102,7 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     {
         local.barrier();
         int a = 0;                          // it doesn't matter what we send, for synchronization only
-        for (const communicator& intercomm : intercomms)
+        for (auto& intercomm : intercomms)
             intercomm.send(local.rank(), 0, a);
     }
 
