@@ -10,6 +10,7 @@ struct Query: public IndexQuery
     int                         id;
     int                         dim;
     Datatype                    type;
+    Dataspace                   space;
     Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
 
     // consumer version of the constructor
@@ -31,12 +32,14 @@ struct Query: public IndexQuery
             msg = recv(intercomm(), 0, tags::producer, id); expected(msg, msgs::id);
 
             send(intercomm(), 0, tags::consumer, msgs::dimension, id, 0);
-            msg = recv(intercomm(), 0, tags::producer, dim);  expected(msg, msgs::dimension);
-            msg = recv(intercomm(), 0, tags::producer, type); expected(msg, msgs::dimension);
+            msg = recv(intercomm(), 0, tags::producer, dim);   expected(msg, msgs::dimension);
+            msg = recv(intercomm(), 0, tags::producer, type);  expected(msg, msgs::dimension);
+            msg = recv(intercomm(), 0, tags::producer, space); expected(msg, msgs::dimension);
         }
         diy::mpi::broadcast(local, id,  0);
         diy::mpi::broadcast(local, dim, 0);
         broadcast(local, type, 0);
+        broadcast(local, space, 0);
 
         // query producer for domain
         Bounds domain { dim };

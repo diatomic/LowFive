@@ -86,6 +86,65 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 
 herr_t
 LowFive::DistMetadataVOL::
+dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    ObjectPointers* dset_ = (ObjectPointers*) dset;
+
+    va_list args;
+    va_copy(args,arguments);
+
+    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
+    // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
+
+    // consumer with the name of a remote dataset
+    if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
+    {
+        // query to producer
+        Query* query = (Query*) ds->query;
+
+        if (get_type == H5VL_DATASET_GET_SPACE)
+        {
+            fmt::print("GET_SPACE\n");
+            auto& dataspace = query->space;
+
+            hid_t space_id = dataspace.copy();
+            fmt::print("copied space id = {}, space = {}\n", space_id, Dataspace(space_id));
+
+            hid_t *ret = va_arg(args, hid_t*);
+            *ret = space_id;
+            fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+        } else if (get_type == H5VL_DATASET_GET_TYPE)
+        {
+            fmt::print("GET_TYPE\n");
+            auto& datatype = query->type;
+
+            fmt::print("dataset data type id = {}, datatype = {}\n",
+                    datatype.id, datatype);
+
+            hid_t dtype_id = datatype.copy();
+            fmt::print("copied data type id = {}, datatype = {}\n",
+                    dtype_id, Datatype(dtype_id));
+
+            hid_t *ret = va_arg(args, hid_t*);
+            *ret = dtype_id;
+            fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+        } else
+        {
+            throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
+        }
+    } else
+    {
+        // TODO: handle correctly
+    }
+
+    if (!vol_properties.memory && vol_properties.passthru)
+        return VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
+
+    return 0;
+}
+
+herr_t
+LowFive::DistMetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;

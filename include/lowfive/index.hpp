@@ -15,6 +15,7 @@ struct Index: public IndexQuery
         {
             dim = ds->space.dims.size();
             type = ds->type;
+            space = ds->space;
 
             Bounds domain { dim };
             domain.max = ds->space.dims;
@@ -25,6 +26,7 @@ struct Index: public IndexQuery
         Dataset*                ds;
         int                     dim;
         Datatype                type;
+        Dataspace               space;
         Decomposer              decomposer { 1, Bounds { { 0 }, { 1} }, 1 };
         BoxLocations            boxes;
     };
@@ -169,6 +171,7 @@ struct Index: public IndexQuery
                 diy::MemoryBuffer out;
                 send(intercomm, source, tags::producer, msgs::dimension, data.dim);
                 send(intercomm, source, tags::producer, msgs::dimension, data.type);
+                send(intercomm, source, tags::producer, msgs::dimension, data.space);
             } else if (msg == msgs::domain)
             {
                 send(intercomm, source, tags::producer, msgs::domain, data.decomposer.domain);

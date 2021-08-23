@@ -45,6 +45,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
     herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
     herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
+    herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;
 };
 
