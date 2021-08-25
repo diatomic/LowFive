@@ -4,6 +4,7 @@
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
 #include    "metadata.hpp"
+#include    <diy/mpi.hpp>
 
 namespace LowFive
 {
@@ -31,7 +32,7 @@ struct DatasetProperties: public FileProperties
 {
 };
 
-// dataset ownership
+// dataset ownership (relevant for producer only)
 struct DataOwnership
 {
     std::string         filename;
@@ -46,14 +47,14 @@ struct MetadataVOL: public LowFive::VOLBase
 {
     using VOLBase::VOLBase;
 
-    using File      = LowFive::File;
-    using Object    = LowFive::Object;
-    using Dataset   = LowFive::Dataset;
-    using Dataspace = LowFive::Dataspace;
-    using Group     = LowFive::Group;
+    using File              = LowFive::File;
+    using Object            = LowFive::Object;
+    using Dataset           = LowFive::Dataset;
+    using Dataspace         = LowFive::Dataspace;
+    using Group             = LowFive::Group;
 
-    using Files     = std::map<std::string, File*>;
-    using DataOwners    = std::vector<DataOwnership>;
+    using Files             = std::map<std::string, File*>;
+    using DataOwners        = std::vector<DataOwnership>;
 
     VOLProperties   vol_properties;
 

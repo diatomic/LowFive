@@ -4,18 +4,16 @@
 using communicator = diy::mpi::communicator;
 
 extern "C" {
-void producer_f (communicator& local, const std::vector<communicator>& intercomms,
-                 std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks, int consumer1_ranks,
+void producer1_f (communicator& local, const std::vector<communicator>& intercomms,
+                 std::mutex& exclusive, bool shared, std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points);
 }
 
-void producer_f (communicator& local, const std::vector<communicator>& intercomms,
-                 std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks, int consumer1_ranks,
+void producer1_f (communicator& local, const std::vector<communicator>& intercomms,
+                 std::mutex& exclusive, bool shared, std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
@@ -41,7 +39,6 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
     vol_plugin.data_ownership("outfile.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
-    vol_plugin.data_ownership("outfile.h5", "/group1/particles", l5::Dataset::Ownership::user);
 
     // diy setup for the producer
     diy::FileStorage                prod_storage(prefix);
@@ -77,22 +74,6 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_grid(cp, dset); });
 
-    // clean up
-    H5Dclose(dset);
-    H5Sclose(filespace);
-
-    // create the file data space for the particles
-    domain_cnts[0]  = global_num_points;
-    domain_cnts[1]  = DIM;
-    filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
-
-    // create the particle dataset with default properties
-    dset = H5Dcreate2(group, "particles", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    // write the particle data
-    prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->write_block_points(cp, dset, global_nblocks); });
-
     // signal the consumer that data are ready
     if (passthru && !metadata && !shared)
     {
@@ -104,7 +85,7 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     {
         local.barrier();
         int a = 0;                          // it doesn't matter what we send, for synchronization only
-        for (const communicator& intercomm : intercomms)
+        for (auto& intercomm : intercomms)
             intercomm.send(local.rank(), 0, a);
     }
 

@@ -110,7 +110,7 @@ struct IndexQuery
             throw std::runtime_error(fmt::format("Message mismatch: expected = {}, received {}", expected_, received_));
     }
 
-    communicator&       intercomm()         { return intercomms[0]; }
+    communicator&       intercomm(int i)         { return intercomms[i]; }
 
     communicator        local;
     communicators       intercomms;

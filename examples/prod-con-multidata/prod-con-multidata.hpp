@@ -25,7 +25,7 @@ typedef     diy::RegularGridLink                                Link;
 typedef     diy::RegularDecomposer<Bounds>::BoolVector          BoolVector;
 typedef     diy::RegularDecomposer<Bounds>::CoordinateVector    CoordinateVector;
 
-enum {producer_task, consumer1_task, consumer2_task};
+enum {producer_task, producer1_task, producer2_task, consumer_task, consumer1_task, consumer2_task};
 
 // block structure
 // the contents of a block are completely user-defined
@@ -174,7 +174,7 @@ struct PointBlock
         status = H5Sclose(filespace);
         status = H5Sclose(memspace);
 
-        fmt::print("write_block_grid success.\n");
+        fmt::print("write_block_grid() gid {} success.\n", cp.gid());
     }
 
     // write the block particle data in parallel to an HDF5 file using native HDF5 API
@@ -214,7 +214,7 @@ struct PointBlock
         status = H5Sclose(filespace);
         status = H5Sclose(memspace);
 
-        fmt::print("write_block_particles success.\n");
+        fmt::print("write_block_points() gid {} success.\n", cp.gid());
     }
 
     // read the block grid data in parallel to an HDF5 file using native HDF5 API
@@ -264,7 +264,7 @@ struct PointBlock
         status = H5Sclose(memspace);
 
         if (success)
-            fmt::print("HDF5 read success.\n");
+            fmt::print("read_block_grid() gid {} success.\n", cp.gid());
     }
 
     // read the block particle data in parallel to an HDF5 file using native HDF5 API
@@ -318,7 +318,7 @@ struct PointBlock
         status = H5Sclose(memspace);
 
         if (success)
-            fmt::print("HDF5 read success.\n");
+            fmt::print("read_block_points() gid {} success.\n", cp.gid());
     }
 
     // block data

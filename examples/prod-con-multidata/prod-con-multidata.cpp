@@ -110,6 +110,7 @@ int main(int argc, char* argv[])
     if (shared && world.rank() == 0)
         fmt::print("space sharing: producer_ranks = consumer_ranks = world: {}\n", world.size());
 
+    // load tasks
     void* lib_producer = dlopen(producer_exec.c_str(), RTLD_LAZY);
     if (!lib_producer)
         fmt::print(stderr, "Couldn't open producer.hx\n");
@@ -169,7 +170,7 @@ int main(int argc, char* argv[])
     {
         ((void (*) (communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
-                              std::string, int,
+                              std::string,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (producer_f_))(producer_comm,
@@ -177,7 +178,6 @@ int main(int argc, char* argv[])
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
-                                                                producer_ranks,
                                                                 metadata,
                                                                 passthru,
                                                                 threads,
@@ -192,7 +192,7 @@ int main(int argc, char* argv[])
     {
         ((void (*) (communicator&, const std::vector<communicator>&,
                               std::mutex&, bool,
-                              std::string, int,
+                              std::string,
                               int, int, int, int,
                               Bounds,
                               int, int, size_t)) (consumer_f_))(consumer_comm,
@@ -200,7 +200,6 @@ int main(int argc, char* argv[])
                                                                 exclusive,
                                                                 shared,
                                                                 prefix,
-                                                                producer_ranks,
                                                                 metadata,
                                                                 passthru,
                                                                 threads,

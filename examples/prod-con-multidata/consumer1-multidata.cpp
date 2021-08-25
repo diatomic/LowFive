@@ -8,7 +8,7 @@ extern "C"
 {
 void consumer1_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
@@ -17,7 +17,7 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
 
 void consumer1_f (communicator& local, const std::vector<communicator>& intercomms,
                  std::mutex& exclusive, bool shared,
-                 std::string prefix, int producer_ranks,
+                 std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
                  Bounds domain,
@@ -31,18 +31,26 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomms[0], metadata, passthru);
+    l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
+    // set intercomms of dataset
+    // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
+    vol_plugin.data_intercomm("outfile.h5", "/group1/grid", 0);
+
     // wait for data to be ready
     if (passthru && !metadata && !shared)
-        intercomms[0].barrier();
+    {
+        for (auto& intercomm: intercomms)
+            intercomm.barrier();
+    }
 
     else if (passthru && !metadata && shared)
     {
         int a;                                  // it doesn't matter what we receive, for synchronization only
-        intercomms[0].recv(local.rank(), 0, a);
+        for (auto& intercomm: intercomms)
+            intercomm.recv(local.rank(), 0, a);
     }
 
     // diy setup for the consumer
