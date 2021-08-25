@@ -293,9 +293,6 @@ struct PointBlock
         hid_t filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
-        // debug
-        fmt::print("read_block_points() gid {} core_cnts [{}]\n", cp.gid(), fmt::join(core_cnts, ","));
-
         // memspace = simple local number of particles
         hid_t memspace = H5Screate_simple (2, &core_cnts[0], NULL);
         status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_points[0]);

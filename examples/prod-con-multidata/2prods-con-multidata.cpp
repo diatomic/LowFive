@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
             MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer1_ranks, /* tag = */ 0, &intercomm2_);
             consumer_comm = local;
             consumer_intercomms.push_back(communicator(intercomm1_));
-            consumer_intercomms.push_back(communicator(intercomm1_));
+            consumer_intercomms.push_back(communicator(intercomm2_));
         }
     }
 

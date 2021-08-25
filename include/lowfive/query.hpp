@@ -61,6 +61,15 @@ struct Query: public IndexQuery
             send(intercomm(intercomm_index), 0, tags::consumer, msgs::done, id, 0);
     }
 
+    static
+    void                close(communicator& local, communicator& intercomm)
+    {
+        local.barrier();
+
+        if (local.rank() == 0)
+            send(intercomm, 0, tags::consumer, msgs::done, 0 /* id */, 0);          // passing 0 for the id seems to work TODO: is this right?
+    }
+
     void                query(const Dataspace&                     file_space,      // input: query in terms of file space
                               const Dataspace&                     mem_space,       // ouput: memory space of resulting data
                               void*                                buf)             // output: resulting data, allocated by caller

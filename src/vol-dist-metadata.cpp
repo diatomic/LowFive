@@ -18,20 +18,24 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
             throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
 
         // check the intercomms for the full path name and file name for this dataset
+        // take the first open file with a matching dataset
         int intercomm_index;
         bool intercomm_found = false;
-        auto it = files.end();                  // assume last-opened file is the one we are reading
-        it--;
-        std::string filename = it->first;
-        for (auto& c : data_intercomms)
+        for (auto it = files.begin(); it != files.end(); it++)
         {
-            // o.filename and o.full_path can have wildcards '*' and '?'
-            if (match(c.filename.c_str(), filename.c_str()) && match(c.full_path.c_str(), ds->name.c_str()))
+            std::string filename = it->first;
+            for (auto& c : data_intercomms)
             {
-                intercomm_index = c.intercomm_index;
-                intercomm_found = true;
-                break;
+                // o.filename and o.full_path can have wildcards '*' and '?'
+                if (match(c.filename.c_str(), filename.c_str()) && match(c.full_path.c_str(), ds->name.c_str()))
+                {
+                    intercomm_index = c.intercomm_index;
+                    intercomm_found = true;
+                    break;
+                }
             }
+            if (intercomm_found)
+                break;
         }
 
         if (!intercomm_found)
@@ -66,8 +70,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
         else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
         {
             Query* query = (Query*) ds->query;
-            // TODO: defer closing query until file close
-//             query->close();
+            // NB: deferring calling query->close() until file_close() time
             delete query;
         }
     }
@@ -119,20 +122,25 @@ file_close(void *file, hid_t dxpl_id, void **req)
         }
         else
         {
-            // calling Query::close() in order to shut down the server on the producer
-            // TODO: multiple different consumer tasks accessing the same server will be a problem
-            // eventually need a different mechanism to shut down the server
-            //
-            int remote_size;
-            int is_inter; MPI_Comm_test_inter(intercomms[0], &is_inter);
-            if (!is_inter)
-                remote_size = intercomms[0].size();
-            else
-                MPI_Comm_remote_size(intercomms[0], &remote_size);
+            // calling Query::close() for each intercomm in order to shut down the server on the producer
+            for (auto i = 0; i < intercomms.size(); i++)
+            {
+                // DEPRECATE
+//                 int remote_size;
+//                 int is_inter; MPI_Comm_test_inter(intercomms[i], &is_inter);
+//                 if (!is_inter)
+//                     remote_size = intercomms[i].size();
+//                 else
+//                     MPI_Comm_remote_size(intercomms[i], &remote_size);
+// 
+//                 // creating a dummy query so that its close() member function can be called
+//                 // TODO: make Query::close() static?
+//                 Query* query = new Query(local, intercomms, remote_size, std::string(""), i);
+//                 query->close();
+//                 delete query;
 
-            Query* query = new Query(local, intercomms, remote_size, std::string(""));
-            query->close();
-            delete query;
+                Query::close(local, intercomms[i]);
+            }
         }
     }
 

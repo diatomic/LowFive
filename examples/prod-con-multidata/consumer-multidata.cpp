@@ -38,11 +38,11 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
 
     // set intercomms of dataset
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
-    vol_plugin.data_communication("outfile.h5", "/group1/grid", 0);
+    vol_plugin.data_intercomm("outfile.h5", "/group1/grid", 0);
     if (intercomms.size() == 1)                 // one producer
-        vol_plugin.data_communication("outfile.h5", "/group1/particles", 0);
+        vol_plugin.data_intercomm("outfile.h5", "/group1/particles", 0);
     else                                        // two producers
-        vol_plugin.data_communication("outfile.h5", "/group1/particles", 1);
+        vol_plugin.data_intercomm("outfile.h5", "/group1/particles", 1);
 
     // wait for data to be ready
     if (passthru && !metadata && !shared)
