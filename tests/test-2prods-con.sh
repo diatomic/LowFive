@@ -21,6 +21,14 @@ if [ -f "$bin_dir/outfile.h5" ]; then
     rm "$bin_dir/outfile.h5"
 fi
 
+if [ -f "$bin_dir/outfile1.h5" ]; then
+    rm "$bin_dir/outfile1.h5"
+fi
+
+if [ -f "$bin_dir/outfile2.h5" ]; then
+    rm "$bin_dir/outfile2.h5"
+fi
+
 if [ $retval == 0 ]; then
     exit 0
 else

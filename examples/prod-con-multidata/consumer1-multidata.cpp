@@ -11,8 +11,7 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
                  std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
-                 Bounds domain,
-                 int con_nblocks, int dim, size_t global_num_points);
+                 int con_nblocks);
 }
 
 void consumer1_f (communicator& local, const std::vector<communicator>& intercomms,
@@ -20,8 +19,7 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
                  std::string prefix,
                  int metadata, int passthru,
                  int threads, int mem_blocks,
-                 Bounds domain,
-                 int con_nblocks, int dim, size_t global_num_points)
+                 int con_nblocks)
 {
     fmt::print("consumer1: shared {} local size {}, intercomm size {}\n", shared, local.size(), intercomms[0].size());
 
@@ -53,6 +51,25 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
             intercomm.recv(local.rank(), 0, a);
     }
 
+    // open the file, dataset, dataspace
+    hid_t file              = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
+    hid_t dset_grid         = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
+    hid_t dspace_grid       = H5Dget_space(dset_grid);
+
+    // get global domain bounds
+    int dim = H5Sget_simple_extent_ndims(dspace_grid);
+    Bounds domain { dim };
+    {
+        std::vector<hsize_t> min_(dim), max_(dim);
+        H5Sget_select_bounds(dspace_grid, min_.data(), max_.data());
+        for (int i = 0; i < dim; ++i)
+        {
+            domain.min[i] = min_[i];
+            domain.max[i] = max_[i];
+        }
+    }
+    fmt::print(stderr, "Read domain: {} {}\n", domain.min, domain.max);
+
     // diy setup for the consumer
     diy::FileStorage                con_storage(prefix);
     diy::Master                     con_master(local,
@@ -63,22 +80,18 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
             &con_storage,
             &Block::save,
             &Block::load);
-    size_t local_num_points = global_num_points / con_nblocks;
-    AddBlock                        con_create(con_master, local_num_points, global_num_points, con_nblocks);
+    AddBlock                        con_create(con_master, 0, 0, con_nblocks);
     diy::ContiguousAssigner         con_assigner(local.size(), con_nblocks);
     diy::RegularDecomposer<Bounds>  con_decomposer(dim, domain, con_nblocks);
     con_decomposer.decompose(local.rank(), con_assigner, con_create);
 
-    // open the file and the dataset
-    hid_t file = H5Fopen("outfile.h5", H5F_ACC_RDONLY, plist);
-    hid_t dset = H5Dopen(file, "/group1/grid", H5P_DEFAULT);
-
     // read the grid data
     con_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->read_block_grid(cp, dset); });
+            { b->read_block_grid(cp, dset_grid); });
 
     // clean up
-    H5Dclose(dset);
+    H5Sclose(dspace_grid);
+    H5Dclose(dset_grid);
     H5Fclose(file);
     H5Pclose(plist);
 }

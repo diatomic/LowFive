@@ -120,7 +120,7 @@ struct MetadataVOL: public LowFive::VOLBase
             std::string     name,                   // name of current object
             Object*         parent,                 // parent of current object
             std::string&    filename,               // (output) file name of enclosing file
-            std::string&    full_path)              // full path name of object in file
+            std::string&    full_path)              // (output) full path name of object in file
     {
         std::tie(filename,full_path) = parent->fullname();
         full_path += "/" + name;

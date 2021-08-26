@@ -4,6 +4,7 @@ void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
 
     if (vol_properties.memory && !result->mdata_obj)
@@ -17,40 +18,37 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         if (ds->name[0] != '/')
             throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
 
-        // check the intercomms for the full path name and file name for this dataset
-        // take the first open file with a matching dataset
+        // get the filename
+        std::string filename, unused;
+        backtrack_name(std::string(""), static_cast<Object*>(obj_->mdata_obj), filename, unused);
+
+        // get the correct intercomm
         int intercomm_index;
         bool intercomm_found = false;
-        for (auto it = files.begin(); it != files.end(); it++)
+        for (auto& c : data_intercomms)
         {
-            std::string filename = it->first;
-            for (auto& c : data_intercomms)
+            // o.filename and o.full_path can have wildcards '*' and '?'
+            if (match(c.filename.c_str(), filename.c_str()) && match(c.full_path.c_str(), ds->name.c_str()))
             {
-                // o.filename and o.full_path can have wildcards '*' and '?'
-                if (match(c.filename.c_str(), filename.c_str()) && match(c.full_path.c_str(), ds->name.c_str()))
-                {
-                    intercomm_index = c.intercomm_index;
-                    intercomm_found = true;
-                    break;
-                }
-            }
-            if (intercomm_found)
+                intercomm_index = c.intercomm_index;
+                intercomm_found = true;
                 break;
+            }
         }
 
         if (!intercomm_found)
             throw MetadataError(fmt::format("Error dataset_read(): no intercomm found for dataset {}", ds->name));
 
+        // get the remote size of the intercomm
         int remote_size;
-
         int is_inter; MPI_Comm_test_inter(intercomms[intercomm_index], &is_inter);
         if (!is_inter)
             remote_size = intercomms[intercomm_index].size();
         else
             MPI_Comm_remote_size(intercomms[intercomm_index], &remote_size);
 
+        // open a query
         Query* query = new Query(local, intercomms, remote_size, ds->name, intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
-
         ds->query = query;
         result->mdata_obj = ds;
     }
@@ -183,23 +181,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
         {
             // calling Query::close() for each intercomm in order to shut down the server on the producer
             for (auto i = 0; i < intercomms.size(); i++)
-            {
-                // DEPRECATE
-//                 int remote_size;
-//                 int is_inter; MPI_Comm_test_inter(intercomms[i], &is_inter);
-//                 if (!is_inter)
-//                     remote_size = intercomms[i].size();
-//                 else
-//                     MPI_Comm_remote_size(intercomms[i], &remote_size);
-// 
-//                 // creating a dummy query so that its close() member function can be called
-//                 // TODO: make Query::close() static?
-//                 Query* query = new Query(local, intercomms, remote_size, std::string(""), i);
-//                 query->close();
-//                 delete query;
-
                 Query::close(local, intercomms[i]);
-            }
         }
     }
 
