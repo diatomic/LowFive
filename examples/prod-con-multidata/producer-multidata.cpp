@@ -91,6 +91,13 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_points(cp, dset, global_nblocks); });
 
+    // clean up
+    H5Dclose(dset);
+    H5Sclose(filespace);
+    H5Gclose(group);
+    H5Fclose(file);
+    H5Pclose(plist);
+
     // signal the consumer that data are ready
     if (passthru && !metadata && !shared)
     {
@@ -105,12 +112,5 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
         for (auto& intercomm : intercomms)
             intercomm.send(local.rank(), 0, a);
     }
-
-    // clean up
-    H5Dclose(dset);
-    H5Sclose(filespace);
-    H5Gclose(group);
-    H5Fclose(file);
-    H5Pclose(plist);
 }
 
