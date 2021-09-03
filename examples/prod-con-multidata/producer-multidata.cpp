@@ -20,11 +20,11 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
                  int global_nblocks, int dim, size_t local_num_points)
 {
     if (intercomms.size() == 2)
-        fmt::print("producer: shared {} local size {}, intercomm1 size {} intercomm2 size {}\n",
-                shared, local.size(), intercomms[0].size(), intercomms[1].size());
+        fmt::print("producer: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
+                shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
     else
-        fmt::print("producer: shared {} local size {}, intercomm1 size {}\n",
-                shared, local.size(), intercomms[0].size());
+        fmt::print("producer: shared {} local size {} intercomms size {} intercomm1 size {}\n",
+                shared, local.size(), intercomms.size(), intercomms[0].size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);

@@ -169,6 +169,8 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
+    File* f = dynamic_cast<File*>((Object*) file_->mdata_obj);
+
     if (vol_properties.memory)
     {
         // serve datasets (producer only)
@@ -179,9 +181,20 @@ file_close(void *file, hid_t dxpl_id, void **req)
         }
         else
         {
-            // calling Query::close() for each intercomm in order to shut down the server on the producer
-            for (auto i = 0; i < intercomms.size(); i++)
-                Query::close(local, intercomms[i]);
+            // Calling Query::close() for each intercomm for this file in order to shut down the server on the producer.
+            // Using data_intercomms to get filename and intercomm index, which can be duplicated for multiple datasets.
+            // Only close the query once for a unique (filename, intercomm).
+            using ClosedQuery = std::pair<std::string, int>;            // (filename, intercomm_index) of closed queries
+            std::vector<ClosedQuery> closed_queries;
+            for (auto i = 0; i < data_intercomms.size(); i++)
+            {
+                ClosedQuery closed_query = std::make_pair(f->name, data_intercomms[i].intercomm_index);
+                if (f->name == data_intercomms[i].filename && std::find(closed_queries.begin(), closed_queries.end(), closed_query) == closed_queries.end())
+                {
+                    Query::close(local, intercomms[data_intercomms[i].intercomm_index]);
+                    closed_queries.push_back(closed_query);
+                }
+            }
         }
     }
 

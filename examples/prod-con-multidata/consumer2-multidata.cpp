@@ -21,7 +21,12 @@ void consumer2_f (communicator& local, const std::vector<communicator>& intercom
                  int threads, int mem_blocks,
                  int con_nblocks)
 {
-    fmt::print("consumer2: shared {} local size {}, intercomm size {}\n", shared, local.size(), intercomms[0].size());
+    if (intercomms.size() == 2)
+        fmt::print("consumer2: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
+                shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
+    else
+        fmt::print("consumer2: shared {} local size {} intercomms size {} intercomm1 size {}\n",
+                shared, local.size(), intercomms.size(), intercomms[0].size());
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
