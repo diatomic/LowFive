@@ -76,3 +76,16 @@ include                     (CTest)
 add_subdirectory            (tests)
 
 add_subdirectory            (examples)
+
+# Install the headers
+file                        (GLOB DEPLOY_FILES_AND_DIRS "${PROJECT_SOURCE_DIR}/include/*")
+foreach                     (ITEM ${DEPLOY_FILES_AND_DIRS})
+   if                       (IS_DIRECTORY "${ITEM}")
+      list                  (APPEND DIRS_TO_DEPLOY "${ITEM}")
+   else                     ()
+      list                  (APPEND FILES_TO_DEPLOY "${ITEM}")
+   endif                    ()
+endforeach                  ()
+install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+

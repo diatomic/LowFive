@@ -13,3 +13,9 @@ add_library             (lowfive
 target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY} diy)
 target_include_directories  (lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 target_compile_definitions(lowfive PRIVATE LOWFIVE_ENABLE_PASSTHRU_LOGGING)
+
+install                 (TARGETS lowfive
+                        DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/
+                        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                        GROUP_READ GROUP_WRITE GROUP_EXECUTE
+                        WORLD_READ WORLD_WRITE WORLD_EXECUTE)
