@@ -12,28 +12,24 @@
 namespace LowFive
 {
 
-// dataset intercommunicator (relevant for consumer only)
-struct DataIntercomm
-{
-    std::string         filename;
-    std::string         full_path;
-    int                 intercomm_index;            // the intercomm to use for this dataset
-};
-
 // custom VOL object for distributed metadata
 struct DistMetadataVOL: public LowFive::MetadataVOL
 {
     using communicator      = diy::mpi::communicator;
     using communicators     = std::vector<communicator>;
     using ServeData         = Index::ServeData;
-    using DataIntercomms    = std::vector<DataIntercomm>;
+    using DataIntercomms    = std::vector<int>;
 
     communicator    local;
     communicators   intercomms;
 
     ServeData       serve_data;
-    DataIntercomms  data_intercomms;
 
+    // parallel vectors to make use of the API in MetadataVOL
+    LocationPatterns    intercomm_locations;
+    DataIntercomms      intercomm_indices;
+
+    // TODO: deprecate memory/passthru/copy arguments; they should be set individually for each data set
                     DistMetadataVOL(diy::mpi::communicator  local_,
                                     diy::mpi::communicator  intercomm_,
                                     bool                    memory_,
@@ -49,15 +45,19 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
                                     bool                    copy_ = true):
                         local(local_), intercomms(std::move(intercomms_))
                     {
-                        vol_properties.memory   = memory_;
-                        vol_properties.passthru = passthru_;
-                        vol_properties.copy     = copy_;
+                        if (memory_)
+                            set_memory("*", "*");
+                        if (passthru_)
+                            set_passthru("*", "*");
+                        if (!copy_)
+                            set_zerocopy("*", "*");
                     }
 
     // record intercomm to use for a dataset
-    void data_intercomm(std::string filename, std::string full_path, int intercomm_index)
+    void set_intercomm(std::string filename, std::string full_path, int intercomm_index)
     {
-        data_intercomms.emplace_back(DataIntercomm { filename, full_path, intercomm_index });
+        intercomm_locations.emplace_back(LocationPattern { filename, full_path });
+        intercomm_indices.emplace_back(intercomm_index);
     }
 
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;

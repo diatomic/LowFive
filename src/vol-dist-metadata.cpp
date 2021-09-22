@@ -1,13 +1,21 @@
 #include <lowfive/vol-dist-metadata.hpp>
 
+// TODO: add file_open
+
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
+    fmt::print("Opening dataset (dist): {} {} {}\n", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
 
-    if (vol_properties.memory && !result->mdata_obj)
+    // trace object back to root to build full path and file name
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+
+    fmt::print("Opening dataset: {} {} {}\n", name, filepath.first, filepath.second);
+
+    if (!result->mdata_obj && match_any(filepath,memory))
     {
         // assume we are the consumer, since nothing stored in memory (open also implies that)
         auto* ds = new RemoteDataset(name);     // build and record the index to be used in read
@@ -16,28 +24,18 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         // TODO: if only leaf name is given, could use backtrack_name to find full path
         // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
         if (ds->name[0] != '/')
-            throw MetadataError(fmt::format("Error: dataset_read(): Need full pathname for dataset {}", ds->name));
+            throw MetadataError(fmt::format("Error: dataset_open(): Need full pathname for dataset {}", ds->name));
 
         // get the filename
-        std::string filename, unused;
-        backtrack_name(std::string(""), static_cast<Object*>(obj_->mdata_obj), filename, unused);
+        std::string filename = filepath.first;
+
+        // TODO: might want to use filepath.second instead of ds->name
 
         // get the correct intercomm
-        int intercomm_index;
-        bool intercomm_found = false;
-        for (auto& c : data_intercomms)
-        {
-            // o.filename and o.full_path can have wildcards '*' and '?'
-            if (match(c.filename.c_str(), filename.c_str()) && match(c.full_path.c_str(), ds->name.c_str()))
-            {
-                intercomm_index = c.intercomm_index;
-                intercomm_found = true;
-                break;
-            }
-        }
-
-        if (!intercomm_found)
-            throw MetadataError(fmt::format("Error dataset_read(): no intercomm found for dataset {}", ds->name));
+        int loc = find_match(filename, ds->name, intercomm_locations);
+        if (loc == -1)
+            throw MetadataError(fmt::format("Error dataset_open(): no intercomm found for dataset {}", ds->name));
+        int intercomm_index = intercomm_indices[loc];
 
         // get the remote size of the intercomm
         int remote_size;
@@ -61,7 +59,7 @@ LowFive::DistMetadataVOL::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
-    if (vol_properties.memory)
+    if (dset_->mdata_obj)
     {
         if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))                   // producer
             serve_data.push_back(ds);   // record dataset for serving later when file closes
@@ -82,7 +80,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    if (vol_properties.memory)
+    if (dset_->mdata_obj)
     {
         // consumer with the name of a remote dataset
         if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
@@ -94,12 +92,13 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         {
             // TODO: handle correctly
         }
-    }
-
-    // read from the file if not reading from memory
-    // if both memory and passthru are enabled, read from memory only
-    if (!vol_properties.memory && vol_properties.passthru && buf)     // TODO: probably also add a condition that read "from memory" failed
+    } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
+    {
         return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    } else if (buf)
+    {
+        throw MetadataError(fmt::format("Error: dataset_read(): neither memory, nor passthru open"));
+    }
 
     return 0;
 }
@@ -152,13 +151,12 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         {
             throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
         }
-    } else
+    } else if (unwrap(dset_))
     {
-        // TODO: handle correctly
-    }
-
-    if (!vol_properties.memory && vol_properties.passthru)
         return VOLBase::dataset_get(dset_, get_type, dxpl_id, req, arguments);
+    } else {
+        throw MetadataError(fmt::format("In dataset_get(): neither memory, nor passthru open"));
+    }
 
     return 0;
 }
@@ -170,8 +168,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
     ObjectPointers* file_ = (ObjectPointers*) file;
 
     File* f = dynamic_cast<File*>((Object*) file_->mdata_obj);
+    fmt::print("Closing file {}\n", fmt::ptr(f));
 
-    if (vol_properties.memory)
+    if (f && match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
     {
         // serve datasets (producer only)
         if (serve_data.size())              // only producer pushed any datasets to serve_data
@@ -186,12 +185,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
             // Only close the query once for a unique (filename, intercomm).
             using ClosedQuery = std::pair<std::string, int>;            // (filename, intercomm_index) of closed queries
             std::vector<ClosedQuery> closed_queries;
-            for (auto i = 0; i < data_intercomms.size(); i++)
+            for (auto i = 0; i < intercomm_locations.size(); i++)
             {
-                ClosedQuery closed_query = std::make_pair(f->name, data_intercomms[i].intercomm_index);
-                if (f->name == data_intercomms[i].filename && std::find(closed_queries.begin(), closed_queries.end(), closed_query) == closed_queries.end())
+                int intercomm_index = intercomm_indices[i];
+                ClosedQuery closed_query = std::make_pair(f->name, intercomm_index);
+                if (f->name == intercomm_locations[i].filename && std::find(closed_queries.begin(), closed_queries.end(), closed_query) == closed_queries.end())
                 {
-                    Query::close(local, intercomms[data_intercomms[i].intercomm_index]);
+                    Query::close(local, intercomms[intercomm_index]);
                     closed_queries.push_back(closed_query);
                 }
             }

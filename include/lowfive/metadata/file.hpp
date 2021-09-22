@@ -23,4 +23,11 @@ struct File: public Object
     }
 };
 
+struct RemoteFile : public Object
+{
+    RemoteFile(std::string filename_):
+        Object(ObjectType::File, filename_)
+    {}
+};
+
 }

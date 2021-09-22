@@ -38,9 +38,14 @@ void consumer2_f (communicator& local, const std::vector<communicator>& intercom
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
+    if (passthru)
+        vol_plugin.set_passthru("outfile.h5", "*");
+    if (metadata)
+        vol_plugin.set_memory("outfile.h5", "*");
+
     // set intercomms of dataset
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
-    vol_plugin.data_intercomm("outfile.h5", "/group1/particles", 0);
+    vol_plugin.set_intercomm("outfile.h5", "/group1/particles", 0);
 
     // wait for data to be ready
     if (passthru && !metadata && !shared)

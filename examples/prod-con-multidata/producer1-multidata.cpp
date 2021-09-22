@@ -36,9 +36,11 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
     l5::H5VOLProperty vol_prop(vol_plugin);
     vol_prop.apply(plist);
 
-    // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
-    // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
-    vol_plugin.data_ownership("outfile1.h5", "/group1/grid", l5::Dataset::Ownership::lowfive);
+    if (passthru)
+        vol_plugin.set_passthru("outfile1.h5", "*");
+    if (metadata)
+        vol_plugin.set_memory("outfile1.h5", "*");
+    vol_plugin.set_zerocopy("outfile1.h5", "/group1/grid");
 
     // diy setup for the producer
     diy::FileStorage                prod_storage(prefix);

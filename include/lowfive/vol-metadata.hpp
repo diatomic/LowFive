@@ -1,6 +1,9 @@
 #ifndef LOWFIVE_VOL_METADATA_HPP
 #define LOWFIVE_VOL_METADATA_HPP
 
+#include    <vector>
+#include    <string>
+
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
 #include    "metadata.hpp"
@@ -8,35 +11,10 @@
 namespace LowFive
 {
 
-// properties of the entire VOL object
-// can be overwritten by individual objects
-struct VOLProperties
-{
-    bool memory;        // in-memory copy (coul be deep or shallow) of all files
-    bool passthru;      // pass-through to native HDF5 for all files
-    bool copy;          // make a deep copy if memory == true
-};
-
-// TODO: eventually add more custom properties only for files
-// or move some of the VOL properties to the file level
-// TODO: move to metadata/file.hpp?
-struct FileProperties: public VOLProperties
-{
-};
-
-// TODO: eventually add more custom properties only for datasets
-// or move some of the file properties to the dataset level
-// TODO: move to metadata/dataset.hpp?
-struct DatasetProperties: public FileProperties
-{
-};
-
-// dataset ownership (relevant for producer only)
-struct DataOwnership
+struct LocationPattern
 {
     std::string         filename;
-    std::string         full_path;
-    Dataset::Ownership  ownership;
+    std::string         pattern;
 };
 
 // custom VOL object
@@ -53,9 +31,7 @@ struct MetadataVOL: public LowFive::VOLBase
     using Group             = LowFive::Group;
 
     using Files             = std::map<std::string, File*>;
-    using DataOwners        = std::vector<DataOwnership>;
-
-    VOLProperties   vol_properties;
+    using LocationPatterns  = std::vector<LocationPattern>;
 
     struct ObjectPointers
     {
@@ -66,8 +42,10 @@ struct MetadataVOL: public LowFive::VOLBase
                     {}
     };
 
-    Files           files;
-    DataOwners      data_owners;
+    Files                       files;
+    LocationPatterns            memory;
+    LocationPatterns            passthru;
+    LocationPatterns            zerocopy;
 
                     MetadataVOL()
                     {}
@@ -124,40 +102,58 @@ struct MetadataVOL: public LowFive::VOLBase
     }
 
     // record intended ownership of a dataset
-    void data_ownership(std::string filename, std::string full_path, Dataset::Ownership own)
+    void set_zerocopy(std::string filename, std::string pattern)
     {
-        data_owners.emplace_back(DataOwnership { filename, full_path, own });
+        zerocopy.emplace_back(LocationPattern { filename, pattern });
     }
 
-    // trace object back to root to build full path and file name
-    static
-    void backtrack_name(
-            std::string     name,                   // name of current object
-            Object*         parent,                 // parent of current object
-            std::string&    filename,               // (output) file name of enclosing file
-            std::string&    full_path)              // (output) full path name of object in file
+    void set_passthru(std::string filename, std::string pattern)
     {
-        std::tie(filename,full_path) = parent->fullname();
-        full_path += "/" + name;
+        passthru.emplace_back(LocationPattern { filename, pattern });
+    }
+
+    void set_memory(std::string filename, std::string pattern)
+    {
+        memory.emplace_back(LocationPattern { filename, pattern });
     }
 
     // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
-    // checks if two given strings match; the first string may contain wildcard characters
-    bool match(const char *first, const char * second)
+    // checks if two given strings; the first string may contain wildcard characters
+    static bool match(const char *first, const char * second, bool partial = false)
     {
         if (*first == '\0' && *second == '\0')
             return true;
 
         if (*first == '*' && *(first+1) != '\0' && *second == '\0')
-            return false;
+            return partial;
 
         if (*first == '?' || *first == *second)
             return match(first+1, second+1);
 
         if (*first == '*')
             return match(first+1, second) || match(first, second+1);
+    }
 
-        return false;
+    bool match_any(std::pair<std::string,std::string> filepath, const LocationPatterns& patterns, bool partial = false) const
+    {
+        return match_any(filepath.first, filepath.second, patterns, partial);
+    }
+
+    bool match_any(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
+    {
+        return find_match(filename, full_path, patterns, partial) != -1;
+    }
+
+    int find_match(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
+    {
+        for (int i = 0; i < patterns.size(); ++i)
+        {
+            auto& x = patterns[i];
+            if (x.filename != filename) continue;
+            if (match(x.pattern.c_str(), full_path.c_str(), partial))
+                return i;
+        }
+        return -1;
     }
 
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;

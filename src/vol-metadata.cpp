@@ -1,4 +1,5 @@
 #include <lowfive/vol-metadata.hpp>
+#include <cassert>
 
 void*
 LowFive::MetadataVOL::
@@ -6,17 +7,14 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
 {
     ObjectPointers* obj_ptrs = nullptr;
 
+    // create our file metadata; NB: we build the in-memory hierarchy regardless of whether we match memory
     void* mdata = nullptr;
-    if (vol_properties.memory)
-    {
-        // create our file metadata
-        std::string name_(name);
-        File* f = new File(name_);
-        files.emplace(name_, f);
-        mdata = f;
-    }
+    std::string name_(name);
+    File* f = new File(name_);
+    files.emplace(name_, f);
+    mdata = f;
 
-    if (vol_properties.passthru)
+    if (match_any(name, "", passthru, true))
         obj_ptrs = (ObjectPointers*) VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
     else
         obj_ptrs = new ObjectPointers;
@@ -36,7 +34,7 @@ file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **r
     // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
 
     herr_t res = 0;
-    if (vol_properties.passthru && unwrap(file_))
+    if (unwrap(file_))
         res = VOLBase::file_optional(file_, opt_type, dxpl_id, req, arguments);
 
     return res;
@@ -49,21 +47,25 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     ObjectPointers* obj_ptrs = nullptr;
 
     void* mdata = nullptr;
-    if (vol_properties.memory)
-    {
+    //if (match_any(name, "", memory, true))
+    //{
+        // FIXME: what does this even mean? why are we creating a new File, when we are opening it "in-memory"?
+
         // create our file metadata
         std::string name_(name);
         File* f = new File(name_);
         files.emplace(name_, f);
         mdata = f;
-    }
+    //}
 
-    if (vol_properties.passthru && ! vol_properties.memory)
+    if (match_any(name, "", passthru, true))
         obj_ptrs = (ObjectPointers*) VOLBase::file_open(name, flags, fapl_id, dxpl_id, req);
     else
         obj_ptrs = new ObjectPointers;
 
     obj_ptrs->mdata_obj = mdata;
+
+    fmt::print("Opened file {}: {} {}\n", name, fmt::ptr(obj_ptrs->mdata_obj), fmt::ptr(obj_ptrs->h5_obj));
 
     return obj_ptrs;
 }
@@ -81,7 +83,7 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     herr_t result = 0;
-    if (vol_properties.passthru)
+    if (unwrap(file_))
         result = VOLBase::file_get(file_, get_type, dxpl_id, req, arguments);
 
     // else: TODO
@@ -97,7 +99,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
     herr_t res = 0;
 
-    if (vol_properties.passthru && unwrap(file_))
+    if (unwrap(file_))
         res = VOLBase::file_close(file_, dxpl_id, req);
 
     // deliberately verbose, to emphasize checking of res
@@ -116,46 +118,34 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
                hid_t space_id, hid_t dcpl_id,
                hid_t dapl_id,  hid_t dxpl_id, void **req)
 {
-    fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
-    fmt::print("data type = {}\n", Datatype(type_id));
-    fmt::print("data space = {}\n", Dataspace(space_id));
+    //fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
+    //fmt::print("data type = {}\n", Datatype(type_id));
+    //fmt::print("data space = {}\n", Dataspace(space_id));
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
     fmt::print("create: dset = {}, dxpl_id = {}\n", fmt::ptr(obj_->h5_obj), dxpl_id);
 
-    if (vol_properties.passthru)
+    assert(obj_->mdata_obj);
+    // trace object back to root to build full path and file name
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+
+    if (unwrap(obj_) && match_any(filepath, passthru))
         result = (ObjectPointers*) VOLBase::dataset_create(obj_, loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
     else
         result = new ObjectPointers;
 
-    if (vol_properties.memory)                                              // add the dataset to our file metadata
-    {
-        // trace object back to root to build full path and file name
-        std::string name_(name);
-        std::string full_path;
-        std::string filename;
-        backtrack_name(name_, static_cast<Object*>(obj_->mdata_obj), filename, full_path);
-
+    //if (match_any(filepath, memory))
+    //{
         // check the ownership map for the full path name and file name
-        Dataset::Ownership own = Dataset::Ownership::user;
-        for (auto& o : data_owners)
-        {
-            // o.filename and o.full_path can have wildcards '*' and '?'
-            if (match(o.filename.c_str(), filename.c_str()) && match(o.full_path.c_str(), full_path.c_str()))
-            {
-                own = o.ownership;
-                break;
-            }
-        }
-
-        // debug
-//         fmt::print("dataset_create(): filename {} full_path {} own {}\n", filename, full_path, own);
+        Dataset::Ownership own = Dataset::Ownership::lowfive;
+        if (match_any(filepath, zerocopy))
+            own = Dataset::Ownership::user;
 
         // add the dataset
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id, own));
-    }
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name, type_id, space_id, own));
+    //}
 
     return (void*)result;
 }
@@ -167,17 +157,25 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
-    // open from the file if not opening from memory
+    fmt::print("dataset_open {} {}\n", fmt::ptr(obj_->mdata_obj), fmt::ptr(obj_->h5_obj));
+
+    // trace object back to root to build full path and file name
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    fmt::print("filepath {} {}\n", filepath.first, filepath.second);
+
     // if both memory and passthru are enabled, open from memory only
-    if (vol_properties.passthru && !vol_properties.memory)
+    if (match_any(filepath, passthru))
         result = (ObjectPointers*) VOLBase::dataset_open(obj_, loc_params, name, dapl_id, dxpl_id, req);
     else
         result = new ObjectPointers;
 
-    // find the dataset in our file metadata
-    std::string name_(name);
-    if (vol_properties.memory)
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+    if (match_any(filepath, memory))
+    {
+        // find the dataset in our file metadata
+        fmt::print("Looking for memory match\n");
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name);
+        fmt::print("  found {}\n", fmt::ptr(result->mdata_obj));
+    }
 
     return (void*)result;
 }
@@ -194,11 +192,11 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
+    // TODO: why do we prefer passthru to memory here?
     herr_t result = 0;
-    if (vol_properties.passthru)
+    if (unwrap(dset_))
         result = VOLBase::dataset_get(dset_, get_type, dxpl_id, req, arguments);
-
-    if (vol_properties.memory)
+    else if (dset_->mdata_obj)
     {
         if (get_type == H5VL_DATASET_GET_SPACE)
         {
@@ -246,7 +244,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
 
-    if (vol_properties.memory)
+    if (unwrap(dset_))
+        return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    else if (dset_->mdata_obj)
     {
         Dataset* ds = (Dataset*) dset_->mdata_obj;              // dataset from our metadata
 
@@ -279,9 +279,6 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         }   // for all data triples
     }
 
-    if (vol_properties.passthru)
-        return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
-
     return 0;
 }
 
@@ -291,19 +288,20 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    fmt::print("dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
+    fmt::print("dset = {}, dset->mdata_obj = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
                fmt::ptr(unwrap(dset_)),
+               fmt::ptr(dset_->mdata_obj),
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
 
-    if (vol_properties.memory)
+    if (dset_->mdata_obj)
     {
         // save our metadata
         Dataset* ds = (Dataset*) dset_->mdata_obj;
         ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
     }
 
-    if (vol_properties.passthru)
+    if (unwrap(dset_))
         return VOLBase::dataset_write(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     return 0;
@@ -320,13 +318,15 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
 
     // close from the file if not using metadata in memory
     // if both memory and passthru are enabled, close from file (producer) only
-    if (vol_properties.passthru && !vol_properties.memory)
+    if (unwrap(dset_))
         retval = VOLBase::dataset_close(dset_, dxpl_id, req);
-    else if (vol_properties.passthru && vol_properties.memory)
-    {
-        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
-            retval = VOLBase::dataset_close(dset_, dxpl_id, req);
-    }
+
+    // TODO: not sure what the point of this was; the comment above offers a clue, but I still don't understand the logic
+    //else if (vol_properties.passthru && vol_properties.memory)
+    //{
+    //    if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
+    //        retval = VOLBase::dataset_close(dset_, dxpl_id, req);
+    //}
 
     return retval;
 }
@@ -338,17 +338,21 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
     fmt::print(stderr, "Group Create\n");
-    fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
+    fmt::print("loc type = {}, name = {}, mdata = {}\n", loc_params->type, name, obj_->mdata_obj != nullptr);
+
+    assert(obj_->mdata_obj);
+
+    // trace object back to root to build full path and file name
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
 
     ObjectPointers* result = nullptr;
-    if (vol_properties.passthru)
+    if (unwrap(obj_) && match_any(filepath, passthru, true))
         result = (ObjectPointers*) VOLBase::group_create(obj_, loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
     else
         result = new ObjectPointers;
 
     // add group to our metadata
-    if (vol_properties.memory)
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Group(name));
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Group(name));
 
     return result;
 }
@@ -358,19 +362,20 @@ LowFive::MetadataVOL::
 group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = nullptr;
+
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
 
     // open from the file if not opening from memory
     // if both memory and passthru are enabled, open from memory only
-    if (vol_properties.passthru && !vol_properties.memory)
+    ObjectPointers* result = nullptr;
+    if (unwrap(obj_) && match_any(filepath, passthru, true))
         result = (ObjectPointers*) VOLBase::group_open(obj_, loc_params, name, gapl_id, dxpl_id, req);
     else
         result = new ObjectPointers;
 
     // find the group in our file metadata
     std::string name_(name);
-    if (vol_properties.memory)
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
 
     return (void*)result;
 }
@@ -385,12 +390,8 @@ group_close(void *grp, hid_t dxpl_id, void **req)
 
     herr_t retval = 0;
 
-    if (vol_properties.passthru)
+    if (unwrap(grp_))
         retval = VOLBase::group_close(grp_, dxpl_id, req);
-
-    // TODO: why create a pointer that isn't used?
-    if (vol_properties.memory)
-        Group* g = (Group*) grp_->mdata_obj;
 
     return retval;
 }
@@ -404,14 +405,17 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     fmt::print(stderr, "Attr Create\n");
     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
 
+    // trace object back to root to build full path and file name
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+
     ObjectPointers* result = nullptr;
-    if (vol_properties.passthru)
+    if (unwrap(obj_) && match_any(filepath,passthru))
         result = (ObjectPointers*) VOLBase::attr_create(obj_, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
     else
         result = new ObjectPointers;
 
-    // add attribute to our metadata
-    if (vol_properties.memory)
+    // add attribute to our metadata; NB: attribute cannot have children, so only creating it if we have to
+    if (match_any(filepath,memory))
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
 
     return result;
@@ -431,11 +435,10 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
     fmt::print(stderr, "Attr Get\n");
     fmt::print("get type = {}\n", get_type);
 
-    if (vol_properties.passthru)
-    {
+    // TODO: again, why do we prefer passthru?
+    if (unwrap(obj_))
         return VOLBase::attr_get(obj, get_type, dxpl_id, req, arguments);
-    }
-    else if (vol_properties.memory)
+    else if (obj_->mdata_obj)
     {
         if (get_type == H5VL_ATTR_GET_SPACE)
         {
@@ -482,7 +485,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
     va_copy(args,arguments);
 
     herr_t result = 0;
-    if (vol_properties.passthru)
+    if (unwrap(obj_))
         result = VOLBase::attr_specific(obj_, loc_params, specific_type, dxpl_id, req, arguments);
 
     // else: TODO
@@ -498,14 +501,14 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
 
     fmt::print("attr = {}, mem_type_id = {}, mem type = {}\n", fmt::ptr(unwrap(attr_)), mem_type_id, Datatype(mem_type_id));
 
-    if (vol_properties.memory)
+    if (attr_->mdata_obj)
     {
         // save our metadata
         Attribute* a = (Attribute*) attr_->mdata_obj;
         a->write(Datatype(mem_type_id), buf);
     }
 
-    if (vol_properties.passthru)
+    if (unwrap(attr_))
         return VOLBase::attr_write(attr_, mem_type_id, buf, dxpl_id, req);
 
     return 0;
@@ -520,12 +523,8 @@ attr_close(void *attr, hid_t dxpl_id, void **req)
 
     herr_t retval = 0;
 
-    if (vol_properties.passthru)
+    if (unwrap(attr_))
         retval = VOLBase::attr_close(attr_, dxpl_id, req);
-
-    // TODO: why create a pointer that isn't used?
-    if (vol_properties.memory)
-        Attribute* a = (Attribute*) attr_->mdata_obj;
 
     return retval;
 }

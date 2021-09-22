@@ -56,6 +56,12 @@ struct Object
             child->print();
     }
 
+    virtual Object* search(const char* cur_path_)
+    {
+        std::string cur_path(cur_path_);
+        return search(cur_path);
+    }
+
     // search for the object at the leaf of the current path in the subtree rooted at this object
     // this object can be either the root of the current path or its direct parent
     // returns pointer to object or null if not found
@@ -124,7 +130,7 @@ struct Object
         return nullptr;
     }
 
-    std::pair<std::string, std::string> fullname()     // returns filename, full path pair
+    std::pair<std::string, std::string> fullname(std::string child_path = "")     // returns filename, full path pair
     {
         std::string full_path;
 
@@ -135,6 +141,8 @@ struct Object
             full_path = "/" + o->name + full_path;
             o = o->parent;
         }
+
+        full_path += ((!child_path.empty() && child_path[0] != '/')? "/" : "") + child_path;
 
         return std::make_pair(o->name, full_path);
     }
