@@ -70,8 +70,7 @@ struct MetadataVOL: public LowFive::VOLBase
     Files           files;
     DataOwners      data_owners;
 
-                    MetadataVOL():
-                        VOLBase(/* version = */ 0, /* value = */ 510, /* name = */ "metadata-vol")
+                    MetadataVOL()
                     {}
 
                     ~MetadataVOL()

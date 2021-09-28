@@ -51,10 +51,10 @@ struct VOLBase
     unsigned                version;
     int                     value;
     std::string             name;
-    H5VL_class_t            connector;
+    static H5VL_class_t     connector;      // need this static for H5PL_* functions (for automatic plugin loading via environment variables)
     static hid_t            connector_id;   // static only because of term()
 
-                            VOLBase(unsigned version_, int value_, std::string name_);
+                            VOLBase();
 
     hid_t                   register_plugin();
 
