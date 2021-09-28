@@ -46,17 +46,23 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 {
     ObjectPointers* obj_ptrs = nullptr;
 
+    // find the file in the VOL
     void* mdata = nullptr;
-    //if (match_any(name, "", memory, true))
-    //{
-        // FIXME: what does this even mean? why are we creating a new File, when we are opening it "in-memory"?
-
-        // create our file metadata
-        std::string name_(name);
+    std::string name_(name);
+    auto it = files.find(name_);
+    if (it != files.end())
+        mdata = it->second;
+    else
+    {
+        // create the file in the VOL
+        // NB: we have to create the file object, just to have the hierarchy,
+        // which will enable us to look up full paths (this is a frustrating
+        // design caused by our inability to resolve the full paths in the pure
+        // HDF5 setting)
         File* f = new File(name_);
         files.emplace(name_, f);
         mdata = f;
-    //}
+    }
 
     if (match_any(name, "", passthru, true))
         obj_ptrs = (ObjectPointers*) VOLBase::file_open(name, flags, fapl_id, dxpl_id, req);
@@ -161,7 +167,6 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
-    fmt::print("filepath {} {}\n", filepath.first, filepath.second);
 
     // if both memory and passthru are enabled, open from memory only
     if (match_any(filepath, passthru))
@@ -170,12 +175,8 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         result = new ObjectPointers;
 
     if (match_any(filepath, memory))
-    {
         // find the dataset in our file metadata
-        fmt::print("Looking for memory match\n");
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name);
-        fmt::print("  found {}\n", fmt::ptr(result->mdata_obj));
-    }
 
     return (void*)result;
 }

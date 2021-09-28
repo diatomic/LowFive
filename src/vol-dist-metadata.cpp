@@ -1,7 +1,5 @@
 #include <lowfive/vol-dist-metadata.hpp>
 
-// TODO: add file_open
-
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -159,6 +157,13 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     }
 
     return 0;
+}
+
+void*
+LowFive::DistMetadataVOL::
+file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
+{
+    return MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 }
 
 herr_t
