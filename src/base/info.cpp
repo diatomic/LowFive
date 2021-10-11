@@ -1,4 +1,6 @@
 #include <lowfive/vol-base.hpp>
+#include <string.h>
+#include <cassert>
 
 /*---------------------------------------------------------------------------
  * Function:    info_copy
@@ -14,14 +16,7 @@ void *
 LowFive::VOLBase::
 _info_copy(const void *_info)
 {
-    const info_t *info = (const info_t *)_info;
-    return info->vol->info_copy(_info);
-}
-
-void *
-LowFive::VOLBase::
-info_copy(const void *_info)
-{
+    printf("------- PASS THROUGH VOL INFO Copy (_info_copy)\n");
     const info_t *info = (const info_t *)_info;
     info_t *new_info;
 
@@ -60,14 +55,6 @@ LowFive::VOLBase::
 _info_free(void *_info)
 {
     info_t *info = (info_t *)_info;
-    return info->vol->info_free(_info);
-}
-
-herr_t
-LowFive::VOLBase::
-info_free(void *_info)
-{
-    info_t *info = (info_t *)_info;
     hid_t err_id;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
@@ -84,7 +71,108 @@ info_free(void *_info)
     H5Eset_current_stack(err_id);
 
     /* Free pass through info object itself */
-    free(info);
+    if (info != &VOLBase::info)
+        free(info);
 
     return 0;
 } /* end info_free() */
+
+/*---------------------------------------------------------------------------
+ * Function:    info_to_str
+ *
+ * Purpose:     Serialize an info object for this connector into a string
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *---------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_info_to_str(const void *_info, char **str)
+{
+    const info_t *info = (const info_t *)_info;
+    H5VL_class_value_t under_value = (H5VL_class_value_t)-1;
+    char *under_vol_string = NULL;
+    size_t under_vol_str_len = 0;
+
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL INFO To String\n");
+#endif
+
+    /* Get value and string for underlying VOL connector */
+    H5VLget_value(info->under_vol_id, &under_value);
+    H5VLconnector_info_to_str(info->under_vol_info, info->under_vol_id, &under_vol_string);
+
+    /* Determine length of underlying VOL info string */
+    if(under_vol_string)
+        under_vol_str_len = strlen(under_vol_string);
+
+    /* Allocate space for our info */
+    *str = (char *)H5allocate_memory(32 + under_vol_str_len, (hbool_t)0);
+    assert(*str);
+
+    /* Encode our info
+     * Normally we'd use snprintf() here for a little extra safety, but that
+     * call had problems on Windows until recently. So, to be as platform-independent
+     * as we can, we're using sprintf() instead.
+     */
+    sprintf(*str, "under_vol=%u;under_info={%s}", (unsigned)under_value, (under_vol_string ? under_vol_string : ""));
+
+    return 0;
+} /* end info_to_str() */
+
+/*---------------------------------------------------------------------------
+ * Function:    str_to_info
+ *
+ * Purpose:     Deserialize a string into an info object for this connector.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *---------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_str_to_info(const char *str, void **_info)
+{
+    unsigned under_vol_value;
+    const char *under_vol_info_start, *under_vol_info_end;
+    hid_t under_vol_id;
+    void *under_vol_info = NULL;
+
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL INFO String To Info\n");
+#endif
+
+    /* Retrieve the underlying VOL connector value and info */
+    sscanf(str, "under_vol=%u;", &under_vol_value);
+    under_vol_id = H5VLregister_connector_by_value((H5VL_class_value_t)under_vol_value, H5P_DEFAULT);
+    under_vol_info_start = strchr(str, '{');
+    under_vol_info_end = strrchr(str, '}');
+    assert(under_vol_info_end > under_vol_info_start);
+    if(under_vol_info_end != (under_vol_info_start + 1)) {
+        char *under_vol_info_str;
+
+        under_vol_info_str = (char *)malloc((size_t)(under_vol_info_end - under_vol_info_start));
+        memcpy(under_vol_info_str, under_vol_info_start + 1, (size_t)((under_vol_info_end - under_vol_info_start) - 1));
+        *(under_vol_info_str + (under_vol_info_end - under_vol_info_start)) = '\0';
+
+        H5VLconnector_str_to_info(under_vol_info_str, under_vol_id, &under_vol_info);
+
+        free(under_vol_info_str);
+    } /* end else */
+
+    // set the class static info
+    info.under_vol_id = under_vol_id;
+    info.under_vol_info = under_vol_info;
+    // NB: info->vol not set because we don't have it;
+    //     it needs to be set before the info starts being copied around
+
+    /* Set return value */
+    *_info = &info;
+
+    printf("Returning, NB: info->vol not yet set\n");
+
+    return 0;
+} /* end str_to_info() */

@@ -1,4 +1,6 @@
 #include <lowfive/vol-base.hpp>
+#include <fmt/core.h>
+#include <fmt/format.h>
 
 /*-------------------------------------------------------------------------
  * Function:    file_create
@@ -26,11 +28,17 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     /* Get copy of our VOL info from FAPL */
     H5Pget_vol_info(fapl_id, (void **)&info);
 
+    fmt::print("got vol info: {} with vol {}\n", fmt::ptr(info), fmt::ptr(info->vol));
+
     /* Copy the FAPL */
     under_fapl_id = H5Pcopy(fapl_id);
 
+    fmt::print("fapl copied\n");
+
     /* Set the VOL ID and info for the underlying FAPL */
     H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
+
+    fmt::print("info->vol = {}\n", fmt::ptr(info->vol));
 
     /* Open the file with the underlying VOL connector */
     under = info->vol->file_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);

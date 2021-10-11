@@ -144,8 +144,6 @@ struct MetadataVOL: public LowFive::VOLBase
         return false;
     }
 
-    void*           info_copy(const void *_info) override;
-
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
     herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;

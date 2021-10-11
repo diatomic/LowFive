@@ -2,15 +2,6 @@
 
 void*
 LowFive::MetadataVOL::
-info_copy(const void *_info)
-{
-    fmt::print(stderr, "Copy Info\n");
-    // NB: calling VOLBase::info_copy even if vol_properties.passthru is false, otherwise things break
-    return VOLBase::info_copy(_info);
-}
-
-void*
-LowFive::MetadataVOL::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ptrs = new ObjectPointers;

@@ -36,7 +36,14 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
-    vol_prop.apply(plist);
+    if (!getenv("HDF5_VOL_CONNECTOR"))
+    {
+        fmt::print("HDF5_VOL_CONNECTOR is not set; enabling VOL explicitly\n");
+        vol_prop.apply(plist);
+    } else
+    {
+        fmt::print("HDF5_VOL_CONNECTOR is set; not enabling VOL explicitly\n");
+    }
 
     // set intercomms of dataset
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)

@@ -1,4 +1,4 @@
-add_library             (lowfive
+add_library             (lowfive SHARED
                             base/base.cpp
                             base/info.cpp
                             base/dataset.cpp

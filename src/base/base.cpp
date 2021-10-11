@@ -1,4 +1,5 @@
 #include <lowfive/vol-base.hpp>
+#include <fmt/core.h>
 
 hid_t LowFive::VOLBase::connector_id = -1;
 
@@ -15,8 +16,8 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_info_copy,                                /* copy    */
         NULL, //&OUR_pass_through_info_cmp,                  /* compare */
         &_info_free,                                /* free    */
-        NULL, //&OUR_pass_through_info_to_str,               /* to_str  */
-        NULL  //&OUR_pass_through_str_to_info,               /* from_str */
+        &_info_to_str,               /* to_str  */
+        &_str_to_info,               /* from_str */
     },
     {                                           /* wrap_cls */
         NULL, // OUR_pass_through_get_object,               /* get_object   */
@@ -110,16 +111,25 @@ H5VL_class_t LowFive::VOLBase::connector =
     NULL // OUR_pass_through_optional                  /* optional */
 };
 
+LowFive::VOLBase::info_t LowFive::VOLBase::info;
+LowFive::VOLBase* LowFive::VOLBase::info_t::vol = NULL;
+
+H5PL_type_t H5PLget_plugin_type(void) { return H5PL_TYPE_VOL; }
+const void *H5PLget_plugin_info(void) { return &LowFive::VOLBase::connector; }
+
 LowFive::VOLBase::
 VOLBase()
 {
-    info.vol = this;
+    fmt::print(stderr, "VOLBase::VOLBase()\n");
+    info_t::vol = this;
 }
 
 hid_t
 LowFive::VOLBase::
 register_plugin()
 {
+    fmt::print("registering plugin\n");
+
     // Singleton register the pass-through VOL connector ID
     if (connector_id < 0)
         connector_id = H5VLregister_connector(&connector, H5P_DEFAULT);

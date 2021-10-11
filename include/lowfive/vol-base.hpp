@@ -45,8 +45,11 @@ struct VOLBase
     {
         hid_t               under_vol_id    = H5VL_NATIVE;      // VOL ID for under VOL
         void*               under_vol_info  = NULL;             // VOL info for under VOL
-        VOLBase*            vol;                                // pointer to this
-    } info;
+        static VOLBase*     vol;                                // pointer to this;
+                                                                // DM: made it static to make the environment-variable loading of VOL work;
+                                                                //     very unfortunate design, but it's the only way I can find to match HDF5 VOL design
+    };
+    static info_t info;     // this needs to be static, since in the environment variable case, we need to configure it from _str_to_info
 
     unsigned                version;
     int                     value;
@@ -63,12 +66,12 @@ struct VOLBase
 
     // info
     static void*           _info_copy(const void *_info);
-    virtual void*           info_copy(const void *_info);
     //void info_cmp()                 {}
     static herr_t          _info_free(void *_info);
-    virtual herr_t          info_free(void *_info);
-    //void info_to_str()              {}
-    //void str_to_info()              {}
+    static herr_t          _info_to_str(const void *info, char **str);
+    //virtual herr_t          info_to_str(const void *info, char **str);
+    static herr_t          _str_to_info(const char *str, void **info);
+    //virtual herr_t          str_to_info(const char *str, void **info);
 
     //// wrap
     //void wrap_get_object()          {}
@@ -173,6 +176,17 @@ struct VOLBase
     //void req_free()                 {}
 };
 
+}
+
+extern "C"
+{
+/* Required shim routines, to enable dynamic loading of shared library */
+/* The HDF5 library _must_ find routines with these names and signatures
+ *      for a shared library that contains a VOL connector to be detected
+ *      and loaded at runtime.
+ */
+H5PL_type_t H5PLget_plugin_type(void);
+const void *H5PLget_plugin_info(void);
 }
 
 #endif
