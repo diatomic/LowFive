@@ -68,7 +68,7 @@ set                         (libraries
                              ${CMAKE_DL_LIBS})
 
 add_subdirectory            (src)
-set                         (libraries ${libraries} lowfive)
+set                         (libraries ${libraries} lowfive lowfive-dist)
 
 # Testing
 # NB testing must be enabled before adding tests subdirectory, otherwise no tests will be found

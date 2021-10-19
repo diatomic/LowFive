@@ -7,12 +7,17 @@ add_library             (lowfive SHARED
                             base/group.cpp
                             base/introspect.cpp
                             vol-metadata.cpp
-                            vol-dist-metadata.cpp
-                            metadata/save-h5.cpp
                         )
-target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY} diy)
+target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY})
 target_include_directories  (lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 target_compile_definitions(lowfive PRIVATE LOWFIVE_ENABLE_PASSTHRU_LOGGING)
+
+add_library             (lowfive-dist
+                         metadata/save-h5.cpp           # not clear, if we even need this (doesn't seem to be used anywhere),
+                                                        # but it requires DIY, so it's going here for now
+                         vol-dist-metadata.cpp)
+target_link_libraries   (lowfive-dist fmt::fmt diy)
+
 
 install                 (TARGETS lowfive
                         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/

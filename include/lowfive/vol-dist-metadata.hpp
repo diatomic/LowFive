@@ -7,6 +7,8 @@
 #include    "query.hpp"
 #include    <diy/types.hpp>
 
+#include    "metadata/serialization.hpp"
+
 namespace LowFive
 {
 

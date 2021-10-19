@@ -4,7 +4,6 @@
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
 #include    "metadata.hpp"
-#include    <diy/mpi.hpp>
 
 namespace LowFive
 {

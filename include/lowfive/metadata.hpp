@@ -24,5 +24,3 @@
 #include "metadata/file.hpp"
 
 #include "metadata/save-h5.hpp"
-
-#include "metadata/serialization.hpp"
