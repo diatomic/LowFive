@@ -11,45 +11,46 @@ namespace LowFive
 // base class for VOL object
 struct VOLBase
 {
-    // automatically manage reference count
-    struct UnderObject
-    {
-        hid_t   under_vol_id;                   // ID for underlying VOL connector
+    //// automatically manage reference count
+    //struct UnderObject
+    //{
+    //    hid_t   under_vol_id;                   // ID for underlying VOL connector
 
-                UnderObject(hid_t uvi):
-                    under_vol_id(uvi)           { H5Iinc_ref(under_vol_id); }
-                ~UnderObject()                  { hid_t err_id; err_id = H5Eget_current_stack(); H5Idec_ref(under_vol_id); H5Eset_current_stack(err_id); }
-    };
+    //            UnderObject(hid_t uvi):
+    //                under_vol_id(uvi)           { H5Iinc_ref(under_vol_id); }
+    //            ~UnderObject()                  { hid_t err_id; err_id = H5Eget_current_stack(); H5Idec_ref(under_vol_id); H5Eset_current_stack(err_id); }
+    //};
 
     // The pass through VOL info object;
     // it increments the reference count for the under_vold_id on creation and decrements on destruction
     struct pass_through_t
     {
                             pass_through_t(void* under_object_, hid_t under_vol_id_, VOLBase* vol_):
-                                under_object(under_object_), vol(vol_)      { H5Iinc_ref(under_vol_id_); }
+                                under_object(under_object_), under_vol_id(under_vol_id_), vol(vol_)      { H5Iinc_ref(under_vol_id_); }
 
-        pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, this->vol->info.under_vol_id, vol); return x; }
+        pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, under_vol_id, vol); return x; }
         static void         destroy(pass_through_t* x)
         {
             hid_t err_id = H5Eget_current_stack();
-            H5Idec_ref(x->vol->info.under_vol_id);
+            H5Idec_ref(x->under_vol_id);
             H5Eset_current_stack(err_id);
             delete x;
         }
 
         void*               under_object;                       // Info object for underlying VOL connector
+        hid_t               under_vol_id;
         VOLBase*            vol;                                // pointer to this
     };
 
     struct info_t
     {
-        hid_t               under_vol_id    = H5VL_NATIVE;      // VOL ID for under VOL
-        void*               under_vol_info  = NULL;             // VOL info for under VOL
+        hid_t               under_vol_id;      // VOL ID for under VOL
+        void*               under_vol_info;             // VOL info for under VOL
         static VOLBase*     vol;                                // pointer to this;
                                                                 // DM: made it static to make the environment-variable loading of VOL work;
                                                                 //     very unfortunate design, but it's the only way I can find to match HDF5 VOL design
     };
-    static info_t info;     // this needs to be static, since in the environment variable case, we need to configure it from _str_to_info
+    static info_t* info;     // this needs to be static, since in the environment variable case, we need to configure it from _str_to_info
 
     unsigned                version;
     int                     value;
@@ -58,6 +59,7 @@ struct VOLBase
     static hid_t            connector_id;   // static only because of term()
 
                             VOLBase();
+                            ~VOLBase();
 
     hid_t                   register_plugin();
 

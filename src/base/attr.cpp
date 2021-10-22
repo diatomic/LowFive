@@ -45,7 +45,7 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id,
     hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    return H5VLattr_create(obj, loc_params, info.under_vol_id, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
+    return H5VLattr_create(obj, loc_params, info->under_vol_id, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -90,7 +90,7 @@ LowFive::VOLBase::
 attr_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    return H5VLattr_open(obj, loc_params, info.under_vol_id, name, aapl_id, dxpl_id, req);
+    return H5VLattr_open(obj, loc_params, info->under_vol_id, name, aapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -129,7 +129,7 @@ LowFive::VOLBase::
 attr_read(void *attr, hid_t mem_type_id, void *buf,
     hid_t dxpl_id, void **req)
 {
-    return H5VLattr_read(attr, info.under_vol_id, mem_type_id, buf, dxpl_id, req);
+    return H5VLattr_read(attr, info->under_vol_id, mem_type_id, buf, dxpl_id, req);
 }
 
 
@@ -169,7 +169,7 @@ LowFive::VOLBase::
 attr_write(void *attr, hid_t mem_type_id, const void *buf,
     hid_t dxpl_id, void **req)
 {
-    return H5VLattr_write(attr, info.under_vol_id, mem_type_id, buf, dxpl_id, req);
+    return H5VLattr_write(attr, info->under_vol_id, mem_type_id, buf, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -208,7 +208,7 @@ LowFive::VOLBase::
 attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    return H5VLattr_get(obj, info.under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLattr_get(obj, info->under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -247,7 +247,7 @@ LowFive::VOLBase::
 attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLattr_specific(obj, loc_params, info.under_vol_id, specific_type, dxpl_id, req, arguments);
+    return H5VLattr_specific(obj, loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -286,7 +286,7 @@ LowFive::VOLBase::
 attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
     va_list arguments)
 {
-    return H5VLattr_optional(obj, info.under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLattr_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -327,5 +327,5 @@ herr_t
 LowFive::VOLBase::
 attr_close(void *attr, hid_t dxpl_id, void **req)
 {
-    return H5VLattr_close(attr, info.under_vol_id, dxpl_id, req);
+    return H5VLattr_close(attr, info->under_vol_id, dxpl_id, req);
 }

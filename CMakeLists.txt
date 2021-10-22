@@ -53,7 +53,7 @@ else                        ()
   message                   ("HDF5_C_LIBRARY_z = " ${HDF5_C_LIBRARY_z})
   set                       (HDF5_LIBRARY ${HDF5_C_LIBRARIES} ${HDF5_C_LIBRARY_hdf5} ${HDF5_C_LIBRARY_z})
 endif                       ()
-set                         (libraries ${libraries} ${HDF5_LIBRARY})
+#set                         (libraries ${libraries} ${HDF5_LIBRARY})
 include_directories         (SYSTEM ${HDF5_INCLUDE_DIR})
 
 # Include dirs

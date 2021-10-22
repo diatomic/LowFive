@@ -44,7 +44,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
 {
-    return H5VLgroup_create(obj, loc_params, info.under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
+    return H5VLgroup_create(obj, loc_params, info->under_vol_id, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -85,5 +85,5 @@ herr_t
 LowFive::VOLBase::
 group_close(void *grp, hid_t dxpl_id, void **req)
 {
-    return H5VLgroup_close(grp, info.under_vol_id, dxpl_id, req);
+    return H5VLgroup_close(grp, info->under_vol_id, dxpl_id, req);
 }

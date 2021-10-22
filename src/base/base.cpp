@@ -1,5 +1,6 @@
 #include <lowfive/vol-base.hpp>
 #include <fmt/core.h>
+#include <fmt/ostream.h>
 
 hid_t LowFive::VOLBase::connector_id = -1;
 
@@ -111,24 +112,46 @@ H5VL_class_t LowFive::VOLBase::connector =
     NULL // OUR_pass_through_optional                  /* optional */
 };
 
-LowFive::VOLBase::info_t LowFive::VOLBase::info;
-LowFive::VOLBase* LowFive::VOLBase::info_t::vol = NULL;
-
 H5PL_type_t H5PLget_plugin_type(void) { return H5PL_TYPE_VOL; }
-const void *H5PLget_plugin_info(void) { return &LowFive::VOLBase::connector; }
+const void *H5PLget_plugin_info(void)
+{
+    fmt::print(stderr, "H5PLget_plugin_info\n");
+    return &LowFive::VOLBase::connector;
+}
 
 LowFive::VOLBase::
 VOLBase()
 {
+    fmt::print(stderr, "VOLBase::VOLBase(), &info = {}\n", fmt::ptr(&info));
+
+    // this is here to trigger HDF5 initialization, in case this constructor is
+    // called before anything else; it would be nice to find a cleaner way to
+    // do this, but this works for now
+    hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pclose(plist);
+
+    if (info == NULL)
+    {
+        VOLBase::info = new info_t;
+        VOLBase::info->under_vol_id = H5VL_NATIVE;      // NB: H5VL_NATIVE is not a variable, it's a macro that calls a function!
+        VOLBase::info->under_vol_info = NULL;
+    }
+
     fmt::print(stderr, "VOLBase::VOLBase()\n");
     info_t::vol = this;
+}
+
+LowFive::VOLBase::
+~VOLBase()
+{
+    // TODO: detele info
 }
 
 hid_t
 LowFive::VOLBase::
 register_plugin()
 {
-    fmt::print("registering plugin\n");
+    fmt::print(stderr, "registering plugin, info = {}\n", fmt::ptr(info));
 
     // Singleton register the pass-through VOL connector ID
     if (connector_id < 0)
@@ -154,8 +177,9 @@ LowFive::VOLBase::
 _init(hid_t vipl_id)
 {
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL INIT\n");
+    fprintf(stderr, "------- PASS THROUGH VOL INIT\n");
 #endif
+    fmt::print(stderr, "_init(), info = {}\n", fmt::ptr(info));
 
     return 0;
 }

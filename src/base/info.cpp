@@ -1,6 +1,11 @@
 #include <lowfive/vol-base.hpp>
 #include <string.h>
 #include <cassert>
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
+LowFive::VOLBase::info_t* LowFive::VOLBase::info = NULL;
+LowFive::VOLBase* LowFive::VOLBase::info_t::vol = NULL;
 
 /*---------------------------------------------------------------------------
  * Function:    info_copy
@@ -16,12 +21,15 @@ void *
 LowFive::VOLBase::
 _info_copy(const void *_info)
 {
-    printf("------- PASS THROUGH VOL INFO Copy (_info_copy)\n");
-    const info_t *info = (const info_t *)_info;
+    fprintf(stderr, "------- PASS THROUGH VOL INFO Copy (_info_copy)\n");
+    // NB: this ignores the argument, and instead always uses VOLBase::info; not ideal, but the only way I can make it work
+    //const info_t *info = (const info_t *)_info;
     info_t *new_info;
 
+    fmt::print(stderr, "_info_copy(), info = {}\n", fmt::ptr(info));
+
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL INFO Copy\n");
+    fprintf(stderr, "------- PASS THROUGH VOL INFO Copy\n");
 #endif
 
     /* Allocate new VOL info struct for the pass through connector */
@@ -71,7 +79,7 @@ _info_free(void *_info)
     H5Eset_current_stack(err_id);
 
     /* Free pass through info object itself */
-    if (info != &VOLBase::info)
+    //if (info != VOLBase::info)
         free(info);
 
     return 0;
@@ -142,7 +150,7 @@ _str_to_info(const char *str, void **_info)
     void *under_vol_info = NULL;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL INFO String To Info\n");
+    fprintf(stderr, "------- PASS THROUGH VOL INFO String To Info\n");
 #endif
 
     /* Retrieve the underlying VOL connector value and info */
@@ -163,16 +171,18 @@ _str_to_info(const char *str, void **_info)
         free(under_vol_info_str);
     } /* end else */
 
+    info = new info_t;
+
     // set the class static info
-    info.under_vol_id = under_vol_id;
-    info.under_vol_info = under_vol_info;
+    info->under_vol_id = under_vol_id;
+    info->under_vol_info = under_vol_info;
     // NB: info->vol not set because we don't have it;
     //     it needs to be set before the info starts being copied around
 
     /* Set return value */
-    *_info = &info;
+    *_info = info;
 
-    printf("Returning, NB: info->vol not yet set\n");
+    fprintf(stderr, "Returning, NB: info->vol not yet set\n");
 
     return 0;
 } /* end str_to_info() */

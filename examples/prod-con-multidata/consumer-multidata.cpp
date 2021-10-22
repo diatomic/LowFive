@@ -28,13 +28,14 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
         fmt::print("consumer: shared {} local size {} intercomms size {} intercomm1 size {}\n",
                 shared, local.size(), intercomms.size(), intercomms[0].size());
 
+    // set up lowfive
+    l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
+
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
     if (passthru)
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
-    // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomms, metadata, passthru);
     l5::H5VOLProperty vol_prop(vol_plugin);
     if (!getenv("HDF5_VOL_CONNECTOR"))
     {

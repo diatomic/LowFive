@@ -164,7 +164,7 @@ LowFive::VOLBase::
 file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    return H5VLfile_get(file, info.under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLfile_get(file, info->under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -203,7 +203,7 @@ LowFive::VOLBase::
 file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLfile_optional(file, info.under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLfile_optional(file, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -244,5 +244,5 @@ herr_t
 LowFive::VOLBase::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
-    return H5VLfile_close(file, info.under_vol_id, dxpl_id, req);
+    return H5VLfile_close(file, info->under_vol_id, dxpl_id, req);
 }
