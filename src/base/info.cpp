@@ -22,8 +22,7 @@ LowFive::VOLBase::
 _info_copy(const void *_info)
 {
     fprintf(stderr, "------- PASS THROUGH VOL INFO Copy (_info_copy)\n");
-    // NB: this ignores the argument, and instead always uses VOLBase::info; not ideal, but the only way I can make it work
-    //const info_t *info = (const info_t *)_info;
+    const info_t *info = (const info_t *)_info;
     info_t *new_info;
 
     fmt::print(stderr, "_info_copy(), info = {}\n", fmt::ptr(info));

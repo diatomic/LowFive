@@ -20,7 +20,7 @@ struct H5VOLProperty
         assert(H5VLis_connector_registered_by_name(vol_plugin.name.c_str()) == 0);
     }
 
-    void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, &vol_plugin.info); }
+    void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, vol_plugin.info); }
 
     hid_t       vol_id;
     VOLBase&    vol_plugin;
