@@ -59,13 +59,13 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_file_create,                               /* create */
         &_file_open,                                 /* open */
         &_file_get,                                  /* get */
-        NULL, // OUR_pass_through_file_specific,            /* specific */
+        &_file_specific,                             /* specific */
         &_file_optional,                             /* optional */
         &_file_close                                 /* close */
     },
     {                                           /* group_cls */
-        &_group_create,                                     /* create */
-        &_group_open,                                       /* open */
+        &_group_create,                              /* create */
+        &_group_open,                                /* open */
         NULL, // OUR_pass_through_group_get,                /* get */
         NULL, // OUR_pass_through_group_specific,           /* specific */
         NULL, // OUR_pass_through_group_optional,           /* optional */
@@ -82,13 +82,13 @@ H5VL_class_t LowFive::VOLBase::connector =
     {                                           /* object_cls */
         NULL, // OUR_pass_through_object_open,              /* open */
         NULL, // OUR_pass_through_object_copy,              /* copy */
-        NULL, // OUR_pass_through_object_get,               /* get */
-        NULL, // OUR_pass_through_object_specific,          /* specific */
+        &_object_get,                                /* get */
+        &_object_specific,                           /* specific */
         NULL  // OUR_pass_through_object_optional,          /* optional */
     },
     {                                           /* introspect_cls */
-        &_introspect_get_conn_cls,                          /* get_conn_cls */
-        &_introspect_opt_query,                             /* opt_query */
+        &_introspect_get_conn_cls,                   /* get_conn_cls */
+        &_introspect_opt_query,                      /* opt_query */
     },
     {                                           /* request_cls */
         NULL, // OUR_pass_through_request_wait,             /* wait */
@@ -99,13 +99,13 @@ H5VL_class_t LowFive::VOLBase::connector =
         NULL  // OUR_pass_through_request_free              /* free */
     },
     {                                           /* blob_cls */
-        NULL, // OUR_pass_through_blob_put,                 /* put */
+        &_blob_put,                                  /* put */
         NULL, // OUR_pass_through_blob_get,                 /* get */
         NULL, // OUR_pass_through_blob_specific,            /* specific */
         NULL, // OUR_pass_through_blob_optional             /* optional */
     },
     {                                           /* token_cls */
-        NULL, // OUR_pass_through_token_cmp,                /* cmp */
+        &_token_cmp,                                 /* cmp */
         NULL, // OUR_pass_through_token_to_str,             /* to_str */
         NULL, // OUR_pass_through_token_from_str              /* from_str */
     },

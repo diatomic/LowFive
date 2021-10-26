@@ -139,7 +139,8 @@ struct VOLBase
     static herr_t          _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     //void file_get()                 {}
-    //void file_specific()            {}
+    static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
+    static herr_t          _file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _file_close(void *file, hid_t dxpl_id, void **req);
@@ -167,7 +168,8 @@ struct VOLBase
     //// object
     //void obj_open()                 {}
     //void obj_copy()                 {}
-    //void obj_get()                  {}
+    static herr_t          _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     //void obj_specific()             {}
     //void obj_optional()             {}
 
@@ -176,6 +178,17 @@ struct VOLBase
     virtual herr_t          introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls);
     static herr_t          _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
     virtual herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
+
+    //// blob
+    static herr_t          _blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
+    //void blob_get                   {}
+    //void blob_specific              {}
+    //void blob_optional              {}
+
+    //// token
+    static herr_t          _token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value);
+    //void token_to_str               {}
+    //void token_from_str             {}
 
     //// request
     //void req_wait()                 {}

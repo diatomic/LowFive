@@ -67,7 +67,7 @@ _dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL DATASET Open\n");
 #endif
 
@@ -111,7 +111,7 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     pass_through_t *o = (pass_through_t *)dset;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL DATASET Read\n");
 #endif
 
