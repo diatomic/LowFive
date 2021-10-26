@@ -6,6 +6,7 @@ add_library             (lowfive SHARED
                             base/attr.cpp
                             base/group.cpp
                             base/introspect.cpp
+                            base/wrap.cpp
                             vol-metadata.cpp
                         )
 target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY})

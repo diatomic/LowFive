@@ -48,6 +48,51 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params,
 }
 
 /*-------------------------------------------------------------------------
+ * Function:    group_open
+ *
+ * Purpose:     Opens a group inside a container
+ *
+ * Return:      Success:    Pointer to a group object
+ *              Failure:    NULL
+ *
+ *-------------------------------------------------------------------------
+ */
+void *
+LowFive::VOLBase::
+_group_open(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
+{
+    pass_through_t *group;
+    pass_through_t *o = (pass_through_t *)obj;
+    void *under;
+
+#ifdef ENABLE_PASSTHRU_LOGGING
+    printf("------- PASS THROUGH VOL GROUP Open\n");
+#endif
+
+    under = o->vol->group_open(o->under_object, loc_params, name, gapl_id, dxpl_id, req);
+    if(under) {
+        group = o->create(under);
+
+        /* Check for async request */
+        if(req && *req)
+            *req = o->create(*req);
+    } /* end if */
+    else
+        group = NULL;
+
+    return (void *)group;
+} /* end group_open() */
+
+void *
+LowFive::VOLBase::
+group_open(void *obj, const H5VL_loc_params_t *loc_params,
+    const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
+{
+    return H5VLgroup_open(obj, loc_params, info->under_vol_id, name, gapl_id, dxpl_id, req);
+}
+
+ /*-------------------------------------------------------------------------
  * Function:    group_close
  *
  * Purpose:     Closes a group.

@@ -42,6 +42,12 @@ struct VOLBase
         VOLBase*            vol;                                // pointer to this
     };
 
+    // The pass through VOL wrapper context
+    struct pass_through_wrap_ctx_t {
+        hid_t under_vol_id;         // VOL ID for under VOL
+        void *under_wrap_ctx;       // Object wrapping context for under VOL
+    };
+
     struct info_t
     {
         hid_t               under_vol_id;      // VOL ID for under VOL
@@ -75,12 +81,12 @@ struct VOLBase
     static herr_t          _str_to_info(const char *str, void **info);
     //virtual herr_t          str_to_info(const char *str, void **info);
 
-    //// wrap
-    //void wrap_get_object()          {}
-    //void get_wrap_ctx()             {}
-    //void wrap_object()              {}
-    //void unwrap_object()            {}
-    //void free_wrap_ctx()            {}
+    // wrap
+    static void*           _wrap_get_object(const void *obj);
+    static herr_t          _get_wrap_ctx(const void *obj, void **wrap_ctx);
+    static void*           _wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx);
+    static void*           _unwrap_object(void *obj);
+    static herr_t          _free_wrap_ctx(void *obj);
 
     // attribute
     static void*           _attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
@@ -141,7 +147,8 @@ struct VOLBase
     //// group
     static void*           _group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     virtual void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
-    //void group_open()               {}
+    static void*           _group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
+    virtual void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
     //void group_get()                {}
     //void group_specific()           {}
     //void group_optional()           {}
