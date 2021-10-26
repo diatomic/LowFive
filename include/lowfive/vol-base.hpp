@@ -44,8 +44,9 @@ struct VOLBase
 
     // The pass through VOL wrapper context
     struct pass_through_wrap_ctx_t {
-        hid_t under_vol_id;         // VOL ID for under VOL
-        void *under_wrap_ctx;       // Object wrapping context for under VOL
+        hid_t       under_vol_id;          // VOL ID for under VOL
+        void        *under_wrap_ctx;       // Object wrapping context for under VOL
+        VOLBase*    vol;                   // pointer to this
     };
 
     struct info_t

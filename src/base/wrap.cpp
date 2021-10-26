@@ -15,7 +15,6 @@ LowFive::VOLBase::
 _wrap_get_object(const void *obj)
 {
     const pass_through_t *o = (const pass_through_t *)obj;
-    void *under;
 
 #ifdef ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL Get object\n");
@@ -52,6 +51,8 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_wrap_ctx->under_vol_id = o->under_vol_id;
     H5Iinc_ref(new_wrap_ctx->under_vol_id);
+    new_wrap_ctx->vol = o->vol;
+
     H5VLget_wrap_ctx(o->under_object, o->under_vol_id, &new_wrap_ctx->under_wrap_ctx);
 
     /* Set wrap context to return */
@@ -74,7 +75,6 @@ void *
 LowFive::VOLBase::
 _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
 {
-    pass_through_t *o = (pass_through_t *)obj;
     pass_through_wrap_ctx_t *wrap_ctx = (pass_through_wrap_ctx_t *)_wrap_ctx;
     pass_through_t *new_obj;
     void *under;
@@ -86,7 +86,7 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     /* Wrap the object with the underlying VOL */
     under = H5VLwrap_object(obj, obj_type, wrap_ctx->under_vol_id, wrap_ctx->under_wrap_ctx);
     if(under)
-        new_obj = o->create(under);
+        new_obj = new pass_through_t(under, wrap_ctx->under_vol_id, wrap_ctx->vol);
     else
         new_obj = NULL;
 
