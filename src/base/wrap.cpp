@@ -41,7 +41,7 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
     const pass_through_t *o = (const pass_through_t *)obj;
     pass_through_wrap_ctx_t *new_wrap_ctx;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Get\n");
 #endif
 
@@ -79,7 +79,7 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     pass_through_t *new_obj;
     void *under;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP Object\n");
 #endif
 
@@ -110,7 +110,7 @@ _unwrap_object(void *obj)
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL UNWRAP Object\n");
 #endif
 
@@ -142,7 +142,7 @@ _free_wrap_ctx(void *_wrap_ctx)
     pass_through_wrap_ctx_t *wrap_ctx = (pass_through_wrap_ctx_t *)_wrap_ctx;
     hid_t err_id;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Free\n");
 #endif
 

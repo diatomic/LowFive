@@ -66,7 +66,7 @@ _group_open(void *obj, const H5VL_loc_params_t *loc_params,
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL GROUP Open\n");
 #endif
 
