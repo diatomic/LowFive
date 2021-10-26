@@ -21,11 +21,11 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_str_to_info,               /* from_str */
     },
     {                                           /* wrap_cls */
-        NULL, // OUR_pass_through_get_object,               /* get_object   */
-        NULL, // OUR_pass_through_get_wrap_ctx,             /* get_wrap_ctx */
-        NULL, // OUR_pass_through_wrap_object,              /* wrap_object  */
-        NULL, // OUR_pass_through_unwrap_object,            /* unwrap_object */
-        NULL  // OUR_pass_through_free_wrap_ctx,            /* free_wrap_ctx */
+        &_wrap_get_object,                          /* get_object   */
+        &_get_wrap_ctx,                             /* get_wrap_ctx */
+        &_wrap_object,                              /* wrap_object  */
+        &_unwrap_object,                            /* unwrap_object */
+        &_free_wrap_ctx,                            /* free_wrap_ctx */
     },
     {                                           /* attribute_cls */
         &_attr_create,                              /* create */
@@ -65,7 +65,7 @@ H5VL_class_t LowFive::VOLBase::connector =
     },
     {                                           /* group_cls */
         &_group_create,                                     /* create */
-        NULL, // OUR_pass_through_group_open,               /* open */
+        &_group_open,                                       /* open */
         NULL, // OUR_pass_through_group_get,                /* get */
         NULL, // OUR_pass_through_group_specific,           /* specific */
         NULL, // OUR_pass_through_group_optional,           /* optional */
