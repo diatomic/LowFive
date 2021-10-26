@@ -1,4 +1,5 @@
 #include <lowfive/vol-base.hpp>
+#include <assert.h>
 
 /*---------------------------------------------------------------------------
  * Function:    _token_cmp
