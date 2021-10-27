@@ -60,6 +60,27 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
 herr_t
 LowFive::MetadataVOL::
+file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    ObjectPointers* file_ = (ObjectPointers*) file;
+
+    va_list args;
+    va_copy(args,arguments);
+
+    fmt::print("file = {}, get_type = {}, req = {}\n", fmt::ptr(file_->h5_obj), get_type, fmt::ptr(req));
+    // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
+
+    herr_t result = 0;
+    if (vol_properties.passthru)
+        result = VOLBase::file_get(file_->h5_obj, get_type, dxpl_id, req, arguments);
+
+    // else: TODO
+
+    return result;
+}
+
+herr_t
+LowFive::MetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
@@ -428,6 +449,24 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
     }
 
     return 0;
+}
+
+herr_t
+LowFive::MetadataVOL::
+attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+
+    va_list args;
+    va_copy(args,arguments);
+
+    herr_t result = 0;
+    if (vol_properties.passthru)
+        result = VOLBase::attr_specific(obj_->h5_obj, loc_params, specific_type, dxpl_id, req, arguments);
+
+    // else: TODO
+
+    return result;
 }
 
 herr_t
