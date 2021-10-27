@@ -21,7 +21,7 @@ _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t ge
     printf("------- PASS THROUGH VOL OBJECT Get\n");
 #endif
 
-    ret_value = H5VLobject_get(o->under_object, loc_params, o->under_vol_id, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->object_get(o->under_object, loc_params, get_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -29,6 +29,13 @@ _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t ge
 
     return ret_value;
 } /* end _object_get() */
+
+herr_t
+LowFive::VOLBase::
+object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    return H5VLobject_get(obj, loc_params, info->under_vol_id, get_type, dxpl_id, req, arguments);
+}
 
 /*-------------------------------------------------------------------------
  * Function:    _object_specific
@@ -57,7 +64,7 @@ _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     // refresh destroying the current object
     under_vol_id = o->under_vol_id;
 
-    ret_value = H5VLobject_specific(o->under_object, loc_params, o->under_vol_id, specific_type, dxpl_id, req, arguments);
+    ret_value = o->vol->object_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
 
     /* Check for async request */
     if(req && *req)
@@ -67,4 +74,11 @@ _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
 } /* end _object_specific() */
 
 
+herr_t
+LowFive::VOLBase::
+object_specific(void *obj, const H5VL_loc_params_t *loc_params,
+    H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    return H5VLobject_specific(obj, loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
+}
 

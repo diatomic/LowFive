@@ -29,8 +29,14 @@ _token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int 
     assert(token2);
     assert(cmp_value);
 
-    ret_value = H5VLtoken_cmp(o->under_object, o->under_vol_id, token1, token2, cmp_value);
+    ret_value = o->vol->token_cmp(o->under_object, token1, token2, cmp_value);
 
     return ret_value;
 } /* end _token_cmp() */
 
+herr_t
+LowFive::VOLBase::
+token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value)
+{
+    return H5VLtoken_cmp(obj, info->under_vol_id, token1, token2, cmp_value);
+}

@@ -183,11 +183,15 @@ LowFive::VOLBase::
 _file_specific_reissue(void *obj, hid_t connector_id,
     H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...)
 {
+    // TODO: is this right? making a new object from the reissued one?
+    pass_through_t *o = (pass_through_t *)obj;
+
     va_list arguments;
     herr_t ret_value;
 
     va_start(arguments, req);
-    ret_value = H5VLfile_specific(obj, connector_id, specific_type, dxpl_id, req, arguments);
+    // TODO: is this right? making a new object from the reissued one?
+    ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
     va_end(arguments);
 
     return ret_value;
@@ -277,7 +281,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
         /* Keep the correct underlying VOL ID for possible async request token */
         under_vol_id = o->under_vol_id;
 
-        ret_value = H5VLfile_specific(o->under_object, o->under_vol_id, specific_type, dxpl_id, req, arguments);
+        ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
 
         /* Wrap file struct pointer, if we reopened one */
         if(specific_type == H5VL_FILE_REOPEN) {
@@ -299,6 +303,14 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
 
     return ret_value;
 } /* end _file_specific() */
+
+herr_t
+LowFive::VOLBase::
+file_specific(void *file, H5VL_file_specific_t specific_type,
+    hid_t dxpl_id, void **req, va_list arguments)
+{
+    return H5VLfile_specific(file, info->under_vol_id, specific_type, dxpl_id, req, arguments);
+}
 
 /*-------------------------------------------------------------------------
  * Function:    file_optional

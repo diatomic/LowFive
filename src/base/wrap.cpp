@@ -20,9 +20,16 @@ _wrap_get_object(const void *obj)
     printf("------- PASS THROUGH VOL Get object\n");
 #endif
 
-    return H5VLget_object(o->under_object, o->under_vol_id);
+    return o->vol->wrap_get_object(o->under_object);
 
 } /* end wrap_get_object() */
+
+void *
+LowFive::VOLBase::
+wrap_get_object(void *obj)
+{
+    return H5VLget_object(obj, info->under_vol_id);
+}
 
 /*---------------------------------------------------------------------------
  * Function:    get_wrap_ctx
@@ -53,7 +60,7 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
     H5Iinc_ref(new_wrap_ctx->under_vol_id);
     new_wrap_ctx->vol = o->vol;
 
-    H5VLget_wrap_ctx(o->under_object, o->under_vol_id, &new_wrap_ctx->under_wrap_ctx);
+    o->vol->get_wrap_ctx(o->under_object, &new_wrap_ctx->under_wrap_ctx);
 
     /* Set wrap context to return */
     *wrap_ctx = new_wrap_ctx;
@@ -61,7 +68,15 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
     return 0;
 } /* end get_wrap_ctx() */
 
+herr_t
+LowFive::VOLBase::
+get_wrap_ctx(void *obj, void **wrap_ctx)
+{
+    return H5VLget_wrap_ctx(obj, info->under_vol_id, wrap_ctx);
+}
+
 /*---------------------------------------------------------------------------
+ *
  * Function:    wrap_object
  *
  * Purpose:     Use a "wrapper context" to wrap a data object
@@ -84,7 +99,7 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
 #endif
 
     /* Wrap the object with the underlying VOL */
-    under = H5VLwrap_object(obj, obj_type, wrap_ctx->under_vol_id, wrap_ctx->under_wrap_ctx);
+    under = wrap_ctx->vol->wrap_object(obj, obj_type, wrap_ctx->under_wrap_ctx);
     if(under)
         new_obj = new pass_through_t(under, wrap_ctx->under_vol_id, wrap_ctx->vol);
     else
@@ -92,6 +107,13 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
 
     return new_obj;
 } /* end wrap_object() */
+
+void *
+LowFive::VOLBase::
+wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
+{
+    return H5VLwrap_object(obj, obj_type, info->under_vol_id, wrap_ctx);
+}
 
 /*---------------------------------------------------------------------------
  * Function:    unwrap_object
@@ -114,14 +136,21 @@ _unwrap_object(void *obj)
     printf("------- PASS THROUGH VOL UNWRAP Object\n");
 #endif
 
-    /* Unrap the object with the underlying VOL */
-    under = H5VLunwrap_object(o->under_object, o->under_vol_id);
+    /* Unwrap the object with the underlying VOL */
+    under = o->vol->unwrap_object(o->under_object);
 
     if(under)
         pass_through_t::destroy(o);
 
     return under;
 } /* end unwrap_object() */
+
+void *
+LowFive::VOLBase::
+unwrap_object(void *obj)
+{
+    return H5VLunwrap_object(obj, info->under_vol_id);
+}
 
 /*---------------------------------------------------------------------------
  * Function:    free_wrap_ctx
@@ -150,7 +179,7 @@ _free_wrap_ctx(void *_wrap_ctx)
 
     /* Release underlying VOL ID and wrap context */
     if(wrap_ctx->under_wrap_ctx)
-        H5VLfree_wrap_ctx(wrap_ctx->under_wrap_ctx, wrap_ctx->under_vol_id);
+        wrap_ctx->vol->free_wrap_ctx(wrap_ctx->under_wrap_ctx);
     H5Idec_ref(wrap_ctx->under_vol_id);
 
     H5Eset_current_stack(err_id);
@@ -160,4 +189,11 @@ _free_wrap_ctx(void *_wrap_ctx)
 
     return 0;
 } /* end free_wrap_ctx() */
+
+herr_t
+LowFive::VOLBase::
+free_wrap_ctx(void *wrap_ctx)
+{
+    return H5VLfree_wrap_ctx(wrap_ctx, info->under_vol_id);
+}
 

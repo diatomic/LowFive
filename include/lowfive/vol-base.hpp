@@ -84,10 +84,15 @@ struct VOLBase
 
     // wrap
     static void*           _wrap_get_object(const void *obj);
+    virtual void*           wrap_get_object(void *obj);
     static herr_t          _get_wrap_ctx(const void *obj, void **wrap_ctx);
+    virtual herr_t          get_wrap_ctx(void *obj, void **wrap_ctx);
     static void*           _wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx);
+    virtual void*           wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx);
     static void*           _unwrap_object(void *obj);
+    virtual void*           unwrap_object(void *obj);
     static herr_t          _free_wrap_ctx(void *obj);
+    virtual herr_t          free_wrap_ctx(void *obj);
 
     // attribute
     static void*           _attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
@@ -141,6 +146,7 @@ struct VOLBase
     //void file_get()                 {}
     static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
     static herr_t          _file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _file_close(void *file, hid_t dxpl_id, void **req);
@@ -169,7 +175,9 @@ struct VOLBase
     //void obj_open()                 {}
     //void obj_copy()                 {}
     static herr_t          _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     //void obj_specific()             {}
     //void obj_optional()             {}
 
@@ -181,12 +189,14 @@ struct VOLBase
 
     //// blob
     static herr_t          _blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
+    virtual herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
     //void blob_get                   {}
     //void blob_specific              {}
     //void blob_optional              {}
 
     //// token
     static herr_t          _token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value);
+    virtual herr_t          token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value);
     //void token_to_str               {}
     //void token_from_str             {}
 
