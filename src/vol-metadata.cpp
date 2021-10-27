@@ -318,6 +318,26 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     return result;
 }
 
+void*
+LowFive::MetadataVOL::
+group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    ObjectPointers* result = new ObjectPointers;
+
+    // open from the file if not opening from memory
+    // if both memory and passthru are enabled, open from memory only
+    if (vol_properties.passthru && !vol_properties.memory)
+        result->h5_obj = VOLBase::group_open(obj_->h5_obj, loc_params, name, gapl_id, dxpl_id, req);
+
+    // find the group in our file metadata
+    std::string name_(name);
+    if (vol_properties.memory)
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+
+    return (void*)result;
+}
+
 herr_t
 LowFive::MetadataVOL::
 group_close(void *grp, hid_t dxpl_id, void **req)
