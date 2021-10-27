@@ -115,6 +115,8 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = new ObjectPointers;
 
+    fmt::print("create: dset = {}, dxpl_id = {}\n", fmt::ptr(obj_->h5_obj), dxpl_id);
+
     if (vol_properties.passthru)
         result->h5_obj = VOLBase::dataset_create(obj_->h5_obj, loc_params, name,
                 lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
