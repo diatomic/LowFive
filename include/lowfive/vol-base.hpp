@@ -40,6 +40,7 @@ struct VOLBase
         void*               under_object;                       // Info object for underlying VOL connector
         hid_t               under_vol_id;
         VOLBase*            vol;                                // pointer to this
+        void*               extra = nullptr;
     };
 
     // The pass through VOL wrapper context

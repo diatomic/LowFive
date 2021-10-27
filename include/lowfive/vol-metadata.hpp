@@ -57,15 +57,6 @@ struct MetadataVOL: public LowFive::VOLBase
 
     VOLProperties   vol_properties;
 
-    struct ObjectPointers
-    {
-        void*           h5_obj;             // HDF5 object (e.g., dset)
-        void*           mdata_obj;          // metadata object (tree node)
-
-        ObjectPointers() : h5_obj(nullptr), mdata_obj(nullptr)
-                    {}
-    };
-
     Files           files;
     DataOwners      data_owners;
 

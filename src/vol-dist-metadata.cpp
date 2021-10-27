@@ -4,10 +4,10 @@ void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
+    pass_through_t* obj_ = (pass_through_t*) obj;
+    pass_through_t* result = (pass_through_t*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
 
-    if (vol_properties.memory && !result->mdata_obj)
+    if (vol_properties.memory && !result->extra)
     {
         // assume we are the consumer, since nothing stored in memory (open also implies that)
         auto* ds = new RemoteDataset(name);     // build and record the index to be used in read
@@ -20,7 +20,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
         // get the filename
         std::string filename, unused;
-        backtrack_name(std::string(""), static_cast<Object*>(obj_->mdata_obj), filename, unused);
+        backtrack_name(std::string(""), static_cast<Object*>(obj_->extra), filename, unused);
 
         // get the correct intercomm
         int intercomm_index;
@@ -50,7 +50,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         // open a query
         Query* query = new Query(local, intercomms, remote_size, ds->name, intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
         ds->query = query;
-        result->mdata_obj = ds;
+        result->extra = ds;
     }
 
     return (void*)result;
@@ -60,12 +60,12 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
+    pass_through_t* dset_ = (pass_through_t*) dset;
     if (vol_properties.memory)
     {
-        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))                   // producer
+        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->extra))                   // producer
             serve_data.push_back(ds);   // record dataset for serving later when file closes
-        else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
+        else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->extra))  // consumer
         {
             Query* query = (Query*) ds->query;
             // NB: deferring calling query->close() until file_close() time
@@ -80,12 +80,12 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
+    pass_through_t* dset_ = (pass_through_t*) dset;
 
     if (vol_properties.memory)
     {
         // consumer with the name of a remote dataset
-        if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
+        if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->extra))
         {
             // query to producer
             Query* query = (Query*) ds->query;
@@ -99,7 +99,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     // read from the file if not reading from memory
     // if both memory and passthru are enabled, read from memory only
     if (!vol_properties.memory && vol_properties.passthru && buf)     // TODO: probably also add a condition that read "from memory" failed
-        return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+        return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     return 0;
 }
@@ -108,16 +108,16 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
+    pass_through_t* dset_ = (pass_through_t*) dset;
 
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
+    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // consumer with the name of a remote dataset
-    if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
+    if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->extra))
     {
         // query to producer
         Query* query = (Query*) ds->query;
@@ -158,7 +158,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     }
 
     if (!vol_properties.memory && vol_properties.passthru)
-        return VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
+        return VOLBase::dataset_get(dset_, get_type, dxpl_id, req, arguments);
 
     return 0;
 }
@@ -167,9 +167,9 @@ herr_t
 LowFive::DistMetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* file_ = (ObjectPointers*) file;
+    pass_through_t* file_ = (pass_through_t*) file;
 
-    File* f = dynamic_cast<File*>((Object*) file_->mdata_obj);
+    File* f = dynamic_cast<File*>((Object*) file_->extra);
 
     if (vol_properties.memory)
     {
