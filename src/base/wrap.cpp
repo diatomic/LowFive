@@ -28,7 +28,7 @@ void *
 LowFive::VOLBase::
 wrap_get_object(void *obj)
 {
-    return H5VLget_object(obj, info->under_vol_id);
+    return wrap(H5VLget_object(unwrap(obj), info->under_vol_id));
 }
 
 /*---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ herr_t
 LowFive::VOLBase::
 get_wrap_ctx(void *obj, void **wrap_ctx)
 {
-    return H5VLget_wrap_ctx(obj, info->under_vol_id, wrap_ctx);
+    return H5VLget_wrap_ctx(unwrap(obj), info->under_vol_id, wrap_ctx);
 }
 
 /*---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ void *
 LowFive::VOLBase::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
-    return H5VLwrap_object(obj, obj_type, info->under_vol_id, wrap_ctx);
+    return wrap(H5VLwrap_object(unwrap(obj), obj_type, info->under_vol_id, wrap_ctx));
 }
 
 /*---------------------------------------------------------------------------
@@ -149,7 +149,7 @@ void *
 LowFive::VOLBase::
 unwrap_object(void *obj)
 {
-    return H5VLunwrap_object(obj, info->under_vol_id);
+    return wrap(H5VLunwrap_object(unwrap(obj), info->under_vol_id));
 }
 
 /*---------------------------------------------------------------------------
@@ -196,4 +196,3 @@ free_wrap_ctx(void *wrap_ctx)
 {
     return H5VLfree_wrap_ctx(wrap_ctx, info->under_vol_id);
 }
-

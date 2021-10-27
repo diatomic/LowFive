@@ -99,7 +99,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     // read from the file if not reading from memory
     // if both memory and passthru are enabled, read from memory only
     if (!vol_properties.memory && vol_properties.passthru && buf)     // TODO: probably also add a condition that read "from memory" failed
-        return VOLBase::dataset_read(dset_->h5_obj, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+        return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     return 0;
 }
@@ -113,7 +113,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(dset_->h5_obj), get_type, fmt::ptr(req));
+    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // consumer with the name of a remote dataset
@@ -158,7 +158,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     }
 
     if (!vol_properties.memory && vol_properties.passthru)
-        return VOLBase::dataset_get(dset_->h5_obj, get_type, dxpl_id, req, arguments);
+        return VOLBase::dataset_get(dset_, get_type, dxpl_id, req, arguments);
 
     return 0;
 }

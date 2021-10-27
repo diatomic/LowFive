@@ -78,6 +78,23 @@ struct MetadataVOL: public LowFive::VOLBase
             delete x.second;
     }
 
+    void*           wrap(void* p) override
+    {
+        ObjectPointers* op = new ObjectPointers;
+        op->h5_obj = p;
+        return op;
+    }
+    void*           unwrap(void* p) override
+    {
+        ObjectPointers* op = static_cast<ObjectPointers*>(p);
+        return op->h5_obj;
+    }
+    void            drop(void* p) override
+    {
+        ObjectPointers* op = static_cast<ObjectPointers*>(p);
+        delete op;
+    }
+
     void            drop(std::string filename)
     {
         auto it = files.find(filename);

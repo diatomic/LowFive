@@ -31,6 +31,8 @@ struct VOLBase
         pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, under_vol_id, vol); return x; }
         static void         destroy(pass_through_t* x)
         {
+            x->vol->drop(x->under_object);
+
             hid_t err_id = H5Eget_current_stack();
             H5Idec_ref(x->under_vol_id);
             H5Eset_current_stack(err_id);
@@ -67,6 +69,10 @@ struct VOLBase
 
                             VOLBase();
                             ~VOLBase();
+
+    virtual void*           wrap(void* p)       { return p; }
+    virtual void*           unwrap(void* p)     { return p; }
+    virtual void            drop(void* p)       {}
 
     hid_t                   register_plugin();
 
