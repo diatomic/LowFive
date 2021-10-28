@@ -16,9 +16,11 @@ _wrap_get_object(const void *obj)
 {
     const pass_through_t *o = (const pass_through_t *)obj;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL Get object\n");
 #endif
+
+    printf("_wrap_get_object obj %p\n", obj);
 
     return o->vol->wrap_get_object(o->under_object);
 
@@ -28,7 +30,7 @@ void *
 LowFive::VOLBase::
 wrap_get_object(void *obj)
 {
-    return wrap(H5VLget_object(unwrap(obj), info->under_vol_id));
+    return H5VLget_object(unwrap(obj), info->under_vol_id);
 }
 
 /*---------------------------------------------------------------------------
@@ -51,6 +53,8 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Get\n");
 #endif
+
+    printf("_get_wrap_ctx obj %p\n", obj);
 
     /* Allocate new VOL object wrapping context for the pass through connector */
     new_wrap_ctx = (pass_through_wrap_ctx_t *)calloc(1, sizeof(pass_through_wrap_ctx_t));
@@ -98,6 +102,8 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     printf("------- PASS THROUGH VOL WRAP Object\n");
 #endif
 
+    printf("_wrap_object obj %p\n", obj);
+
     /* Wrap the object with the underlying VOL */
     under = wrap_ctx->vol->wrap_object(obj, obj_type, wrap_ctx->under_wrap_ctx);
     if(under)
@@ -112,7 +118,7 @@ void *
 LowFive::VOLBase::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
-    return wrap(H5VLwrap_object(unwrap(obj), obj_type, info->under_vol_id, wrap_ctx));
+    return wrap(H5VLwrap_object(obj, obj_type, info->under_vol_id, wrap_ctx));
 }
 
 /*---------------------------------------------------------------------------
@@ -136,6 +142,8 @@ _unwrap_object(void *obj)
     printf("------- PASS THROUGH VOL UNWRAP Object\n");
 #endif
 
+    printf("_unwrap_object obj %p\n", obj);
+
     /* Unwrap the object with the underlying VOL */
     under = o->vol->unwrap_object(o->under_object);
 
@@ -149,7 +157,11 @@ void *
 LowFive::VOLBase::
 unwrap_object(void *obj)
 {
-    return wrap(H5VLunwrap_object(unwrap(obj), info->under_vol_id));
+    void* res = H5VLunwrap_object(unwrap(obj), info->under_vol_id);
+    if (res)
+        return wrap(res);
+    else
+        return res;
 }
 
 /*---------------------------------------------------------------------------
@@ -174,6 +186,8 @@ _free_wrap_ctx(void *_wrap_ctx)
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Free\n");
 #endif
+
+    printf("_free_wrap_ctx obj %p\n", wrap_ctx);
 
     err_id = H5Eget_current_stack();
 

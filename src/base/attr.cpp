@@ -233,6 +233,8 @@ _attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL ATTRIBUTE Specific\n");
 #endif
 
+    printf("_attr_specific obj %p\n", obj);
+
     ret_value = o->vol->attr_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
 
     /* Check for async request */

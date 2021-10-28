@@ -24,6 +24,8 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     printf("------- PASS THROUGH VOL DATASET Create\n");
 #endif
 
+    printf("_dataset_create obj %p\n", obj);
+
     under = o->vol->dataset_create(o->under_object, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
 
     if(under) {
@@ -45,6 +47,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
+    printf("dataset_create obj %p\n", unwrap(obj));
     return wrap(H5VLdataset_create(unwrap(obj), loc_params, info->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req));
 }
 
@@ -226,6 +229,8 @@ _dataset_close(void *dset, hid_t dxpl_id, void **req)
     printf("------- PASS THROUGH VOL DATASET Close\n");
 #endif
 
+    printf("_dataset_close dset %p\n", dset);
+
     ret_value = o->vol->dataset_close(o->under_object, dxpl_id, req);
 
     /* Check for async request */
@@ -243,5 +248,6 @@ herr_t
 LowFive::VOLBase::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
+    printf("dataset_close dset %p\n", unwrap(dset));
     return H5VLdataset_close(unwrap(dset), info->under_vol_id, dxpl_id, req);
 }
