@@ -20,8 +20,6 @@ _wrap_get_object(const void *obj)
     printf("------- PASS THROUGH VOL Get object\n");
 #endif
 
-    printf("_wrap_get_object obj %p\n", obj);
-
     return o->vol->wrap_get_object(o->under_object);
 
 } /* end wrap_get_object() */
@@ -53,8 +51,6 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Get\n");
 #endif
-
-    printf("_get_wrap_ctx obj %p\n", obj);
 
     /* Allocate new VOL object wrapping context for the pass through connector */
     new_wrap_ctx = (pass_through_wrap_ctx_t *)calloc(1, sizeof(pass_through_wrap_ctx_t));
@@ -102,8 +98,6 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     printf("------- PASS THROUGH VOL WRAP Object\n");
 #endif
 
-    printf("_wrap_object obj %p\n", obj);
-
     /* Wrap the object with the underlying VOL */
     under = wrap_ctx->vol->wrap_object(obj, obj_type, wrap_ctx->under_wrap_ctx);
     if(under)
@@ -141,8 +135,6 @@ _unwrap_object(void *obj)
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL UNWRAP Object\n");
 #endif
-
-    printf("_unwrap_object obj %p\n", obj);
 
     /* Unwrap the object with the underlying VOL */
     under = o->vol->unwrap_object(o->under_object);
@@ -186,8 +178,6 @@ _free_wrap_ctx(void *_wrap_ctx)
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     printf("------- PASS THROUGH VOL WRAP CTX Free\n");
 #endif
-
-    printf("_free_wrap_ctx obj %p\n", wrap_ctx);
 
     err_id = H5Eget_current_stack();
 
