@@ -355,7 +355,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     if (vol_properties.memory)
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Group(name));
 
-    return result;
+    return (void*)result;
 }
 
 void*
@@ -364,9 +364,6 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
-
-    fmt::print("group_open: obj = {} [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
-            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), dxpl_id);
 
     // open from the file if not opening from memory
     // if both memory and passthru are enabled, open from memory only
@@ -378,7 +375,13 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     // find the group in our file metadata
     std::string name_(name);
     if (vol_properties.memory)
+    {
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+
+        // create the group if it doesn't exist
+        if (!result->mdata_obj)
+            result = static_cast<ObjectPointers*>(group_create(obj, loc_params, name, H5P_DEFAULT, H5P_DEFAULT, gapl_id, dxpl_id, req));
+    }
 
     return (void*)result;
 }
