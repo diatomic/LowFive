@@ -132,6 +132,8 @@ struct MetadataVOL: public LowFive::VOLBase
 
         if (*first == '*')
             return match(first+1, second) || match(first, second+1);
+
+        return partial;
     }
 
     bool match_any(std::pair<std::string,std::string> filepath, const LocationPatterns& patterns, bool partial = false) const
