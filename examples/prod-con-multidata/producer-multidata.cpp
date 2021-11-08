@@ -67,10 +67,7 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
 
     // create a new file and group using default properties
     hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
-
-    // debug: open a group that wasn't created
-//     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t group = H5Gopen(file, "/group1", H5P_DEFAULT);
+    hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     std::vector<hsize_t> domain_cnts(DIM);
     for (auto i = 0; i < DIM; i++)

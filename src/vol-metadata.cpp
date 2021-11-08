@@ -375,13 +375,7 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     // find the group in our file metadata
     std::string name_(name);
     if (vol_properties.memory)
-    {
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
-
-        // create the group if it doesn't exist
-        if (!result->mdata_obj)
-            result = static_cast<ObjectPointers*>(group_create(obj, loc_params, name, H5P_DEFAULT, H5P_DEFAULT, gapl_id, dxpl_id, req));
-    }
 
     return (void*)result;
 }
