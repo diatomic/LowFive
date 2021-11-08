@@ -23,6 +23,9 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
 
     obj_ptrs->mdata_obj = mdata;
 
+    fmt::print("file_create: obj_ptrs = {} [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
+            fmt::ptr(obj_ptrs), fmt::ptr(obj_ptrs->h5_obj), fmt::ptr(obj_ptrs->mdata_obj), dxpl_id);
+
     return obj_ptrs;
 }
 
@@ -77,7 +80,8 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("file = {}, get_type = {}, req = {}\n", fmt::ptr(file_->h5_obj), get_type, fmt::ptr(req));
+    fmt::print("file_get: file = {} [h5_obj {} mdata_obj {}], get_type = {} req = {} dxpl_id = {}\n",
+            fmt::ptr(file_), fmt::ptr(file_->h5_obj), fmt::ptr(file_->mdata_obj), get_type, fmt::ptr(req), dxpl_id);
     // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     herr_t result = 0;
@@ -123,7 +127,8 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
-    fmt::print("create: dset = {}, dxpl_id = {}\n", fmt::ptr(obj_->h5_obj), dxpl_id);
+    fmt::print("dataset_create: obj = {} [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
+            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), dxpl_id);
 
     if (vol_properties.passthru)
         result = (ObjectPointers*) VOLBase::dataset_create(obj_, loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
@@ -359,6 +364,9 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
+
+    fmt::print("group_open: obj = {} [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
+            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), dxpl_id);
 
     // open from the file if not opening from memory
     // if both memory and passthru are enabled, open from memory only
