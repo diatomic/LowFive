@@ -1,6 +1,16 @@
 #include <lowfive/vol-metadata.hpp>
 #include <cassert>
 
+// General design philosophy:
+//  - build in-memory hierarchy, regardless of whether it was requested, but if
+//    it wasn't, don't store the actual data
+//  - if passthru is enabled for the particular item, prefer it (as an
+//    iron-clad way to get what the user wants);
+//    TODO: this may be a wrong decision: the more logical way would be to always
+//    prefer memory, since it's faster, but passthru is safer; it's worth re-visiting
+//  - of course, it's perfectly reasonable to have both memory and passthru on
+//    producer, and only memory on consumer
+
 void*
 LowFive::MetadataVOL::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
@@ -91,8 +101,9 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     herr_t result = 0;
     if (unwrap(file_))
         result = VOLBase::file_get(file_, get_type, dxpl_id, req, arguments);
-
     // else: TODO
+    else
+        fmt::print("Warning: requested file_get() not implemented for in-memory regime\n");
 
     return result;
 }
@@ -107,6 +118,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
     if (unwrap(file_))
         res = VOLBase::file_close(file_, dxpl_id, req);
+
+    if (file_->mdata_obj)
+    {
+        File* f = (File*) file_->mdata_obj;
+        files.erase(f->name);
+        delete f;       // erases all the children too
+    }
 
     // deliberately verbose, to emphasize checking of res
     if (res == 0)
@@ -142,16 +160,13 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     else
         result = new ObjectPointers;
 
-    //if (match_any(filepath, memory))
-    //{
-        // check the ownership map for the full path name and file name
-        Dataset::Ownership own = Dataset::Ownership::lowfive;
-        if (match_any(filepath, zerocopy))
-            own = Dataset::Ownership::user;
+    // check the ownership map for the full path name and file name
+    Dataset::Ownership own = Dataset::Ownership::lowfive;
+    if (match_any(filepath, zerocopy))
+        own = Dataset::Ownership::user;
 
-        // add the dataset
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name, type_id, space_id, own));
-    //}
+    // add the dataset
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name, type_id, space_id, own));
 
     return (void*)result;
 }
@@ -168,7 +183,6 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
 
-    // if both memory and passthru are enabled, open from memory only
     if (match_any(filepath, passthru))
         result = (ObjectPointers*) VOLBase::dataset_open(obj_, loc_params, name, dapl_id, dxpl_id, req);
     else
@@ -193,7 +207,9 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
-    // TODO: why do we prefer passthru to memory here?
+    // TODO: Why do we prefer passthru to memory here? Only reason is that it's
+    //       more complete. But perhaps it's best to trigger the error in the else
+    //       than survive on passthru?
     herr_t result = 0;
     if (unwrap(dset_))
         result = VOLBase::dataset_get(dset_, get_type, dxpl_id, req, arguments);
@@ -317,8 +333,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
 
     herr_t retval = 0;
 
-    // close from the file if not using metadata in memory
-    // if both memory and passthru are enabled, close from file (producer) only
+    // close the file, keep in-memory structures in the hierarchy (they may be needed up to file_close())
     if (unwrap(dset_))
         retval = VOLBase::dataset_close(dset_, dxpl_id, req);
 

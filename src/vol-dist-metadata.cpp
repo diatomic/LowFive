@@ -172,6 +172,15 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
+    // this is a little too closely coupled to MetadataVOL::file_close(), but
+    // it closes the file before starting to serve, which may be useful in some
+    // scenarios
+    if (unwrap(file_))
+    {
+        herr_t res = VOLBase::file_close(file_, dxpl_id, req);
+        file_->h5_obj = nullptr;    // this makes sure that the recursive call below won't trigger VOLBase::file_close() again
+    }
+
     File* f = dynamic_cast<File*>((Object*) file_->mdata_obj);
     fmt::print("Closing file {}\n", fmt::ptr(f));
 
