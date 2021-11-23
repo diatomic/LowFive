@@ -120,15 +120,16 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
                hid_t space_id, hid_t dcpl_id,
                hid_t dapl_id,  hid_t dxpl_id, void **req)
 {
-    fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
-    fmt::print("data type = {}\n", Datatype(type_id));
-    fmt::print("data space = {}\n", Dataspace(space_id));
+//     fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
+//     fmt::print("data type = {}\n", Datatype(type_id));
+//     fmt::print("data space = {}\n", Dataspace(space_id));
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
-    fmt::print("dataset_create: obj = {} [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
-            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), dxpl_id);
+    fmt::print(stderr, "Dataset Create\n");
+    fmt::print("dataset_create: parent obj = {} [h5_obj {} mdata_obj {}], name = {}\n",
+            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), name);
 
     if (vol_properties.passthru)
         result = (ObjectPointers*) VOLBase::dataset_create(obj_, loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
@@ -155,12 +156,12 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
             }
         }
 
-        // debug
-//         fmt::print("dataset_create(): filename {} full_path {} own {}\n", filename, full_path, own);
-
         // add the dataset
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id, own));
+
     }
+    fmt::print(stderr, "dataset_create: created result {} result->h5_obj {} result->mdata_obj {}\n",
+            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj));
 
     return (void*)result;
 }
@@ -296,6 +297,7 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
+    fmt::print(stderr, "Dataset Write\n");
     fmt::print("dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
                fmt::ptr(unwrap(dset_)),
                mem_space_id, Dataspace(mem_space_id),
@@ -319,7 +321,12 @@ LowFive::MetadataVOL::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
-    fmt::print("close: dset = {}, dxpl_id = {}\n", fmt::ptr(unwrap(dset_)), dxpl_id);
+
+    fmt::print(stderr, "Dataset Close\n");
+    fmt::print(stderr, "dataset_close: dset = {} = [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
+            fmt::ptr(dset_), fmt::ptr(dset_->h5_obj), fmt::ptr(dset_->mdata_obj), dxpl_id);
+    if (dset_->mdata_obj)
+        fmt::print(stderr, "closing dataset name {}\n", static_cast<Object*>(dset_->mdata_obj)->name);
 
     herr_t retval = 0;
 
@@ -419,7 +426,39 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     if (vol_properties.memory)
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
 
+    fmt::print("created attribute object = {} = [h5_obj {} mdata_obj {}] name {}\n",
+            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);
+
     return result;
+}
+
+void*
+LowFive::MetadataVOL::
+attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    ObjectPointers* result = nullptr;
+
+    fmt::print(stderr, "Attr Open\n");
+    fmt::print("attr_open obj = {} = [h5_obj {} mdata_obj {}] name {}\n",
+            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), name);
+
+    // open from the file if not opening from memory
+    // if both memory and passthru are enabled, open from memory only
+    if (vol_properties.passthru && !vol_properties.memory)
+        result = (ObjectPointers*) VOLBase::attr_open(obj_, loc_params, name, aapl_id, dxpl_id, req);
+    else
+        result = new ObjectPointers;
+
+    // find the attribute in our file metadata
+    std::string name_(name);
+    if (vol_properties.memory)
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+
+    fmt::print("attr_open search result = {} = [h5_obj {} mdata_obj {}] name {}\n",
+            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);
+
+    return (void*)result;
 }
 
 herr_t
@@ -486,11 +525,65 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
     va_list args;
     va_copy(args,arguments);
 
+    fmt::print("attr_specific obj = {} = [h5_obj {} mdata_obj {}]\n",
+            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj));
+
     herr_t result = 0;
     if (vol_properties.passthru)
         result = VOLBase::attr_specific(obj_, loc_params, specific_type, dxpl_id, req, arguments);
 
-    // else: TODO
+    else if (vol_properties.memory)
+    {
+        switch(specific_type)
+        {
+            case H5VL_ATTR_DELETE:                      // H5Adelete(_by_name/idx)
+            {
+//                 fmt::print("Warning, H5VL_ATTR_DELETE not yet implemented in LowFive::MetadataVOL::attr_specific()\n");
+                // TODO
+                throw MetadataError(fmt::format("Warning, H5VL_ATTR_DELETE not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                break;
+            }
+            case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
+            {
+                fmt::print(stderr, "case H5VL_ATTR_EXISTS\n");
+
+                const char *attr_name = va_arg(arguments, const char *);
+                htri_t *    ret       = va_arg(arguments, htri_t *);
+
+                // check direct children of the parent object (NB, not full search all the way down the tree)
+                *ret = 0;           // not found
+                for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
+                {
+                    if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name)
+                    {
+                        *ret = 1;   // found
+                        break;
+                    }
+                }
+                if (*ret)
+                    fmt::print(stderr, "Found attribute {} as a child of the parent {}\n", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
+                else
+                    fmt::print(stderr, "Did not find attribute {} as a child of the parent {}\n", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
+                break;
+            }
+            case H5VL_ATTR_ITER:                        // H5Aiterate(_by_name)
+            {
+                fmt::print("Warning, H5VL_ATTR_ITER not yet implemented in LowFive::MetadataVOL::attr_specific()\n");
+                // TODO
+//                 throw MetadataError(fmt::format("Warning, H5VL_ATTR_ITER not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                break;
+            }
+            case H5VL_ATTR_RENAME:                     // H5Arename(_by_name)
+            {
+//                 fmt::print("Warning, H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()\n");
+                // TODO
+                throw MetadataError(fmt::format("Warning, H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                break;
+            }
+            default:
+                throw MetadataError(fmt::format("Unknown specific_type in LowFive::MetadataVOL::attr_specific()"));
+        }
+    }
 
     return result;
 }
@@ -501,13 +594,17 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
 {
     ObjectPointers* attr_ = (ObjectPointers*) attr;
 
-    fmt::print("attr = {}, mem_type_id = {}, mem type = {}\n", fmt::ptr(unwrap(attr_)), mem_type_id, Datatype(mem_type_id));
+    fmt::print(stderr, "Attr Write\n");
+    fmt::print("attr = {} = [h5_obj {} mdata_obj {}], mem_type_id = {}, mem type = {}\n",
+            fmt::ptr(attr_), fmt::ptr(attr_->h5_obj), fmt::ptr(attr_->mdata_obj), mem_type_id, Datatype(mem_type_id));
 
     if (vol_properties.memory)
     {
         // save our metadata
         Attribute* a = (Attribute*) attr_->mdata_obj;
-        a->write(Datatype(mem_type_id), buf);
+        // skip an attribute that wasn't created or otherwise doesn't have a valide metadata object
+//         if (a)
+            a->write(Datatype(mem_type_id), buf);
     }
 
     if (vol_properties.passthru)
@@ -521,7 +618,10 @@ LowFive::MetadataVOL::
 attr_close(void *attr, hid_t dxpl_id, void **req)
 {
     ObjectPointers* attr_ = (ObjectPointers*) attr;
-    fmt::print("close: attr = {}, dxpl_id = {}\n", fmt::ptr(unwrap(attr_)), dxpl_id);
+
+    fmt::print(stderr, "Attr Close\n");
+    fmt::print("close: attr = {} = [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
+            fmt::ptr(attr_), fmt::ptr(attr_->h5_obj), fmt::ptr(attr_->mdata_obj), dxpl_id);
 
     herr_t retval = 0;
 
