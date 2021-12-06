@@ -13,21 +13,12 @@ struct File: public Object
         fmt::print(stderr, "Creating metadata for {}\n", filename_);
     }
 
-    // TODO: add find(name), add(name, object)
-
     // preorder depth-first traversal
     void print() const
     {
         fmt::print(stderr, "Printing metadata tree for {}\n", name);
         Object::print();
     }
-};
-
-struct RemoteFile : public Object
-{
-    RemoteFile(std::string filename_):
-        Object(ObjectType::File, filename_)
-    {}
 };
 
 }

@@ -54,13 +54,4 @@ struct Dataset : public Object
     }
 };
 
-struct RemoteDataset : public Object
-{
-    RemoteDataset(std::string name):
-        Object(ObjectType::Dataset, name, false)    // false: remote datasets don't strip path from their name
-    {}
-
-    void* query = nullptr;
-};
-
 }

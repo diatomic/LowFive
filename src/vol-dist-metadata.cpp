@@ -1,4 +1,5 @@
 #include <lowfive/vol-dist-metadata.hpp>
+#include <lowfive/metadata/remote.hpp>
 
 void*
 LowFive::DistMetadataVOL::
