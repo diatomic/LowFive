@@ -29,29 +29,15 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     LocationPatterns    intercomm_locations;
     DataIntercomms      intercomm_indices;
 
-    // TODO: deprecate memory/passthru/copy arguments; they should be set individually for each data set
                     DistMetadataVOL(diy::mpi::communicator  local_,
-                                    diy::mpi::communicator  intercomm_,
-                                    bool                    memory_,
-                                    bool                    passthru_,
-                                    bool                    copy_ = true):
-                        DistMetadataVOL(local_, communicators { std::move(intercomm_) }, memory_, passthru_, copy_)
+                                    diy::mpi::communicator  intercomm_):
+                        DistMetadataVOL(local_, communicators { std::move(intercomm_) })
                     {}
 
                     DistMetadataVOL(communicator            local_,
-                                    communicators           intercomms_,
-                                    bool                    memory_,
-                                    bool                    passthru_,
-                                    bool                    copy_ = true):
+                                    communicators           intercomms_):
                         local(local_), intercomms(std::move(intercomms_))
-                    {
-                        if (memory_)
-                            set_memory("*", "*");
-                        if (passthru_)
-                            set_passthru("*", "*");
-                        if (!copy_)
-                            set_zerocopy("*", "*");
-                    }
+                    {}
 
     // record intercomm to use for a dataset
     void set_intercomm(std::string filename, std::string full_path, int intercomm_index)
