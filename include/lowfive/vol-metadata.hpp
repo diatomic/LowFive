@@ -30,7 +30,7 @@ struct MetadataVOL: public LowFive::VOLBase
     using Dataspace         = LowFive::Dataspace;
     using Group             = LowFive::Group;
 
-    using Files             = std::map<std::string, File*>;
+    using Files             = std::map<std::string, Object*>;       // Object*, to support both File and RemoteFile
     using LocationPatterns  = std::vector<LocationPattern>;
 
     struct ObjectPointers
@@ -156,6 +156,20 @@ struct MetadataVOL: public LowFive::VOLBase
                 return i;
         }
         return -1;
+    }
+
+    std::vector<int>
+        find_matches(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
+    {
+        std::vector<int> result;
+        for (int i = 0; i < patterns.size(); ++i)
+        {
+            auto& x = patterns[i];
+            if (x.filename != filename) continue;
+            if (match(x.pattern.c_str(), full_path.c_str(), partial))
+                result.push_back(i);
+        }
+        return result;
     }
 
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;

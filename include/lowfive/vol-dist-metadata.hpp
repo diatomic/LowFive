@@ -53,6 +53,10 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req) override;
     herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;
+
+    void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req) override;
+
+    int             remote_size(int intercomm_index);
 };
 
 }

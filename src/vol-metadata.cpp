@@ -54,6 +54,7 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    fmt::print("DistMetadataVOL::file_open()\n");
     ObjectPointers* obj_ptrs = nullptr;
 
     // find the file in the VOL
@@ -62,17 +63,6 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     auto it = files.find(name_);
     if (it != files.end())
         mdata = it->second;
-    else
-    {
-        // create the file in the VOL
-        // NB: we have to create the file object, just to have the hierarchy,
-        // which will enable us to look up full paths (this is a frustrating
-        // design caused by our inability to resolve the full paths in the pure
-        // HDF5 setting)
-        File* f = new File(name_);
-        files.emplace(name_, f);
-        mdata = f;
-    }
 
     if (match_any(name, "", passthru, true))
         obj_ptrs = (ObjectPointers*) VOLBase::file_open(name, flags, fapl_id, dxpl_id, req);
@@ -119,9 +109,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
     if (unwrap(file_))
         res = VOLBase::file_close(file_, dxpl_id, req);
 
-    if (file_->mdata_obj)
+    if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
-        File* f = (File*) file_->mdata_obj;
+        // we created this file
         files.erase(f->name);
         delete f;       // erases all the children too
     }

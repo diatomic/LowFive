@@ -115,6 +115,8 @@ struct Index: public IndexQuery
         //    send(intercomm, 0, tags::producer, msgs::ready, 0);
         //}
 
+        int open_files = 0;
+
         diy::mpi::request all_done;
         bool all_done_active = false;
         int  done_count  = 0;
@@ -152,6 +154,26 @@ struct Index: public IndexQuery
 
             diy::MemoryBuffer b;
             int msg = recv(intercomm, source, tags::consumer, b);
+
+            if (msg == msgs::file)
+            {
+                bool open = false;
+                diy::load(b, open);
+                if (open)
+                    open_files++;
+                else
+                    open_files--;
+
+                // NB: this will only get triggered after a file has been open;
+                //     might need to tweak this, if need to make sure multiple files have been opened
+                if (open_files == 0)
+                {
+                    all_done = local.ibarrier();
+                    all_done_active = true;
+                }
+
+                continue;
+            }
 
             if (msg == msgs::id)
             {
@@ -210,17 +232,7 @@ struct Index: public IndexQuery
                     }
                 }
                 send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
-            } else if (msg == msgs::done)
-            {
-                ++done_count;
-
-                if (done_count == intercomms.size())
-                {
-                    all_done = local.ibarrier();
-                    all_done_active = true;
-                }
             }
-
             // TODO: add other potential queries (e.g., datatype)
         }
     }

@@ -12,12 +12,36 @@ struct Query: public IndexQuery
     Datatype                    type;
     Dataspace                   space;
     Decomposer                  decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy, overwritten in the constructor
+    int                         remote_size;                                        // remote size of the intercomm at intercomm_index
     int                         intercomm_index;                                    // index of intercomm to use
 
     // consumer versions of the constructor
 
-    Query(communicator& local_, communicators& intercomms_, int remote_size, std::string name, int intercomm_index_ = 0):
-                              IndexQuery(local_, intercomms_), intercomm_index(intercomm_index_)
+    Query(communicator& local_, communicators& intercomms_, int remote_size_, int intercomm_index_ = 0):
+                              IndexQuery(local_, intercomms_),
+                              remote_size(remote_size_),
+                              intercomm_index(intercomm_index_)
+    {}
+
+    void                file_open()
+    {
+        bool root = local.rank() == 0;
+        if (root)
+        {
+            send(intercomm(intercomm_index), 0, tags::consumer, msgs::file, true);
+        }
+    }
+
+    void                file_close()
+    {
+        bool root = local.rank() == 0;
+        if (root)
+        {
+            send(intercomm(intercomm_index), 0, tags::consumer, msgs::file, false);
+        }
+    }
+
+    void dataset_open(std::string name)
     {
         bool root = local.rank() == 0;
 
@@ -56,22 +80,7 @@ struct Query: public IndexQuery
         decomposer = Decomposer(dim, domain, remote_size);
     }
 
-    void                close()
-    {
-        local.barrier();
-
-        if (local.rank() == 0)
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::done, id, 0);
-    }
-
-    static
-    void                close(communicator& local, communicator& intercomm)
-    {
-        local.barrier();
-
-        if (local.rank() == 0)
-            send(intercomm, 0, tags::consumer, msgs::done, 0 /* id */, 0);          // passing 0 for the id seems to work TODO: is this right?
-    }
+    void                dataset_close()             {}
 
     void                query(const Dataspace&                     file_space,      // input: query in terms of file space
                               const Dataspace&                     mem_space,       // ouput: memory space of resulting data

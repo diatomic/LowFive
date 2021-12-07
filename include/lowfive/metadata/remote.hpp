@@ -23,11 +23,24 @@ struct RemoteFile : public RemoteObject
     {}
 };
 
+struct RemoteGroup : public RemoteObject
+{
+    RemoteGroup(std::string name):
+        RemoteObject(ObjectType::Group, name)
+    {}
+};
+
+
 struct RemoteDataset : public RemoteObject
 {
+    Datatype                        type;
+    Dataspace                       space;
+
     RemoteDataset(std::string name):
         RemoteObject(ObjectType::Dataset, name)
     {}
 };
+
+// TODO: RemoteAttribute
 
 }

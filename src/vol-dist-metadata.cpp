@@ -1,6 +1,23 @@
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/metadata/remote.hpp>
 
+
+
+int
+LowFive::DistMetadataVOL::
+remote_size(int intercomm_index)
+{
+    // get the remote size of the intercomm: different logic for inter- and intra-comms
+    int remote_size;
+    int is_inter; MPI_Comm_test_inter(intercomms[intercomm_index], &is_inter);
+    if (!is_inter)
+        remote_size = intercomms[intercomm_index].size();
+    else
+        MPI_Comm_remote_size(intercomms[intercomm_index], &remote_size);
+
+    return remote_size;
+}
+
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -36,16 +53,9 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
             throw MetadataError(fmt::format("Error dataset_open(): no intercomm found for dataset {}", ds->name));
         int intercomm_index = intercomm_indices[loc];
 
-        // get the remote size of the intercomm
-        int remote_size;
-        int is_inter; MPI_Comm_test_inter(intercomms[intercomm_index], &is_inter);
-        if (!is_inter)
-            remote_size = intercomms[intercomm_index].size();
-        else
-            MPI_Comm_remote_size(intercomms[intercomm_index], &remote_size);
-
         // open a query
-        Query* query = new Query(local, intercomms, remote_size, ds->name, intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
+        Query* query = new Query(local, intercomms, remote_size(intercomm_index), intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
+        query->dataset_open(ds->name);
         ds->query = query;
         result->mdata_obj = ds;
     }
@@ -65,7 +75,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
         else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
         {
             Query* query = (Query*) ds->query;
-            // NB: deferring calling query->close() until file_close() time
+            query->dataset_close();
             delete query;
         }
     }
@@ -79,18 +89,12 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    if (dset_->mdata_obj)
+    RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj);
+    if (ds)
     {
-        // consumer with the name of a remote dataset
-        if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
-        {
-            // query to producer
-            Query* query = (Query*) ds->query;
-            query->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
-        } else
-        {
-            // TODO: handle correctly
-        }
+        // consumer with the name of a remote dataset: query to producer
+        Query* query = (Query*) ds->query;
+        query->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
     } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
     {
         return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -164,7 +168,32 @@ void*
 LowFive::DistMetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    return MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
+    fmt::print("DistMetadataVOL::file_open()\n");
+    ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
+
+    if (result->mdata_obj == nullptr && match_any(name, "", memory, true))
+    {
+        fmt::print("Creating remote\n");
+        RemoteFile* f = new RemoteFile(name);
+        files.emplace(name, f);
+        result->mdata_obj = f;
+
+        // get an intercomm for this file
+        auto locs = find_matches(name, "", intercomm_locations, true);
+        if (locs.empty())
+            throw MetadataError(fmt::format("Error file_open(): no intercomm found for {}", name));
+        // signal to every intercomm that we are opening the file;
+        // technically ought to dedup the intercomms, but signalling open once
+        // per pattern works too, as long as it matches file_close()
+        for (auto loc : locs)
+        {
+            int intercomm_index = intercomm_indices[loc];
+            Query(local, intercomms, remote_size(intercomm_index), intercomm_index).file_open();
+        }
+
+    }
+
+    return result;
 }
 
 herr_t
@@ -182,36 +211,53 @@ file_close(void *file, hid_t dxpl_id, void **req)
         file_->h5_obj = nullptr;    // this makes sure that the recursive call below won't trigger VOLBase::file_close() again
     }
 
-    File* f = dynamic_cast<File*>((Object*) file_->mdata_obj);
-    fmt::print("Closing file {}\n", fmt::ptr(f));
-
-    if (f && match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
+    if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_->mdata_obj))
     {
-        // serve datasets (producer only)
-        if (serve_data.size())              // only producer pushed any datasets to serve_data
+        // signal that we are done
+        // get an intercomm for this file
+        auto locs = find_matches(f->name, "", intercomm_locations, true);
+        if (locs.empty())
+            throw MetadataError(fmt::format("Error file_close(): no intercomm found for {}", f->name));
+        // signal to every intercomm that we are opening the file
+        for (auto loc : locs)
         {
-            Index index(local, intercomms, serve_data);
-            index.serve();
+            int intercomm_index = intercomm_indices[loc];
+            Query(local, intercomms, remote_size(intercomm_index), intercomm_index).file_close();
         }
-        else
+
+        files.erase(f->name);
+        delete f;       // erases all the children too
+        file_->mdata_obj = nullptr;
+    } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
+    {
+        if (match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
         {
-            // Calling Query::close() for each intercomm for this file in order to shut down the server on the producer.
-            // Using data_intercomms to get filename and intercomm index, which can be duplicated for multiple datasets.
-            // Only close the query once for a unique (filename, intercomm).
-            using ClosedQuery = std::pair<std::string, int>;            // (filename, intercomm_index) of closed queries
-            std::vector<ClosedQuery> closed_queries;
-            for (auto i = 0; i < intercomm_locations.size(); i++)
+            fmt::print("Closing file {}\n", fmt::ptr(f));
+
+            // serve datasets (producer only)
+            if (serve_data.size())              // only producer pushed any datasets to serve_data
             {
-                int intercomm_index = intercomm_indices[i];
-                ClosedQuery closed_query = std::make_pair(f->name, intercomm_index);
-                if (f->name == intercomm_locations[i].filename && std::find(closed_queries.begin(), closed_queries.end(), closed_query) == closed_queries.end())
-                {
-                    Query::close(local, intercomms[intercomm_index]);
-                    closed_queries.push_back(closed_query);
-                }
+                Index index(local, intercomms, serve_data);
+                index.serve();
             }
         }
     }
 
-    return MetadataVOL::file_close(file, dxpl_id, req);
+    return MetadataVOL::file_close(file, dxpl_id, req);     // this is almost redundant; removes mdata_obj, if it's a File
+}
+
+void*
+LowFive::DistMetadataVOL::
+group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* result = (ObjectPointers*) MetadataVOL::group_open(obj, loc_params, name, gapl_id, dxpl_id, req);
+
+    // TODO: should we double-check that we are in a remote file?
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+
+    if (!result->mdata_obj && match_any(filepath, memory, true))    // didn't find local
+        result->mdata_obj = new RemoteGroup(name);      // just store the name for future reference
+
+    return result;
 }

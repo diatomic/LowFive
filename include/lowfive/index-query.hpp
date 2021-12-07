@@ -26,7 +26,7 @@ struct IndexQuery
     using communicator          = diy::mpi::communicator;
     using communicators         = std::vector<communicator>;
 
-    enum msgs   { dimension = 1, domain, redirect, data, done, ready, id };        // message type
+    enum msgs   { dimension = 1, domain, redirect, data, done, ready, id, file };        // message type
 
     // tags indicate the source of communication, so that in the threaded
     // regime, they can be used to correctly distinguish between senders and
