@@ -623,64 +623,62 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             {
                 fmt::print(stderr, "case H5VL_ATTR_ITER\n");
 
-                // copied from HDF5 H5VLnative_attr.c, line 452
+                // copied from HDF5 H5VLnative_attr.c, H5VL__native_attr_specific()
                 H5_index_t      idx_type = (H5_index_t)va_arg(arguments, int);
                 H5_iter_order_t order    = (H5_iter_order_t)va_arg(arguments, int);
                 hsize_t *       idx      = va_arg(arguments, hsize_t *);
                 H5A_operator2_t op       = va_arg(arguments, H5A_operator2_t);
                 void *          op_data  = va_arg(arguments, void *);
 
-                // check direct children of the parent object (NB, not full search all the way down the tree)
+                // find object's location, copied from HDF5 H5Aint.c, H5A__iterate()
+//                 H5G_loc_t   obj_loc;                        // location used to open group
+//                 H5G_name_t  obj_path;                       // opened object group hier. path
+//                 H5O_loc_t   obj_oloc;                       // opened object object location
+                hid_t       obj_loc_id = H5I_INVALID_HID;   // ID for object located TODO: not assigned
+//                 obj_loc.oloc = &obj_oloc;
+//                 obj_loc.path = &obj_path;
+//                 H5G_loc_reset(&obj_loc);
+//                 if (H5G_loc_find(loc, obj_name, &obj_loc) < 0)
+//                     throw MetadataError(fmt::format("Error: object not found in LowFive::MetadataVOL::attr_specific()\n"));
+//                 if(NULL == (temp_obj = H5O_open_by_loc(&obj_loc, &obj_type)))
+//                     throw MetadataError(fmt::format("Error: unable to open object in LowFive::MetadataVOL::attr_specific()\n"));
+//                 if((obj_loc_id = H5VL_wrap_register(obj_type, temp_obj, TRUE)) < 0)
+//                     throw MetadataError(fmt::format("Error: unable to register datatype in LowFive::MetadataVOL::attr_specific()\n"));
+
+                H5A_info_t ainfo;                           // info for attribute, defined in HDF5 H5Apublic.h  TODO: not assigned
+
+                // check direct children of the parent object, not full search all the way down the tree
                 bool found = false;         // some attributes were found
+
+                // TODO: currently ignores the iteration order, increment direction, and current index
+                // just blindly goes through all the attributes in the order they were created
                 for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
                 {
                     if (c->type == LowFive::ObjectType::Attribute)
                     {
                         found = true;
+
                         fmt::print(stderr, "Found attribute {} as a child of the parent {}\n",
                                 c->name, static_cast<Object*>(obj_->mdata_obj)->name);
 
-                        fmt::print(stderr, "Warning: operating on attribute not implemented yet\n");
+                        fmt::print(stderr, "*** ------------------- ***\n");
+                        fmt::print(stderr, "Warning: operating on attribute not fully implemented yet.\n");
+                        fmt::print(stderr, "Ignoring object location, name, attribute info, attribute order, increment direction, current index.\n");
+                        fmt::print(stderr, "Basically just stepping through all attributes of the object in the order they were created.\n");
+                        fmt::print(stderr, "*** ------------------- ***\n");
 
-//                         // copied from HDF5 H5int.c, line 1785
-//                         // Check which type of callback to make
-//                         switch (op->op_type)
-//                         {
-//                             case H5A_ATTR_OP_APP2:
-//                             {
-//                                 fmt::print(stderr, "op_type = H5A_ATTR_OP_APP2\n");
-// 
-// //                                 // get the attribute information
-// //                                 H5A_info_t ainfo;               // info for attribute
-// //                                 if (H5A__get_info(atable->attrs[u], &ainfo) < 0)
-// //                                     throw MetadataError(fmt::format("Error: unable to get attribute info.\n");
-// // 
-// //                                 // make the application callback
-// //                                 result = (op->u.app_op2)(loc_id, ((atable->attrs[u])->shared)->name, &ainfo, op_data);
-//                                 break;
-//                             }
-// 
-//                             case H5A_ATTR_OP_APP:
-//                             {
-//                                 fmt::print(stderr, "op_type = H5A_ATTR_OP_APP\n");
-// 
-// //                                 // make the application callback
-// //                                 result = (op->u.app_op)(loc_id, ((atable->attrs[u])->shared)->name, op_data);
-//                                 break;
-//                             }
-// 
-//                             case H5A_ATTR_OP_LIB:
-//                             {
-//                                 fmt::print(stderr, "op_type = H5A_ATTR_OP_LIB\n");
-// 
-// //                                 // call the library's callback
-// //                                 result = (op->u.lib_op)((atable->attrs[u]), op_data);
-//                                 break;
-//                             }
-// 
-//                             default:
-//                                 throw MetadataError(fmt::format("Error: unsupported attribute op type.\n");
-//                         }   // switch on type of callback to make
+                        // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
+                        herr_t retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
+                        if (retval > 0)
+                        {
+                            fmt::print(stderr, "Terminating iteration because operator returned > 0 value, indicating user-defined early termination\n");
+                            break;
+                        }
+                        else if (retval < 0)
+                        {
+                            fmt::print(stderr, "Terminating iteration because operator returned < 0 value, indicating user-defined failure\n");
+                            break;
+                        }
                     }   // child is type attribute
                 }   // for all children
                 if (!found)
@@ -688,8 +686,6 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
                     fmt::print(stderr, "Did not find any attributes as direct children of the parent {} when trying to iterate over attributes\n.",
                             static_cast<Object*>(obj_->mdata_obj)->name);
                 }
-                // TODO
-//                 throw MetadataError(fmt::format("Warning, H5VL_ATTR_ITER not yet implemented in LowFive::MetadataVOL::attr_specific()"));
                 break;
             }
             case H5VL_ATTR_RENAME:                     // H5Arename(_by_name)
