@@ -564,6 +564,106 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
     return 0;
 }
 
+// helper function for attr_specific()
+void
+LowFive::MetadataVOL::
+attr_exists(void *obj, va_list arguments)
+{
+    ObjectPointers* obj_    = (ObjectPointers*) obj;
+
+    const char *attr_name   = va_arg(arguments, const char *);
+    htri_t *    ret         = va_arg(arguments, htri_t *);
+
+    // check direct children of the parent object (NB, not full search all the way down the tree)
+    *ret = 0;           // not found
+    for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
+    {
+        if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name)
+        {
+            *ret = 1;   // found
+            break;
+        }
+    }
+    if (*ret)
+        fmt::print(stderr, "Found attribute {} as a child of the parent {}\n", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
+    else
+        fmt::print(stderr, "Did not find attribute {} as a child of the parent {}\n", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
+}
+
+// helper function for attr_specific()
+void
+LowFive::MetadataVOL::
+attr_iter(void *obj, va_list arguments)
+{
+    ObjectPointers* obj_        = (ObjectPointers*) obj;
+    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+
+    // copied from HDF5 H5VLnative_attr.c, H5VL__native_attr_specific()
+    H5_index_t      idx_type = (H5_index_t)va_arg(arguments, int);
+    H5_iter_order_t order    = (H5_iter_order_t)va_arg(arguments, int);
+    hsize_t *       idx      = va_arg(arguments, hsize_t *);
+    H5A_operator2_t op       = va_arg(arguments, H5A_operator2_t);
+    void *          op_data  = va_arg(arguments, void *);
+
+    // get object type in HDF format and use that to get an HDF hid_t to the object
+    std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
+    int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
+    // TODO: following causes the closing of the dataset to crash
+    hid_t obj_loc_id = H5VLwrap_register(obj, static_cast<H5I_type_t>(obj_type));
+    // TODO: following does not solve the crash when closing the dataset
+//     int refs = H5Iinc_ref(obj_loc_id);
+
+    // debug
+    fmt::print(stderr, "attr_iter(): obj_type {} H5I_DATASET {} obj_loc_id {} name {}\n",
+            obj_type, H5I_DATASET, obj_loc_id, mdata_obj->name);
+
+    // info for attribute, defined in HDF5 H5Apublic.h  TODO: assigned with some defaults, not sure if they're corrent
+    H5A_info_t ainfo;
+    ainfo.corder_valid  = true;                     // whether creation order is valid
+    ainfo.corder        = 0;                        // creation order (TODO: no idea what this is)
+    ainfo.cset          = H5T_CSET_ASCII;           // character set of attribute names
+    ainfo.data_size =                               // size of raw data (bytes)
+        static_cast<Attribute*>(mdata_obj)->space.size() * static_cast<Attribute*>(mdata_obj)->type.dtype_size;
+
+    // check direct children of the parent object, not full search all the way down the tree
+    bool found = false;         // some attributes were found
+
+    // TODO: currently ignores the iteration order, increment direction, and current index
+    // just blindly goes through all the attributes in the order they were created
+    for (auto& c : mdata_obj->children)
+    {
+        if (c->type == LowFive::ObjectType::Attribute)
+        {
+            found = true;
+
+            fmt::print(stderr, "Found attribute {} as a child of the parent {}\n", c->name, mdata_obj->name);
+
+            fmt::print(stderr, "*** ------------------- ***\n");
+            fmt::print(stderr, "Warning: operating on attribute not fully implemented yet.\n");
+            fmt::print(stderr, "Ignoring object location, name, attribute info, attribute order, increment direction, current index.\n");
+            fmt::print(stderr, "Basically just stepping through all attributes of the object in the order they were created.\n");
+            fmt::print(stderr, "*** ------------------- ***\n");
+
+            // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
+            herr_t retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
+            if (retval > 0)
+            {
+                fmt::print(stderr, "Terminating iteration because operator returned > 0 value, indicating user-defined early termination\n");
+                break;
+            }
+            else if (retval < 0)
+            {
+                fmt::print(stderr, "Terminating iteration because operator returned < 0 value, indicating user-defined failure\n");
+                break;
+            }
+        }   // child is type attribute
+    }   // for all children
+    if (!found)
+    {
+        fmt::print(stderr, "Did not find any attributes as direct children of the parent {} when trying to iterate over attributes\n.", mdata_obj->name);
+    }
+}
+
 herr_t
 LowFive::MetadataVOL::
 attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
@@ -599,98 +699,19 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
             {
                 fmt::print(stderr, "case H5VL_ATTR_EXISTS\n");
+                attr_exists(obj, arguments);
 
-                const char *attr_name = va_arg(arguments, const char *);
-                htri_t *    ret       = va_arg(arguments, htri_t *);
-
-                // check direct children of the parent object (NB, not full search all the way down the tree)
-                *ret = 0;           // not found
-                for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
-                {
-                    if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name)
-                    {
-                        *ret = 1;   // found
-                        break;
-                    }
-                }
-                if (*ret)
-                    fmt::print(stderr, "Found attribute {} as a child of the parent {}\n", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
-                else
-                    fmt::print(stderr, "Did not find attribute {} as a child of the parent {}\n", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
                 break;
             }
             case H5VL_ATTR_ITER:                        // H5Aiterate(_by_name)
             {
                 fmt::print(stderr, "case H5VL_ATTR_ITER\n");
+                attr_iter(obj, arguments);
 
-                // copied from HDF5 H5VLnative_attr.c, H5VL__native_attr_specific()
-                H5_index_t      idx_type = (H5_index_t)va_arg(arguments, int);
-                H5_iter_order_t order    = (H5_iter_order_t)va_arg(arguments, int);
-                hsize_t *       idx      = va_arg(arguments, hsize_t *);
-                H5A_operator2_t op       = va_arg(arguments, H5A_operator2_t);
-                void *          op_data  = va_arg(arguments, void *);
-
-                // find object's location, copied from HDF5 H5Aint.c, H5A__iterate()
-//                 H5G_loc_t   obj_loc;                        // location used to open group
-//                 H5G_name_t  obj_path;                       // opened object group hier. path
-//                 H5O_loc_t   obj_oloc;                       // opened object object location
-                hid_t       obj_loc_id = H5I_INVALID_HID;   // ID for object located TODO: not assigned
-//                 obj_loc.oloc = &obj_oloc;
-//                 obj_loc.path = &obj_path;
-//                 H5G_loc_reset(&obj_loc);
-//                 if (H5G_loc_find(loc, obj_name, &obj_loc) < 0)
-//                     throw MetadataError(fmt::format("Error: object not found in LowFive::MetadataVOL::attr_specific()\n"));
-//                 if(NULL == (temp_obj = H5O_open_by_loc(&obj_loc, &obj_type)))
-//                     throw MetadataError(fmt::format("Error: unable to open object in LowFive::MetadataVOL::attr_specific()\n"));
-//                 if((obj_loc_id = H5VL_wrap_register(obj_type, temp_obj, TRUE)) < 0)
-//                     throw MetadataError(fmt::format("Error: unable to register datatype in LowFive::MetadataVOL::attr_specific()\n"));
-
-                H5A_info_t ainfo;                           // info for attribute, defined in HDF5 H5Apublic.h  TODO: not assigned
-
-                // check direct children of the parent object, not full search all the way down the tree
-                bool found = false;         // some attributes were found
-
-                // TODO: currently ignores the iteration order, increment direction, and current index
-                // just blindly goes through all the attributes in the order they were created
-                for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
-                {
-                    if (c->type == LowFive::ObjectType::Attribute)
-                    {
-                        found = true;
-
-                        fmt::print(stderr, "Found attribute {} as a child of the parent {}\n",
-                                c->name, static_cast<Object*>(obj_->mdata_obj)->name);
-
-                        fmt::print(stderr, "*** ------------------- ***\n");
-                        fmt::print(stderr, "Warning: operating on attribute not fully implemented yet.\n");
-                        fmt::print(stderr, "Ignoring object location, name, attribute info, attribute order, increment direction, current index.\n");
-                        fmt::print(stderr, "Basically just stepping through all attributes of the object in the order they were created.\n");
-                        fmt::print(stderr, "*** ------------------- ***\n");
-
-                        // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
-                        herr_t retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
-                        if (retval > 0)
-                        {
-                            fmt::print(stderr, "Terminating iteration because operator returned > 0 value, indicating user-defined early termination\n");
-                            break;
-                        }
-                        else if (retval < 0)
-                        {
-                            fmt::print(stderr, "Terminating iteration because operator returned < 0 value, indicating user-defined failure\n");
-                            break;
-                        }
-                    }   // child is type attribute
-                }   // for all children
-                if (!found)
-                {
-                    fmt::print(stderr, "Did not find any attributes as direct children of the parent {} when trying to iterate over attributes\n.",
-                            static_cast<Object*>(obj_->mdata_obj)->name);
-                }
                 break;
             }
             case H5VL_ATTR_RENAME:                     // H5Arename(_by_name)
             {
-//                 fmt::print("Warning, H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()\n");
                 // TODO
                 throw MetadataError(fmt::format("Warning, H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()"));
                 break;

@@ -8,12 +8,11 @@
 using communicator = diy::mpi::communicator;
 
 // user-define operator over attributes
-// TODO: location_id, ainfo not supported yet by LowFive; values are not initialized and cannot be used by the callback
 // returns 0: keep iterating, 1: intentional early termination, -1: failure, early termination
 herr_t iter_op(
-        hid_t               location_id,        // TODO: not assigned by LowFive yet
+        hid_t               location_id,
         const char          *attr_name,
-        const H5A_info_t    *ainfo,             // TODO: not assigned by LowFive yet
+        const H5A_info_t    *ainfo,
         void *              op_data)
 {
     // in this example, the operator simply prints the attribute name
@@ -81,20 +80,35 @@ int main(int argc, char**argv)
         return 1;
     }
 
-    // set up lowfive
-    communicator                local;
-    communicator                intercomm;
-    std::vector<communicator>   intercomms;
+  // set location patterns
+  LowFive::LocationPattern all { "outfile.h5", "*"};
+  LowFive::LocationPattern none { "outfile.h5", ""};
+
+  // create a MetadataVOL object for passthru
+//   l5::MetadataVOL vol_plugin;
+//   vol_plugin.memory.push_back(none);
+//   vol_plugin.passthru.push_back(all);
+//   vol_plugin.zerocopy.push_back(none);
+
+  // or create a MetadataVOL object for metadata
+  l5::MetadataVOL vol_plugin;
+  vol_plugin.memory.push_back(all);
+  vol_plugin.passthru.push_back(none);
+  vol_plugin.zerocopy.push_back(none);
+
+  // or create a MetadataVOL object for both passthru and metadata
+//   l5::MetadataVOL vol_plugin;
+//   vol_plugin.memory.push_back(all);
+//   vol_plugin.passthru.push_back(all);
+//   vol_plugin.zerocopy.push_back(none);
+
+    communicator local;
     local.duplicate(world);
-    intercomm.duplicate(world);
-    intercomms.push_back(intercomm);
-    l5::DistMetadataVOL vol_plugin(local, intercomms);
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
     if (passthru)
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
-
     l5::H5VOLProperty vol_prop(vol_plugin);
     if (!getenv("HDF5_VOL_CONNECTOR"))
     {
@@ -104,15 +118,6 @@ int main(int argc, char**argv)
     {
         fmt::print("HDF5_VOL_CONNECTOR is set; not enabling VOL explicitly\n");
     }
-
-    // set ownership of dataset (default is user (shallow copy), lowfive means deep copy)
-    // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
-    // NB: we say nothing about /group1/grid because lowfive ownership is implicit
-    if (passthru)
-        vol_plugin.set_passthru("outfile.h5", "*");
-    if (metadata)
-        vol_plugin.set_memory("outfile.h5", "*");
-    vol_plugin.set_zerocopy("outfile.h5", "/group1/particles");
 
     // diy setup
     diy::FileStorage                prod_storage(prefix);
@@ -143,6 +148,9 @@ int main(int argc, char**argv)
 
     // create the grid dataset with default properties
     hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    // debug
+    fmt::print(stderr, "grid dataset created with hid_t dset = {}\n", dset);
 
     // write the grid data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
