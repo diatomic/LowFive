@@ -34,6 +34,8 @@ struct Query: public IndexQuery
 
     void                file_close()
     {
+        local.barrier();
+
         bool root = local.rank() == 0;
         if (root)
         {
