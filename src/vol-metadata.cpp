@@ -1,5 +1,6 @@
 #include <lowfive/vol-metadata.hpp>
 #include <cassert>
+#include <lowfive/metadata/dummy.hpp>
 
 // General design philosophy:
 //  - build in-memory hierarchy, regardless of whether it was requested, but if
@@ -57,7 +58,7 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    fmt::print("DistMetadataVOL::file_open()\n");
+    fmt::print("MetadataVOL::file_open()\n");
     ObjectPointers* obj_ptrs = nullptr;
 
     // find the file in the VOL
@@ -66,6 +67,12 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     auto it = files.find(name_);
     if (it != files.end())
         mdata = it->second;
+    else
+    {
+        auto* f = new DummyFile(name);
+        files.emplace(name, f);
+        mdata = f;
+    }
 
     if (match_any(name, "", passthru, true))
         obj_ptrs = (ObjectPointers*) VOLBase::file_open(name, flags, fapl_id, dxpl_id, req);
@@ -203,10 +210,11 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
-    fmt::print("dataset_open {} {}\n", fmt::ptr(obj_->mdata_obj), fmt::ptr(obj_->h5_obj));
+    fmt::print(stderr, "dataset_open {} {}\n", fmt::ptr(obj_->mdata_obj), fmt::ptr(obj_->h5_obj));
 
     // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    Object* parent = static_cast<Object*>(obj_->mdata_obj);
+    auto filepath = parent->fullname(name);
 
     if (match_any(filepath, passthru))
         result = (ObjectPointers*) VOLBase::dataset_open(obj_, loc_params, name, dapl_id, dxpl_id, req);
@@ -215,7 +223,10 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     if (match_any(filepath, memory))
         // find the dataset in our file metadata
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name);
+        result->mdata_obj = parent->search(name);
+
+    if (!result->mdata_obj)
+        result->mdata_obj = parent->add_child(new DummyDataset(name));
 
     return (void*)result;
 }
@@ -409,7 +420,8 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    Object* parent = static_cast<Object*>(obj_->mdata_obj);
+    auto filepath = parent->fullname(name);
 
     // open from the file if not opening from memory
     // if both memory and passthru are enabled, open from memory only
@@ -421,7 +433,9 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 
     // find the group in our file metadata
     std::string name_(name);
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+    result->mdata_obj = parent->search(name_);
+    if (!result->mdata_obj)
+        result->mdata_obj = parent->add_child(new DummyGroup(name_));
 
     return (void*)result;
 }

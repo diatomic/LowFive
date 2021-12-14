@@ -1,5 +1,6 @@
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/metadata/remote.hpp>
+#include <lowfive/metadata/dummy.hpp>
 
 
 
@@ -24,40 +25,47 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
-    fmt::print("Opening dataset (dist): {} {} {}\n", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
+    fmt::print(stderr, "Opening dataset (dist): {} {} {}\n", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
 
     // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    Object* parent = static_cast<Object*>(obj_->mdata_obj);
+    auto filepath = parent->fullname(name);
 
-    fmt::print("Opening dataset: {} {} {}\n", name, filepath.first, filepath.second);
+    fmt::print(stderr, "Opening dataset: {} {} {}\n", name, filepath.first, filepath.second);
 
-    if (!result->mdata_obj && match_any(filepath,memory))
+    if (match_any(filepath,memory))
     {
-        // assume we are the consumer, since nothing stored in memory (open also implies that)
-        auto* ds = new RemoteDataset(name);     // build and record the index to be used in read
+        if (DummyDataset* dd = dynamic_cast<DummyDataset*>((Object*) result->mdata_obj))
+        {
+            delete dd;
 
-        // check that the dataset name is the full path (the only mode supported for now)
-        // TODO: if only leaf name is given, could use backtrack_name to find full path
-        // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
-        if (ds->name[0] != '/')
-            throw MetadataError(fmt::format("Error: dataset_open(): Need full pathname for dataset {}", ds->name));
+            // assume we are the consumer, since nothing stored in memory (open also implies that)
+            auto* ds = new RemoteDataset(name);     // build and record the index to be used in read
+            parent->add_child(ds);
 
-        // get the filename
-        std::string filename = filepath.first;
+            // check that the dataset name is the full path (the only mode supported for now)
+            // TODO: if only leaf name is given, could use backtrack_name to find full path
+            // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
+            if (ds->name[0] != '/')
+                throw MetadataError(fmt::format("Error: dataset_open(): Need full pathname for dataset {}", ds->name));
 
-        // TODO: might want to use filepath.second instead of ds->name
+            // get the filename
+            std::string filename = filepath.first;
 
-        // get the correct intercomm
-        int loc = find_match(filename, ds->name, intercomm_locations);
-        if (loc == -1)
-            throw MetadataError(fmt::format("Error dataset_open(): no intercomm found for dataset {}", ds->name));
-        int intercomm_index = intercomm_indices[loc];
+            // TODO: might want to use filepath.second instead of ds->name
 
-        // open a query
-        Query* query = new Query(local, intercomms, remote_size(intercomm_index), intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
-        query->dataset_open(ds->name);
-        ds->query = query;
-        result->mdata_obj = ds;
+            // get the correct intercomm
+            int loc = find_match(filename, ds->name, intercomm_locations);
+            if (loc == -1)
+                throw MetadataError(fmt::format("Error dataset_open(): no intercomm found for dataset {}", ds->name));
+            int intercomm_index = intercomm_indices[loc];
+
+            // open a query
+            Query* query = new Query(local, intercomms, remote_size(intercomm_index), intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
+            query->dataset_open(ds->name);
+            ds->query = query;
+            result->mdata_obj = ds;
+        }
     }
 
     return (void*)result;
@@ -171,8 +179,12 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     fmt::print("DistMetadataVOL::file_open()\n");
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
-    if (result->mdata_obj == nullptr && match_any(name, "", memory, true))
+    if (match_any(name, "", memory, true))
     {
+        DummyFile* df = dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
+        assert(df);
+        delete df;
+
         fmt::print("Creating remote\n");
         RemoteFile* f = new RemoteFile(name);
         files.emplace(name, f);
@@ -254,10 +266,15 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 
     // TODO: should we double-check that we are in a remote file?
     ObjectPointers* obj_ = (ObjectPointers*) obj;
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    Object* parent = static_cast<Object*>(obj_->mdata_obj);
+    auto filepath = parent->fullname(name);
 
-    if (!result->mdata_obj && match_any(filepath, memory, true))    // didn't find local
-        result->mdata_obj = new RemoteGroup(name);      // just store the name for future reference
+    if (match_any(filepath, memory, true))
+        if (DummyGroup* dg = dynamic_cast<DummyGroup*>((Object*) result->mdata_obj)) // didn't find local
+        {
+            delete dg;
+            result->mdata_obj = parent->add_child(new RemoteGroup(name));      // just store the name for future reference
+        }
 
     return result;
 }
