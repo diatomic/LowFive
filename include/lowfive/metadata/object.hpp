@@ -69,8 +69,15 @@ struct Object
     {
         // remove any trailing slashes from current path
         std::size_t found = cur_path.find_last_of("/");
-        while (found == cur_path.size() - 1)
-            cur_path = cur_path.substr(0, found);
+        if (found > 0)                                                  // unless the current path is only one "/"
+        {
+            while (found == cur_path.size() - 1)
+                cur_path = cur_path.substr(0, found);
+        }
+
+        // base case: root only
+        if (cur_path == "/")
+            return this;
 
         size_t start, end;                                              // starting and ending position of root name in path
         if (cur_path[0] == '/')
