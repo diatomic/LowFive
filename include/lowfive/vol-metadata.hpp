@@ -35,11 +35,12 @@ struct MetadataVOL: public LowFive::VOLBase
 
     struct ObjectPointers
     {
-        void*           h5_obj;             // HDF5 object (e.g., dset)
-        void*           mdata_obj;          // metadata object (tree node)
+        void*           h5_obj = nullptr;             // HDF5 object (e.g., dset)
+        void*           mdata_obj = nullptr;          // metadata object (tree node)
+        bool            tmp = false;
 
-        ObjectPointers() : h5_obj(nullptr), mdata_obj(nullptr)
-                    {}
+        ObjectPointers() = default;
+        ObjectPointers(void* h5_obj_) : h5_obj(h5_obj_)     {}
     };
 
     Files                       files;
@@ -56,13 +57,13 @@ struct MetadataVOL: public LowFive::VOLBase
             delete x.second;
     }
 
-    void*           wrap(void* p) override
+    ObjectPointers* wrap(void* p)
     {
         ObjectPointers* op = new ObjectPointers;
         op->h5_obj = p;
         return op;
     }
-    void*           unwrap(void* p) override
+    void*           unwrap(void* p)
     {
         ObjectPointers* op = static_cast<ObjectPointers*>(p);
         return op->h5_obj;
@@ -177,6 +178,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;
     void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req) override;
+    herr_t          file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
 
     void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) override;
     herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
@@ -191,14 +193,30 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void*           attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req) override;
     void*           attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req) override;
-    //herr_t          attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req) override;
+    herr_t          attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req) override;
     herr_t          attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req) override;
     herr_t          attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    //herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
     void            attr_exists(void *obj, va_list arguments);
     void            attr_iter(void *obj, va_list arguments);
+
+    herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
+
+    herr_t          introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls) override;
+    herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported) override;
+
+    herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx) override;
+
+    herr_t          token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value) override;
+
+    void*           wrap_get_object(void *obj) override;
+    herr_t          get_wrap_ctx(void *obj, void **wrap_ctx) override;
+    void*           wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx) override;
+    void*           unwrap_object(void *obj) override;
+    //herr_t          free_wrap_ctx(void *obj) override;
 };
 
 }

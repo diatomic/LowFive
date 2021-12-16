@@ -45,7 +45,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    return wrap(H5VLdataset_create(unwrap(obj), loc_params, info->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req));
+    return H5VLdataset_create(obj, loc_params, info->under_vol_id, name, lcpl_id, type_id, space_id, dcpl_id,  dapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -91,7 +91,7 @@ LowFive::VOLBase::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    return wrap(H5VLdataset_open(unwrap(obj), loc_params, info->under_vol_id, name, dapl_id, dxpl_id, req));
+    return H5VLdataset_open(obj, loc_params, info->under_vol_id, name, dapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -128,7 +128,7 @@ herr_t
 LowFive::VOLBase::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
-    return H5VLdataset_read(unwrap(dset), info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    return H5VLdataset_read(dset, info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -165,7 +165,7 @@ herr_t
 LowFive::VOLBase::
 dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
-    return H5VLdataset_write(unwrap(dset), info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    return H5VLdataset_write(dset, info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -202,7 +202,7 @@ herr_t
 LowFive::VOLBase::
 dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLdataset_get(unwrap(dset), info->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLdataset_get(dset, info->under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -243,5 +243,5 @@ herr_t
 LowFive::VOLBase::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
-    return H5VLdataset_close(unwrap(dset), info->under_vol_id, dxpl_id, req);
+    return H5VLdataset_close(dset, info->under_vol_id, dxpl_id, req);
 }

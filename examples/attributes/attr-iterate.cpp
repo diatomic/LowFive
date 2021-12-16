@@ -93,8 +93,8 @@ int main(int argc, char**argv)
   // or create a MetadataVOL object for metadata
   l5::MetadataVOL vol_plugin;
   vol_plugin.memory.push_back(all);
-  vol_plugin.passthru.push_back(none);
-  vol_plugin.zerocopy.push_back(none);
+  //vol_plugin.passthru.push_back(none);
+  //vol_plugin.zerocopy.push_back(none);
 
   // or create a MetadataVOL object for both passthru and metadata
 //   l5::MetadataVOL vol_plugin;

@@ -32,14 +32,17 @@ struct VOLBase
         static void         destroy(pass_through_t* x)
         {
             x->vol->drop(x->under_object);
-
+            destroy_wrapper(x);
+        }
+        static void         destroy_wrapper(pass_through_t* x)
+        {
             hid_t err_id = H5Eget_current_stack();
             H5Idec_ref(x->under_vol_id);
             H5Eset_current_stack(err_id);
             delete x;
         }
 
-        void*               under_object;                       // Info object for underlying VOL connector
+        void*               under_object;
         hid_t               under_vol_id;
         VOLBase*            vol;                                // pointer to this
     };
@@ -71,8 +74,6 @@ struct VOLBase
                             VOLBase();
                             ~VOLBase();
 
-    virtual void*           wrap(void* p)       { return p; }
-    virtual void*           unwrap(void* p)     { return p; }
     virtual void            drop(void* p)       {}
 
     hid_t                   register_plugin();

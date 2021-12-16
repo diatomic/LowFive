@@ -105,7 +105,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         query->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
     } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
     {
-        return VOLBase::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+        return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
     } else if (buf)
     {
         throw MetadataError(fmt::format("Error: dataset_read(): neither memory, nor passthru open"));
@@ -164,7 +164,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         }
     } else if (unwrap(dset_))
     {
-        return VOLBase::dataset_get(dset_, get_type, dxpl_id, req, arguments);
+        return VOLBase::dataset_get(unwrap(dset_), get_type, dxpl_id, req, arguments);
     } else {
         throw MetadataError(fmt::format("In dataset_get(): neither memory, nor passthru open"));
     }
@@ -219,7 +219,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
     // scenarios
     if (unwrap(file_))
     {
-        herr_t res = VOLBase::file_close(file_, dxpl_id, req);
+        herr_t res = VOLBase::file_close(unwrap(file_), dxpl_id, req);
         file_->h5_obj = nullptr;    // this makes sure that the recursive call below won't trigger VOLBase::file_close() again
     }
 
