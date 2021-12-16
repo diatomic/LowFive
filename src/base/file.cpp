@@ -65,7 +65,7 @@ void*
 LowFive::VOLBase::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    return wrap(H5VLfile_create(name, flags, fcpl_id, fapl_id, dxpl_id, req));
+    return H5VLfile_create(name, flags, fcpl_id, fapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -125,7 +125,7 @@ void*
 LowFive::VOLBase::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    return wrap(H5VLfile_open(name, flags, fapl_id, dxpl_id, req));
+    return H5VLfile_open(name, flags, fapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -164,7 +164,7 @@ LowFive::VOLBase::
 file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
-    return H5VLfile_get(unwrap(file), info->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLfile_get(file, info->under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -309,7 +309,7 @@ LowFive::VOLBase::
 file_specific(void *file, H5VL_file_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLfile_specific(unwrap(file), info->under_vol_id, specific_type, dxpl_id, req, arguments);
+    return H5VLfile_specific(file, info->under_vol_id, specific_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -348,7 +348,7 @@ LowFive::VOLBase::
 file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLfile_optional(unwrap(file), info->under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLfile_optional(file, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -369,7 +369,7 @@ _file_close(void *file, hid_t dxpl_id, void **req)
     herr_t ret_value;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL FILE Close\n");
+    fprintf(stderr, "------- PASS THROUGH VOL FILE Close\n");
 #endif
 
     ret_value = o->vol->file_close(o->under_object, dxpl_id, req);
@@ -389,5 +389,5 @@ herr_t
 LowFive::VOLBase::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
-    return H5VLfile_close(unwrap(file), info->under_vol_id, dxpl_id, req);
+    return H5VLfile_close(file, info->under_vol_id, dxpl_id, req);
 }

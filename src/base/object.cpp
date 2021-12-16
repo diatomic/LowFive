@@ -34,7 +34,7 @@ herr_t
 LowFive::VOLBase::
 object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLobject_get(unwrap(obj), loc_params, info->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLobject_get(obj, loc_params, info->under_vol_id, get_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
@@ -79,6 +79,6 @@ LowFive::VOLBase::
 object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLobject_specific(unwrap(obj), loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
+    return H5VLobject_specific(obj, loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
 }
 

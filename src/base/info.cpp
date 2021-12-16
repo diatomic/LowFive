@@ -34,6 +34,7 @@ _info_copy(const void *_info)
     /* Allocate new VOL info struct for the pass through connector */
     new_info = (info_t *)calloc(1, sizeof(info_t));
     new_info->vol = info->vol;
+    new_info->under_vol_info = NULL;
 
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_info->under_vol_id = info->under_vol_id;

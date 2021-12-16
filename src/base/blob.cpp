@@ -29,5 +29,5 @@ herr_t
 LowFive::VOLBase::
 blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx)
 {
-    return H5VLblob_put(unwrap(obj), info->under_vol_id, buf, size, blob_id, ctx);
+    return H5VLblob_put(obj, info->under_vol_id, buf, size, blob_id, ctx);
 }
