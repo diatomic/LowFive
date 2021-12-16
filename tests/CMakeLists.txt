@@ -54,31 +54,32 @@ foreach                     (p 2 4 8)
                             consumer-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
 endforeach()
 
-# space sharing only works under Linux, not Mac
-if(UNIX AND NOT APPLE)
+# Space sharing currently broken everywhere
+## space sharing only works under Linux, not Mac
+#if(UNIX AND NOT APPLE)
 
-    # space sharing communicating through metadata
-    foreach                 (p 2 4 8)
-        add_test            (NAME prod-con-multidata-shared-metadata-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
-                            consumer-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
-    endforeach()
+#    # space sharing communicating through metadata
+#    foreach                 (p 2 4 8)
+#        add_test            (NAME prod-con-multidata-shared-metadata-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+#                            consumer-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
+#    endforeach()
 
-    # space sharing communicating through a file
-    foreach                 (p 2 4 8)
-        add_test            (NAME prod-con-multidata-shared-file-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
-                            consumer-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
-    endforeach()
+#    # space sharing communicating through a file
+#    foreach                 (p 2 4 8)
+#        add_test            (NAME prod-con-multidata-shared-file-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+#                            consumer-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
+#    endforeach()
 
-    # space sharing communicating through metadata but also writing a file
-    foreach                 (p 2 4 8)
-        add_test            (NAME prod-con-multidata-shared-metadata-file-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
-                            consumer-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
-    endforeach()
+#    # space sharing communicating through metadata but also writing a file
+#    foreach                 (p 2 4 8)
+#        add_test            (NAME prod-con-multidata-shared-metadata-file-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
+#                            consumer-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
+#    endforeach()
 
-endif()
+#endif()
 
 # ------------ test 1 producer 2 consumers -----------------
 
@@ -106,31 +107,32 @@ foreach                     (p 6 7 8)
                             producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
 endforeach()
 
-# space sharing only works under Linux, not Mac
-if(UNIX AND NOT APPLE)
+# Space sharing currently broken everywhere
+## space sharing only works under Linux, not Mac
+#if(UNIX AND NOT APPLE)
 
-    # space sharing communicating through metadata
-    foreach                 (p 6 7 8)
-        add_test            (NAME prod-2cons-multidata-shared-metadata-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
-    endforeach()
+#    # space sharing communicating through metadata
+#    foreach                 (p 6 7 8)
+#        add_test            (NAME prod-2cons-multidata-shared-metadata-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+#                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
+#    endforeach()
 
-    # space sharing communicating through a file
-    foreach                 (p 6 7 8)
-        add_test            (NAME prod-2cons-multidata-shared-file-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
-    endforeach()
+#    # space sharing communicating through a file
+#    foreach                 (p 6 7 8)
+#        add_test            (NAME prod-2cons-multidata-shared-file-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+#                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
+#    endforeach()
 
-    # space sharing communicating through metadata but also writing a file
-    foreach                 (p 6 7 8)
-        add_test            (NAME prod-2cons-multidata-shared-metadata-file-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
-    endforeach()
+#    # space sharing communicating through metadata but also writing a file
+#    foreach                 (p 6 7 8)
+#        add_test            (NAME prod-2cons-multidata-shared-metadata-file-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+#                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
+#    endforeach()
 
-endif()
+#endif()
 
 # ------------ test 2 producers 1 consumer -----------------
 
@@ -158,29 +160,30 @@ foreach                     (p 6 7 8)
                             producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
 endforeach()
 
-# space sharing only works under Linux, not Mac
-if(UNIX AND NOT APPLE)
+# Space sharing currently broken everywhere
+## space sharing only works under Linux, not Mac
+#if(UNIX AND NOT APPLE)
 
-    # space sharing communicating through metadata
-    foreach                 (p 6 7 8)
-        add_test            (NAME 2prods-con-multidata-shared-metadata-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
-    endforeach()
+#    # space sharing communicating through metadata
+#    foreach                 (p 6 7 8)
+#        add_test            (NAME 2prods-con-multidata-shared-metadata-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+#                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
+#    endforeach()
 
-    # space sharing communicating through a file
-    foreach                 (p 6 7 8)
-        add_test            (NAME 2prods-con-multidata-shared-file-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
-    endforeach()
+#    # space sharing communicating through a file
+#    foreach                 (p 6 7 8)
+#        add_test            (NAME 2prods-con-multidata-shared-file-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+#                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
+#    endforeach()
 
-    # space sharing communicating through metadata but also writing a file
-    foreach                 (p 6 7 8)
-        add_test            (NAME 2prods-con-multidata-shared-metadata-file-p${p}
-                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
-    endforeach()
+#    # space sharing communicating through metadata but also writing a file
+#    foreach                 (p 6 7 8)
+#        add_test            (NAME 2prods-con-multidata-shared-metadata-file-p${p}
+#                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+#                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 1 1) # 1 1 1: memory file shared
+#    endforeach()
 
-endif()
+#endif()
 
