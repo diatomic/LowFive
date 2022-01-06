@@ -9,6 +9,14 @@
 
 #include    "prod-con-multidata.hpp"
 
+herr_t
+fail_on_hdf5_error(hid_t stack_id, void*)
+{
+    H5Eprint(stack_id, stderr);
+    fprintf(stderr, "An HDF5 error was detected. Terminating.\n");
+    exit(1);
+}
+
 int main(int argc, char* argv[])
 {
     int   dim = DIM;
@@ -149,6 +157,9 @@ int main(int argc, char* argv[])
     void* consumer2_f_ = dlsym(lib_consumer2, "consumer2_f");
     if (!consumer2_f_)
         fmt::print(stderr, "Couldn't find consumer2_f\n");
+
+    // set HDF5 error handler
+    H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
     // communicator management
     using communicator = diy::mpi::communicator;

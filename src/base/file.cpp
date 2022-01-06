@@ -88,7 +88,7 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     void *under;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL FILE Open\n");
+    fprintf(stderr, "------- PASS THROUGH VOL FILE Open\n");
 #endif
 
     /* Get copy of our VOL info from FAPL */

@@ -176,7 +176,7 @@ void*
 LowFive::DistMetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    fmt::print("DistMetadataVOL::file_open()\n");
+    fmt::print(stderr, "DistMetadataVOL::file_open()\n");
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
     if (match_any(name, "", memory, true))

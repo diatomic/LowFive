@@ -58,7 +58,7 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    fmt::print("MetadataVOL::file_open()\n");
+    fmt::print(stderr, "MetadataVOL::file_open()\n");
     ObjectPointers* obj_ptrs = nullptr;
 
     // find the file in the VOL

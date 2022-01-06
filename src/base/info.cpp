@@ -65,7 +65,7 @@ _info_free(void *_info)
     hid_t err_id;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL INFO Free\n");
+    fprintf(stderr, "------- PASS THROUGH VOL INFO Free\n");
 #endif
 
     err_id = H5Eget_current_stack();
