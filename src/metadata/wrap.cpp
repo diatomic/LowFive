@@ -23,7 +23,11 @@ void *
 LowFive::MetadataVOL::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
-    return wrap(VOLBase::wrap_object(obj, obj_type, wrap_ctx));
+    void* res = VOLBase::wrap_object(obj, obj_type, wrap_ctx);
+    // XXX: this is hideously ugly, but currently needed to register ObjectPointers as HDF5 types (e.g., in attr_iter)
+    if (dont_wrap)
+        return res;
+    return wrap(res);
 }
 
 void *

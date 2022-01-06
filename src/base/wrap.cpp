@@ -29,9 +29,9 @@ void *
 LowFive::VOLBase::
 wrap_get_object(void *obj)
 {
-//     fprintf(stderr, "wrap_get_object obj = %p unwrap(obj) = %p\n", obj, unwrap(obj));
-
-    return H5VLget_object(obj, info->under_vol_id);
+    void* res = H5VLget_object(obj, info->under_vol_id);
+    fprintf(stderr, "wrap_get_object obj = %p res = %p\n", obj, res);
+    return res;
 }
 
 /*---------------------------------------------------------------------------
@@ -119,7 +119,9 @@ void *
 LowFive::VOLBase::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
-    return H5VLwrap_object(obj, obj_type, info->under_vol_id, wrap_ctx);
+    void* res = H5VLwrap_object(obj, obj_type, info->under_vol_id, wrap_ctx);
+    fprintf(stderr, "wrap_object: obj = %p, res = %p\n", obj, res);
+    return res;
 }
 
 /*---------------------------------------------------------------------------

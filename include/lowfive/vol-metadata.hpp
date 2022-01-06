@@ -57,6 +57,8 @@ struct MetadataVOL: public LowFive::VOLBase
             delete x.second;
     }
 
+    bool dont_wrap = false;
+
     ObjectPointers* wrap(void* p)
     {
         ObjectPointers* op = new ObjectPointers;
