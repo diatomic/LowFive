@@ -15,9 +15,18 @@ herr_t iter_op(
         const H5A_info_t    *ainfo,
         void *              op_data)
 {
+    fmt::print(stderr, "Location type: {}\n", H5Iget_type(location_id));
+
     // in this example, the operator simply prints the attribute name
     fmt::print(stderr, "Iterating over attributes: name = {}\n", attr_name);
     return 0;
+}
+
+herr_t fail_on_hdf5_error(hid_t stack_id, void*)
+{
+    H5Eprint(stack_id, stderr);
+    fprintf(stderr, "An HDF5 error was detected. Terminating.\n");
+    exit(1);
 }
 
 int main(int argc, char**argv)
@@ -79,6 +88,9 @@ int main(int argc, char**argv)
         }
         return 1;
     }
+
+    // set HDF5 error handler
+    H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
   // set location patterns
   LowFive::LocationPattern all { "outfile.h5", "*"};

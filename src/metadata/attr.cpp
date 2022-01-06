@@ -172,8 +172,12 @@ attr_iter(void *obj, va_list arguments)
     obj_tmp->tmp = true;
     fmt::print(stderr, "wrapping {} [h5_obj={} mdata_obj={} tmp={}]\n",
                         fmt::ptr(obj_tmp), fmt::ptr(obj_tmp->h5_obj), fmt::ptr(obj_tmp->mdata_obj), obj_tmp->tmp);
+
+    // XXX: this is a hideously ugly hack that wouldn't work in a multi-threaded setting
+    dont_wrap = true;
     hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
-    fmt::print(stderr, "wrap_object = {}\n", fmt::ptr(H5VLobject(obj_loc_id)));
+    dont_wrap = false;
+    //fmt::print(stderr, "wrap_object = {}\n", fmt::ptr(H5VLobject(obj_loc_id)));
     //fmt::print(stderr, "dec_ref, refcount = {}", H5Idec_ref(obj_loc_id));
 
     // debug
@@ -223,7 +227,9 @@ attr_iter(void *obj, va_list arguments)
     }   // for all children
 
     fmt::print(stderr, "refcount = {}\n", H5Idec_ref(obj_loc_id));
-    delete obj_tmp;
+    // NB: don't need to delete obj_tmp; it gets deleted (via
+    //     MetadataVOL::drop()) automagically, when refcount reaches 0,
+    //     i.e., this part works as expected
 
     if (!found)
     {
