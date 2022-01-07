@@ -35,7 +35,7 @@ struct Dataset : public Object
     {
         if (ownership == Ownership::lowfive)
         {
-            size_t nbytes   = (file.id ? file.size() : space.size()) * type.dtype_size;
+            size_t nbytes   = (memory.id ? memory.size() : space.size()) * type.dtype_size;
             char* p         = new char[nbytes];
             std::memcpy(p, buf, nbytes);
             data.emplace_back(DataTriple { type, memory, file, p, std::unique_ptr<char[]>(p) });
