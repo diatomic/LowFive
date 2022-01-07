@@ -179,7 +179,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 //         std::string full_path;
 //         std::string filename;
 //         backtrack_name(name_, static_cast<Object*>(obj_->mdata_obj), filename, full_path);
-// 
+//
 //         // check the ownership map for the full path name and file name
 //         Dataset::Ownership own = Dataset::Ownership::user;
 //         for (auto& o : data_owners)
@@ -191,10 +191,10 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 //                 break;
 //             }
 //         }
-// 
+//
 //         // add the dataset
 //         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id, own));
-// 
+//
 //     }
 
     fmt::print(stderr, "dataset_create: created result {} result->h5_obj {} result->mdata_obj {}\n",
@@ -309,7 +309,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
                 ds->type.dtype_size != H5Tget_size(mem_type_id))
             throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
-        if (Dataspace(file_space_id).dim != ds->space.dim)
+        if (file_space_id && Dataspace(file_space_id).dim != ds->space.dim)
             throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
 
         for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
