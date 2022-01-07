@@ -97,6 +97,11 @@ struct Object
         {
             if (name == cur_path)
                 return this;
+
+            for(auto* child : children)
+                if (child->name == cur_path)
+                    return child;
+
             return nullptr;
         }
         else                                                            // current path is not the leaf yet
