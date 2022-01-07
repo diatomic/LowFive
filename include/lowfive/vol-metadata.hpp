@@ -151,7 +151,7 @@ struct MetadataVOL: public LowFive::VOLBase
         for (int i = 0; i < patterns.size(); ++i)
         {
             auto& x = patterns[i];
-            if (x.filename != filename) continue;
+            if (!match(x.filename.c_str(), filename.c_str())) continue;
             if (match(x.pattern.c_str(), full_path.c_str(), partial))
                 return i;
         }
