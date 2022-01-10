@@ -165,8 +165,6 @@ attr_iter(void *obj, va_list arguments)
     // get object type in HDF format and use that to get an HDF hid_t to the object
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
     int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-    // TODO: following causes the closing of the dataset to crash
-    fmt::print(stderr, "before wrap_register\n");
     ObjectPointers* obj_tmp = new ObjectPointers;
     *obj_tmp = *obj_;
     obj_tmp->tmp = true;
@@ -179,10 +177,6 @@ attr_iter(void *obj, va_list arguments)
     dont_wrap = false;
     //fmt::print(stderr, "wrap_object = {}\n", fmt::ptr(H5VLobject(obj_loc_id)));
     //fmt::print(stderr, "dec_ref, refcount = {}", H5Idec_ref(obj_loc_id));
-
-    // debug
-    //fmt::print(stderr, "attr_iter(): obj_type {} H5I_DATASET {} obj_loc_id {} name {}\n",
-    //        obj_type, H5I_DATASET, obj_loc_id, mdata_obj->name);
 
     // info for attribute, defined in HDF5 H5Apublic.h  TODO: assigned with some defaults, not sure if they're corrent
     H5A_info_t ainfo;
@@ -207,8 +201,8 @@ attr_iter(void *obj, va_list arguments)
 
             fmt::print(stderr, "*** ------------------- ***\n");
             fmt::print(stderr, "Warning: operating on attribute not fully implemented yet.\n");
-            fmt::print(stderr, "Ignoring object location, name, attribute info, attribute order, increment direction, current index.\n");
-            fmt::print(stderr, "Basically just stepping through all attributes of the object in the order they were created.\n");
+            fmt::print(stderr, "Ignoring attribute info, attribute order, increment direction, current index.\n");
+            fmt::print(stderr, "Stepping through all attributes of the object in the order they were created.\n");
             fmt::print(stderr, "*** ------------------- ***\n");
 
             // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
