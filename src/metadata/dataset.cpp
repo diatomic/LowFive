@@ -17,8 +17,13 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     ObjectPointers* result = nullptr;
 
     fmt::print(stderr, "Dataset Create\n");
-    fmt::print("dataset_create: parent obj = {} [h5_obj {} mdata_obj {}], name = {}\n",
-            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), name);
+    fmt::print("dataset_create: parent obj = {} [h5_obj {} mdata_obj {}]",
+            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj));
+    if (name)
+        fmt::print(", name = {}", name);
+    else
+        fmt::print(", name = NULL");
+    fmt::print("\n");
 
     assert(obj_->mdata_obj);
     // trace object back to root to build full path and file name
