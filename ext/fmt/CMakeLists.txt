@@ -17,11 +17,22 @@ endif ()
 
 # Joins arguments and places the results in ${result_var}.
 function(join result_var)
-  set(result )
+  set(result "")
   foreach (arg ${ARGN})
     set(result "${result}${arg}")
   endforeach ()
   set(${result_var} "${result}" PARENT_SCOPE)
+endfunction()
+
+function(enable_module target)
+  if (MSVC)
+    set(BMI ${CMAKE_CURRENT_BINARY_DIR}/${target}.ifc)
+    target_compile_options(${target}
+      PRIVATE /interface /ifcOutput ${BMI}
+      INTERFACE /reference fmt=${BMI})
+  endif ()
+  set_target_properties(${target} PROPERTIES ADDITIONAL_CLEAN_FILES ${BMI})
+  set_source_files_properties(${BMI} PROPERTIES GENERATED ON)
 endfunction()
 
 include(CMakeParseArguments)
@@ -69,6 +80,27 @@ option(FMT_TEST "Generate the test target." ${FMT_MASTER_PROJECT})
 option(FMT_FUZZ "Generate the fuzz target." OFF)
 option(FMT_CUDA_TEST "Generate the cuda-test target." OFF)
 option(FMT_OS "Include core requiring OS (Windows/Posix) " ON)
+option(FMT_MODULE "Build a module instead of a traditional library." OFF)
+option(FMT_SYSTEM_HEADERS "Expose headers with marking them as system." OFF)
+
+set(FMT_CAN_MODULE OFF)
+if (CMAKE_CXX_STANDARD GREATER 17 AND
+    # msvc 16.10-pre4
+    MSVC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 19.29.30035)
+  set(FMT_CAN_MODULE OFF)
+endif ()
+if (NOT FMT_CAN_MODULE)
+  set(FMT_MODULE OFF)
+  message(STATUS "Module support is disabled.")
+endif ()
+if (FMT_TEST AND FMT_MODULE)
+  # The tests require {fmt} to be compiled as traditional library
+  message(STATUS "Testing is incompatible with build mode 'module'.")
+endif ()
+set(FMT_SYSTEM_HEADERS_ATTRIBUTE "")
+if (FMT_SYSTEM_HEADERS)
+  set(FMT_SYSTEM_HEADERS_ATTRIBUTE SYSTEM)
+endif ()
 
 # Get version from core.h
 file(READ include/fmt/core.h core_h)
@@ -104,6 +136,18 @@ if (${index} GREATER -1)
 endif ()
 message(STATUS "Required features: ${FMT_REQUIRED_FEATURES}")
 
+if (FMT_MASTER_PROJECT AND NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET)
+  set_verbose(CMAKE_CXX_VISIBILITY_PRESET hidden CACHE STRING
+              "Preset for the export of private symbols")
+  set_property(CACHE CMAKE_CXX_VISIBILITY_PRESET PROPERTY STRINGS
+               hidden default)
+endif ()
+
+if (FMT_MASTER_PROJECT AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
+  set_verbose(CMAKE_VISIBILITY_INLINES_HIDDEN ON CACHE BOOL
+              "Whether to add a compile flag to hide symbols of inline functions")
+endif ()
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   set(PEDANTIC_COMPILE_FLAGS -pedantic-errors -Wall -Wextra -pedantic
       -Wold-style-cast -Wundef
@@ -112,10 +156,10 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
       -Wcast-align
       -Wctor-dtor-privacy -Wdisabled-optimization
       -Winvalid-pch -Woverloaded-virtual
-      -Wconversion -Wswitch-enum -Wundef
+      -Wconversion -Wundef
       -Wno-ctor-dtor-privacy -Wno-format-nonliteral)
   if (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.6)
-      set(PEDANTIC_COMPILE_FLAGS ${PEDANTIC_COMPILE_FLAGS} -Wnoexcept
+      set(PEDANTIC_COMPILE_FLAGS ${PEDANTIC_COMPILE_FLAGS}
          -Wno-dangling-else -Wno-unused-local-typedefs)
   endif ()
   if (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)
@@ -132,7 +176,8 @@ endif ()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(PEDANTIC_COMPILE_FLAGS -Wall -Wextra -pedantic -Wconversion -Wundef
-      -Wdeprecated -Wweak-vtables -Wshadow)
+      -Wdeprecated -Wweak-vtables -Wshadow
+      -Wno-gnu-zero-variadic-macro-arguments)
   check_cxx_compiler_flag(-Wzero-as-null-pointer-constant HAS_NULLPTR_WARNING)
   if (HAS_NULLPTR_WARNING)
     set(PEDANTIC_COMPILE_FLAGS ${PEDANTIC_COMPILE_FLAGS}
@@ -186,9 +231,11 @@ endfunction()
 
 # Define the fmt library, its includes and the needed defines.
 add_headers(FMT_HEADERS args.h chrono.h color.h compile.h core.h format.h
-                        format-inl.h locale.h os.h ostream.h posix.h printf.h
-                        ranges.h)
-if (FMT_OS)
+                        format-inl.h locale.h os.h ostream.h printf.h ranges.h
+                        xchar.h)
+if (FMT_MODULE)
+  set(FMT_SOURCES src/fmt.cc)
+elseif (FMT_OS)
   set(FMT_SOURCES src/format.cc src/os.cc)
 else()
   set(FMT_SOURCES src/format.cc)
@@ -202,7 +249,7 @@ if (HAVE_STRTOD_L)
 endif ()
 
 if (MINGW)
-  check_cxx_compiler_flag("Wa,-mbig-obj" FMT_HAS_MBIG_OBJ)
+  check_cxx_compiler_flag("-Wa,-mbig-obj" FMT_HAS_MBIG_OBJ)
   if (${FMT_HAS_MBIG_OBJ})
     target_compile_options(fmt PUBLIC "-Wa,-mbig-obj")
   endif()
@@ -214,10 +261,13 @@ endif ()
 if (FMT_PEDANTIC)
   target_compile_options(fmt PRIVATE ${PEDANTIC_COMPILE_FLAGS})
 endif ()
+if (FMT_MODULE)
+  enable_module(fmt)
+endif ()
 
 target_compile_features(fmt INTERFACE ${FMT_REQUIRED_FEATURES})
 
-target_include_directories(fmt PUBLIC
+target_include_directories(fmt ${FMT_SYSTEM_HEADERS_ATTRIBUTE} PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${FMT_INC_DIR}>)
 
@@ -253,7 +303,7 @@ add_library(fmt::fmt-header-only ALIAS fmt-header-only)
 target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
 target_compile_features(fmt-header-only INTERFACE ${FMT_REQUIRED_FEATURES})
 
-target_include_directories(fmt-header-only INTERFACE
+target_include_directories(fmt-header-only ${FMT_SYSTEM_HEADERS_ATTRIBUTE} INTERFACE
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${FMT_INC_DIR}>)
 

@@ -5,7 +5,7 @@ else()
   cmake_policy(VERSION 3.13)
 endif()
 
-project(HighFive VERSION 2.2.2)
+project(HighFive VERSION 2.3.1)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/highfive/H5Version.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/include/highfive/H5Version.hpp)
@@ -17,8 +17,6 @@ list(APPEND CMAKE_MODULE_PATH
 
 include(CompilerFlagsHelpers)
 include(ReleaseDebugAutoFlags)
-include(CheckCXXStandardSupport)
-include(BlueGenePortability)
 
 # OPTIONS
 # Compat within Highfive 2.x series
@@ -37,7 +35,7 @@ option(HIGHFIVE_EXAMPLES "Compile examples" ON)
 option(HIGHFIVE_PARALLEL_HDF5 "Enable Parallel HDF5 support" OFF)
 option(HIGHFIVE_BUILD_DOCS "Enable documentation building" ON)
 
-# In deplomyents we probably don't want/cant have dynamic dependencies
+# In deployments we probably don't want/cant have dynamic dependencies
 option(HIGHFIVE_USE_INSTALL_DEPS "End applications by default use detected dependencies here" OFF)
 mark_as_advanced(HIGHFIVE_USE_INSTALL_DEPS)
 
@@ -45,9 +43,10 @@ mark_as_advanced(HIGHFIVE_USE_INSTALL_DEPS)
 # Check compiler cxx_std requirements
 # -----------------------------------
 
-if(NOT COMPILER_SUPPORTS_CXX11)
-  message(FATAL_ERROR "HighFive version >= 2.0 requires c++ standard >= c++11")
+if(CMAKE_CXX_STANDARD EQUAL 98)
+    message(FATAL_ERROR "HighFive needs to be compiled with at least C++11")
 endif()
+
 if(NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,18 +54,15 @@ if(NOT DEFINED CMAKE_CXX_STANDARD)
 endif()
 
 if(HIGHFIVE_USE_XTENSOR)
-  if(NOT COMPILER_SUPPORTS_CXX14)
-    message(SEND_ERROR "C++ compiler does not support standard c++14, required to support xtensor.")
-  else()
     set(CMAKE_CXX_STANDARD 14)
-  endif()
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
 
 # Search dependencies (hdf5, boost, eigen, xtensor, mpi) and build target highfive_deps
 include(${PROJECT_SOURCE_DIR}/CMake/HighFiveTargetDeps.cmake)
 
-# Setup HighFive to be used in 3rd party project using exports. Create a HighFive target
+# Set-up HighFive to be used in 3rd party project using exports. Create a HighFive target
 include(${PROJECT_SOURCE_DIR}/CMake/HighFiveTargetExport.cmake)
 
 # Installation of headers (HighFive is only interface)
@@ -101,7 +97,7 @@ if(HIGHFIVE_UNIT_TESTS)
 endif()
 
 
-if(CMAKE_CXX_COMPILER_IS_ICC)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
   # ICC gets mad if we shorten "int"s
   add_definitions("-wd1682")
 endif()

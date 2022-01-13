@@ -5,12 +5,12 @@ imports:
 
 git module HighFive:
     url: gh:BlueBrain/HighFive
-    rev: e582076fb5b4dd654738c24c2d40517d11512ca6
+    rev: 3897c8b8e8e1b220e6fc2bbae680a6764645c453
 
 git module fmt:
     url: gh:fmtlib/fmt
-    rev: 58aa04573f6fab54dd998183d333bf9d630843ee
+    rev: 4fe6129d6c6fb88e5ac80d2aaaaeb87fa08c47d7
 
 git module diy:
     url: kgl:mrzv/diy
-    rev: e3bfa9846332a4621385226cd8417b9967d97022
+    rev: 9246b0bd09368455e8604063a44fe7a93088d789
