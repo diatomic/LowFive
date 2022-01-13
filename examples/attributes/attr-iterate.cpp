@@ -178,6 +178,10 @@ int main(int argc, char**argv)
     hsize_t n = 0;
     H5Aiterate(dset, H5_INDEX_CRT_ORDER, H5_ITER_INC, &n, &iter_op, NULL);
 
+    // get info back about the dataset
+    H5O_info_t oinfo;
+    H5Oget_info(dset, &oinfo, H5O_INFO_ALL);
+
     // clean up
     H5Aclose(attr1);
     H5Aclose(attr2);

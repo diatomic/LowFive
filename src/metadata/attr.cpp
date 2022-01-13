@@ -203,6 +203,10 @@ attr_iter(void *obj, va_list arguments)
             fmt::print(stderr, "Warning: operating on attribute not fully implemented yet.\n");
             fmt::print(stderr, "Ignoring attribute info, attribute order, increment direction, current index.\n");
             fmt::print(stderr, "Stepping through all attributes of the object in the order they were created.\n");
+            if (idx)
+                fmt::print(stderr, "The provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}\n", order, *idx);
+            else
+                fmt::print(stderr, "The provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned\n", order);
             fmt::print(stderr, "*** ------------------- ***\n");
 
             // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
