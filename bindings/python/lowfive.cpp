@@ -9,6 +9,10 @@ PYBIND11_MODULE(lowfive, m)
 
     m.doc() = "LowFive python bindings";
 
+    py::class_<LowFive::VOLBase>(m, "VOLBase", "base VOL object")
+        .def(py::init<>(), "construct the object")
+    ;
+
     py::class_<LowFive::MetadataVOL>(m, "MetadataVOL", "metadata VOL object")
         .def(py::init<>(), "construct the object")
         .def("set_passthru", &LowFive::MetadataVOL::set_passthru, "filename"_a, "pattern"_a, "set (filename,pattern) for passthru")
