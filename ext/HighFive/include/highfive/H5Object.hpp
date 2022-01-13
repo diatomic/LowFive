@@ -63,6 +63,11 @@ class Object {
     ///
     ObjectType getType() const;
 
+    // Check if refer to same object
+    bool operator==(const Object& other) const noexcept {
+        return _hid == other._hid;
+    }
+
   protected:
     // empty constructor
     Object();
@@ -76,6 +81,7 @@ class Object {
     // Init with an low-level object id
     explicit Object(hid_t);
 
+    // Copy-Assignment operator
     Object& operator=(const Object& other);
 
     hid_t _hid;
@@ -85,6 +91,7 @@ class Object {
     template <typename Derivate> friend class NodeTraits;
     template <typename Derivate> friend class AnnotateTraits;
     friend class Reference;
+    friend class CompoundType;
 };
 
 
