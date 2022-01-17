@@ -5,6 +5,8 @@
 
 #include    "../prod-con-multidata/prod-con-multidata.hpp"
 
+#include    <H5DSpublic.h>
+
 using communicator = diy::mpi::communicator;
 
 // user-define operator over attributes
@@ -182,7 +184,26 @@ int main(int argc, char**argv)
     H5O_info_t oinfo;
     H5Oget_info(dset, &oinfo, H5O_INFO_ALL);
 
+    // dimension scale example
+    // make a 1-d array dataset that will be the scale for the 0th dimension of the grid data
+    // in this example, the scale is a vector of values, each associated with each point in the grid, eg, its physical space position
+    // although HDF5 makes no restrictions on how dimension scales are used, that's a typical scenario
+    // thie example only assigns a scale to one dimension, which is valid; other dimensions could be done similarly
+    // the dimension scale of another dataset is itself a dataset that needs to be created first
+    hid_t scale_space = H5Screate_simple(1, &domain_cnts[0], NULL);
+    hid_t scale = H5Dcreate2(group, "grid_scale", H5T_IEEE_F32LE, scale_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    std::vector<float> scale_data(domain_cnts[0]);
+    for (auto i = 0; i < scale_data.size(); i++)
+        scale_data[i] = i * 10;
+    H5Dwrite(scale, H5T_NATIVE_FLOAT, scale_space, scale_space, H5P_DEFAULT, &scale_data[0]);
+
+    // now attach the dimension scale dataset to the original grid dataset
+    H5DSset_scale(dset, "scale");
+    H5DSattach_scale(dset, scale, 0);
+
     // clean up
+    H5Dclose(scale);
+    H5Sclose(scale_space);
     H5Aclose(attr1);
     H5Aclose(attr2);
     H5Dclose(dset);

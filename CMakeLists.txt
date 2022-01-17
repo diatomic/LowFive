@@ -40,10 +40,11 @@ add_subdirectory            (ext/fmt)
 set                         (libraries ${libraries} fmt::fmt)
 
 # HDF5
-if                          (HDF5_LIBRARY AND Z_LIBRARY)
+if                          (HDF5_LIBRARY AND HDF5_HL_LIBRARY AND Z_LIBRARY)
   message                   ("HDF5_LIBRARY = " ${HDF5_LIBRARY})
+  message                   ("HDF5_HL_LIBRARY = " ${HDF5_HL_LIBRARY})
   message                   ("Z_LIBRARY = " ${Z_LIBRARY})
-  set                       (HDF5_LIBRARY ${HDF5_LIBRARY} ${Z_LIBRARY})
+  set                       (HDF5_LIBRARY ${HDF5_LIBRARY} ${HDF5_HL_LIBRARY} ${Z_LIBRARY})
 else                        ()
   message                   ("Looking for HDF5")
   if                        (NOT APPLE)
