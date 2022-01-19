@@ -56,6 +56,20 @@ struct Object
             child->print();
     }
 
+    virtual void fill_token(H5O_token_t& token)
+    {
+        for (size_t i = 0; i < H5O_MAX_TOKEN_SIZE; ++i)
+            token.__data[i] = 0;
+
+        void* _this = this;
+        memcpy(token.__data, &_this, sizeof(void*));
+
+        fmt::print(stderr, "fill_token: {} ", fmt::ptr(this));
+        for (size_t i = 0; i < H5O_MAX_TOKEN_SIZE; ++i)
+            fmt::print(stderr, "{0:x}", token.__data[i]);
+        fmt::print(stderr, "\n");
+    }
+
     virtual Object* search(const char* cur_path_)
     {
         std::string cur_path(cur_path_);

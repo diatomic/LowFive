@@ -90,6 +90,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                     int otype   = h5_types[static_cast<int>(mdata_obj->type)];
                     oinfo->type = static_cast<H5O_type_t>(otype);
 
+                    mdata_obj->fill_token(oinfo->token);
+
                     // count number of attributes
                     oinfo->num_attrs = 0;
                     for (auto& c : mdata_obj->children)
@@ -115,6 +117,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                             // get object type in HDF format
                             int otype   = h5_types[static_cast<int>(o->type)];
                             oinfo->type = static_cast<H5O_type_t>(otype);
+
+                            o->fill_token(oinfo->token);
 
                             // count number of attributes
                             oinfo->num_attrs = 0;
@@ -148,6 +152,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                             int otype   = h5_types[static_cast<int>(o->type)];
                             oinfo->type = static_cast<H5O_type_t>(otype);
 
+                            o->fill_token(oinfo->token);
+
                             // count number of attributes
                             oinfo->num_attrs = 0;
                             for (auto& c : o->children)
@@ -168,7 +174,6 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
 
                 // TODO: following are uninitialized, unknown, arbitrary
                 oinfo->fileno   = 0;                                // TODO
-                // oinfo->token = ?                                 // TODO
                 oinfo->rc       = 0;                                // TODO
                 oinfo->atime    = 0;                                // TODO
                 oinfo->mtime    = 0;                                // TODO
@@ -195,6 +200,35 @@ LowFive::MetadataVOL::
 object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    return VOLBase::object_specific(unwrap(obj), loc_params, specific_type, dxpl_id, req, arguments);
+    fmt::print(stderr, "object_specific: specific_type = {}\n", specific_type);
+    if (!unwrap(obj))
+    {
+        ObjectPointers* obj_ = (ObjectPointers*) obj;
+        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+
+        switch(specific_type)
+        {
+            /* Lookup object */
+            case H5VL_OBJECT_LOOKUP: {
+                H5O_token_t *token = va_arg(arguments, H5O_token_t *);
+                fmt::print(stderr, "loc_params->type = {}\n", loc_params->type);
+                fmt::print(stderr, "name = {}\n", loc_params->loc_data.loc_by_name.name);
+
+                // TODO: this really should call mdata_obj->search(...), but that needs to handle '.'
+                if (std::string(loc_params->loc_data.loc_by_name.name) == ".")
+                {
+                    mdata_obj->fill_token(*token);
+                    return 0;
+                }
+
+                throw MetadataError("Error: object_specific(): object lookup not implemented");
+
+                break;
+            }
+            default:
+                throw MetadataError("Error: object_specific(): unrecognized specific_type");
+        }
+    } else
+        return VOLBase::object_specific(unwrap(obj), loc_params, specific_type, dxpl_id, req, arguments);
 }
 
