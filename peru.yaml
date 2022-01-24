@@ -2,6 +2,7 @@ imports:
     HighFive: ./ext/HighFive
     fmt: ./ext/fmt
     diy: ./ext/diy
+    pybind11: ./ext/pybind11
 
 git module HighFive:
     url: gh:BlueBrain/HighFive
@@ -14,3 +15,6 @@ git module fmt:
 git module diy:
     url: kgl:mrzv/diy
     rev: 9246b0bd09368455e8604063a44fe7a93088d789
+
+git module pybind11:
+    url: gh:pybind/pybind11
