@@ -6,15 +6,16 @@ imports:
 
 git module HighFive:
     url: gh:BlueBrain/HighFive
-    rev: 3897c8b8e8e1b220e6fc2bbae680a6764645c453
+    rev: b5cab79dc5ebd2bf450d0d6783930ad8f8bb3dcb
 
 git module fmt:
     url: gh:fmtlib/fmt
-    rev: 4fe6129d6c6fb88e5ac80d2aaaaeb87fa08c47d7
+    rev: a7aecbfcaa0e1586da9cf8175bd8d1c4383acd8c
 
 git module diy:
     url: kgl:mrzv/diy
-    rev: 9246b0bd09368455e8604063a44fe7a93088d789
+    rev: 89ff7a86988753bc0291953e73815cfc723240fa
 
 git module pybind11:
     url: gh:pybind/pybind11
+    rev: 9ec1128c7aac3d069a4ec2bd1dfc7f57c6526d1c
