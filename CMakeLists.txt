@@ -94,4 +94,5 @@ endforeach                  ()
 install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
 install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
 
+add_subdirectory            (ext/pybind11)
 add_subdirectory            (bindings/python)

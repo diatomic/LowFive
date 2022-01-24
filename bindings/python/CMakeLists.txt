@@ -1,5 +1,3 @@
-find_package                (pybind11 REQUIRED)
-
 if                          (CMAKE_LIBRARY_OUTPUT_DIRECTORY)        # to work with pip
     set                     (MODULE_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 else                        ()
