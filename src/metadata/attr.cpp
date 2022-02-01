@@ -17,14 +17,13 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     if (unwrap(obj_) && match_any(filepath,passthru))
         result = wrap(VOLBase::attr_create(unwrap(obj_), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
     else
-        result = new ObjectPointers;
+        result = wrap(nullptr);
 
     // add attribute to our metadata; NB: attribute cannot have children, so only creating it if we have to
     if (match_any(filepath,memory))
         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
 
-    fmt::print("created attribute object = {} = [h5_obj {} mdata_obj {}] name {}\n",
-            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);
+    fmt::print("created attribute object = {} name {}\n", *result, name);
 
     return result;
 }
@@ -37,8 +36,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     ObjectPointers* result = nullptr;
 
     fmt::print(stderr, "Attr Open\n");
-    fmt::print("attr_open obj = {} = [h5_obj {} mdata_obj {}] name {}\n",
-            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), name);
+    fmt::print("attr_open obj = {} name {}\n", *obj_, name);
 
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
@@ -46,7 +44,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     if (match_any(filepath, passthru))
         result = wrap(VOLBase::attr_open(unwrap(obj_), loc_params, name, aapl_id, dxpl_id, req));
     else
-        result = new ObjectPointers;
+        result = wrap(nullptr);
 
     // find the attribute in our file metadata
     std::string name_(name);
@@ -76,7 +74,7 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("attr = {}, get_type = {}, req = {}\n", fmt::ptr(unwrap(obj_)), get_type, fmt::ptr(req));
+    fmt::print("attr = {}, get_type = {}, req = {}\n", *obj_, get_type, fmt::ptr(req));
 
     fmt::print(stderr, "Attr Get\n");
     fmt::print("get type = {}\n", get_type);
@@ -165,16 +163,12 @@ attr_iter(void *obj, va_list arguments)
     // get object type in HDF format and use that to get an HDF hid_t to the object
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
     int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-    ObjectPointers* obj_tmp = new ObjectPointers;
+    ObjectPointers* obj_tmp = wrap(nullptr);
     *obj_tmp = *obj_;
     obj_tmp->tmp = true;
-    fmt::print(stderr, "wrapping {} [h5_obj={} mdata_obj={} tmp={}]\n",
-                        fmt::ptr(obj_tmp), fmt::ptr(obj_tmp->h5_obj), fmt::ptr(obj_tmp->mdata_obj), obj_tmp->tmp);
+    fmt::print(stderr, "wrapping {}\n", *obj_tmp);
 
-    // XXX: this is a hideously ugly hack that wouldn't work in a multi-threaded setting
-    dont_wrap = true;
     hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
-    dont_wrap = false;
     //fmt::print(stderr, "wrap_object = {}\n", fmt::ptr(H5VLobject(obj_loc_id)));
     //fmt::print(stderr, "dec_ref, refcount = {}", H5Idec_ref(obj_loc_id));
 
@@ -244,8 +238,8 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("attr_specific obj = {} = [h5_obj {} mdata_obj {}] specific_type = {}\n",
-            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), specific_type);
+    fmt::print("attr_specific obj = {} specific_type = {}\n",
+            *obj_, specific_type);
     fmt::print("specific types H5VL_ATTR_DELETE = {} H5VL_ATTR_EXISTS = {} H5VL_ATTR_ITER = {} H5VL_ATTR_RENAME = {}\n",
             H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
 
@@ -310,8 +304,8 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
     ObjectPointers* attr_ = (ObjectPointers*) attr;
 
     fmt::print(stderr, "Attr Write\n");
-    fmt::print("attr = {} = [h5_obj {} mdata_obj {}], mem_type_id = {}, mem type = {}\n",
-            fmt::ptr(attr_), fmt::ptr(attr_->h5_obj), fmt::ptr(attr_->mdata_obj), mem_type_id, Datatype(mem_type_id));
+    fmt::print(stderr, "attr = {}, mem_type_id = {}, mem type = {}\n",
+            *attr_, mem_type_id, Datatype(mem_type_id));
 
     if (attr_->mdata_obj)
     {
@@ -335,8 +329,7 @@ attr_close(void *attr, hid_t dxpl_id, void **req)
     ObjectPointers* attr_ = (ObjectPointers*) attr;
 
     fmt::print(stderr, "Attr Close\n");
-    fmt::print("close: attr = {} = [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
-            fmt::ptr(attr_), fmt::ptr(attr_->h5_obj), fmt::ptr(attr_->mdata_obj), dxpl_id);
+    fmt::print(stderr, "close: {}, dxpl_id = {}\n", *attr_, dxpl_id);
 
     herr_t retval = 0;
 

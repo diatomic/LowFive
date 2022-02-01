@@ -5,9 +5,16 @@ void *
 LowFive::MetadataVOL::
 wrap_get_object(void *obj)
 {
-//     fprintf(stderr, "wrap_get_object obj = %p unwrap(obj) = %p\n", obj, unwrap(obj));
+    bool our = ours(obj);
+    if (our)
+        fmt::print(stderr, "wrap_get_object: obj = {}\n", *static_cast<ObjectPointers*>(obj));
+    else
+        fmt::print(stderr, "wrap_get_object: obj = {}\n", fmt::ptr(obj));
 
-    return VOLBase::wrap_get_object(unwrap(obj));
+    if (unwrap(obj))
+        return VOLBase::wrap_get_object(unwrap(obj));
+    else
+        return VOLBase::wrap_get_object(obj);
 }
 
 herr_t
@@ -23,10 +30,13 @@ void *
 LowFive::MetadataVOL::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
+    if (ours(obj))
+    {
+        fmt::print(stderr, "wrap_object: obj = {}\n", *static_cast<ObjectPointers*>(obj));
+        return obj;
+    }
+
     void* res = VOLBase::wrap_object(obj, obj_type, wrap_ctx);
-    // XXX: this is hideously ugly, but currently needed to register ObjectPointers as HDF5 types (e.g., in attr_iter)
-    if (dont_wrap)
-        return res;
     return wrap(res);
 }
 

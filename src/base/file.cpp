@@ -22,7 +22,7 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     void *under;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL FILE Create\n");
+    fprintf(stderr, "------- PASS THROUGH VOL FILE Create\n");
 #endif
 
     /* Get copy of our VOL info from FAPL */

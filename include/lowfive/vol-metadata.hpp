@@ -3,6 +3,7 @@
 
 #include    <vector>
 #include    <string>
+#include    <unordered_set>
 
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
@@ -40,7 +41,17 @@ struct MetadataVOL: public LowFive::VOLBase
         bool            tmp = false;
 
         ObjectPointers() = default;
-        ObjectPointers(void* h5_obj_) : h5_obj(h5_obj_)     {}
+        ObjectPointers(void* h5_obj_): h5_obj(h5_obj_)     {}
+
+        friend
+        std::ostream&   operator<<(std::ostream& out, const ObjectPointers& obj)
+        {
+            fmt::print(out, "[{}: h5 = {}, mdata = {}, tmp = {}", fmt::ptr(&obj), fmt::ptr(obj.h5_obj), fmt::ptr(obj.mdata_obj), obj.tmp);
+            if (obj.mdata_obj)
+                fmt::print(out, ", name = {}", static_cast<Object*>(obj.mdata_obj)->name);
+            fmt::print(out, "]");
+            return out;
+        }
     };
 
     Files                       files;
@@ -57,12 +68,17 @@ struct MetadataVOL: public LowFive::VOLBase
             delete x.second;
     }
 
-    bool dont_wrap = false;
+    //bool dont_wrap = false;
+    std::unordered_set<void*>   our_objects;
+    bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }
 
     ObjectPointers* wrap(void* p)
     {
         ObjectPointers* op = new ObjectPointers;
         op->h5_obj = p;
+
+        our_objects.insert(op);
+
         return op;
     }
     void*           unwrap(void* p)
@@ -72,6 +88,7 @@ struct MetadataVOL: public LowFive::VOLBase
     }
     void            drop(void* p) override
     {
+        our_objects.erase(p);
         ObjectPointers* op = static_cast<ObjectPointers*>(p);
         delete op;
     }

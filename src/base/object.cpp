@@ -18,7 +18,7 @@ _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t ge
     herr_t ret_value;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL OBJECT Get\n");
+    fprintf(stderr, "------- PASS THROUGH VOL OBJECT Get\n");
 #endif
 
     ret_value = o->vol->object_get(o->under_object, loc_params, get_type, dxpl_id, req, arguments);
@@ -57,7 +57,7 @@ _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     herr_t ret_value;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL OBJECT Specific\n");
+    fprintf(stderr, "------- PASS THROUGH VOL OBJECT Specific\n");
 #endif
 
     // Save copy of underlying VOL connector ID and prov helper, in case of

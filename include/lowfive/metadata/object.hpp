@@ -192,6 +192,14 @@ struct Object
             parent = nullptr;
         }
     }
+
+    Object* find_root()
+    {
+        Object* cur = this;
+        while (cur->parent)
+            cur = cur->parent;
+        return cur;
+    }
 };
 
 }

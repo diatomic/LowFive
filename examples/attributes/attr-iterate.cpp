@@ -46,14 +46,14 @@ int main(int argc, char**argv)
     int                       metadata          = 1;              // build in-memory metadata
     int                       passthru          = 0;              // write file to disk
     bool                      shared            = false;          // producer and consumer run on the same ranks
-    size_t                    local_num_points  = 100;            // points per block
+    size_t                    local_num_points  = 20;            // points per block
 
     // default global data bounds
     Bounds domain { dim };
     for (auto i = 0; i < dim; i++)
     {
         domain.min[i] = 0;
-        domain.max[i] = 10;
+        domain.max[i] = 4;
     }
 
     // get command line arguments
@@ -106,7 +106,10 @@ int main(int argc, char**argv)
 
   // or create a MetadataVOL object for metadata
   l5::MetadataVOL vol_plugin;
-  vol_plugin.memory.push_back(all);
+  if (metadata)
+      vol_plugin.memory.push_back(all);
+  if (passthru)
+      vol_plugin.passthru.push_back(all);
   //vol_plugin.passthru.push_back(none);
   //vol_plugin.zerocopy.push_back(none);
 
@@ -171,8 +174,10 @@ int main(int argc, char**argv)
             { b->write_block_grid(cp, dset); });
 
     // add some attributes to the grid dataset
-    hid_t attr1 = H5Acreate(dset, "attr1", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, filespace, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t attr_space = H5Screate_simple(1, &domain_cnts[0], NULL);
+    hid_t attr1 = H5Acreate(dset, "attr1", H5T_IEEE_F32LE, attr_space, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, attr_space, H5P_DEFAULT, H5P_DEFAULT);
+    H5Sclose(attr_space);
 
     // iterate through the attributes of the grid dataset, printing their names
     // TODO: currently LowFive ignores the iteration order, increment direction, and current index

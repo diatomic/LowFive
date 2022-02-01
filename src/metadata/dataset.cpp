@@ -17,8 +17,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     ObjectPointers* result = nullptr;
 
     fmt::print(stderr, "Dataset Create\n");
-    fmt::print("dataset_create: parent obj = {} [h5_obj {} mdata_obj {}]",
-            fmt::ptr(obj_), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj));
+    fmt::print("dataset_create: parent obj = {}", *obj_);
     if (name)
         fmt::print(", name = {}", name);
     else
@@ -32,7 +31,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     if (unwrap(obj_) && match_any(filepath, passthru))
         result = wrap(VOLBase::dataset_create(unwrap(obj_), loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req));
     else
-        result = new ObjectPointers;
+        result = wrap(nullptr);
 
     // check the ownership map for the full path name and file name
     Dataset::Ownership own = Dataset::Ownership::lowfive;
@@ -68,8 +67,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 // 
 //     }
 
-    fmt::print(stderr, "dataset_create: created result {} result->h5_obj {} result->mdata_obj {}\n",
-            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj));
+    fmt::print(stderr, "dataset_create: created result {}\n", *result);
 
     return (void*)result;
 }
@@ -81,7 +79,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
-    fmt::print(stderr, "dataset_open {} {}\n", fmt::ptr(obj_->mdata_obj), fmt::ptr(obj_->h5_obj));
+    fmt::print(stderr, "dataset_open {}\n", *obj_);
 
     // trace object back to root to build full path and file name
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
@@ -90,7 +88,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     if (match_any(filepath, passthru))
         result = wrap(VOLBase::dataset_open(unwrap(obj_), loc_params, name, dapl_id, dxpl_id, req));
     else
-        result = new ObjectPointers;
+        result = wrap(nullptr);
 
     if (match_any(filepath, memory))
         // find the dataset in our file metadata
@@ -111,7 +109,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
+    fmt::print("dset = {}, get_type = {}, req = {}\n", *dset_, get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // TODO: Why do we prefer passthru to memory here? Only reason is that it's
@@ -164,7 +162,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
     fmt::print("dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}\n",
-               fmt::ptr(unwrap(dset_)),
+               *dset_,
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
 
@@ -212,9 +210,8 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    fmt::print("dset = {}, dset->mdata_obj = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
-               fmt::ptr(unwrap(dset_)),
-               fmt::ptr(dset_->mdata_obj),
+    fmt::print("dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
+               *dset_,
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
 
@@ -243,10 +240,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
         fmt::print(stderr, "temporary reference, skipping close\n");
         return 0;
     }
-    fmt::print(stderr, "dataset_close: dset = {} = [h5_obj {} mdata_obj {}], dxpl_id = {}\n",
-            fmt::ptr(dset_), fmt::ptr(dset_->h5_obj), fmt::ptr(dset_->mdata_obj), dxpl_id);
-    if (dset_->mdata_obj)
-        fmt::print(stderr, "closing dataset name {}\n", static_cast<Object*>(dset_->mdata_obj)->name);
+    fmt::print(stderr, "dataset_close: dset = {}, dxpl_id = {}\n", *dset_, dxpl_id);
 
     herr_t retval = 0;
 

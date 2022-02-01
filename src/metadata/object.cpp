@@ -24,17 +24,18 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                 void **ret = va_arg(arguments, void **);
                 if (loc_params->type == H5VL_OBJECT_BY_SELF)
                 {
-                    // TODO
-                    // *ret is a pointer to a H5F_t object
-                    // H5_t is defined in H5Fpkg.h, whic is private, so we can't access its fields
-//                     H5_t* file = static_cast<H5_t*>(*ret);       // TODO: this won't work
-//                     file.open_name = ...
-                    throw MetadataError("object_get() file by self not yet implemented");
+                    Object* res = mdata_obj->find_root();
+                    assert(res->type == ObjectType::File);
+                    ObjectPointers* res_pair = wrap(nullptr);
+                    res_pair->mdata_obj = res;
+                    res_pair->tmp = true;
+                    *ret = res_pair;
+                    fmt::print(stderr, "returning {}\n", *res_pair);
                 }
                 else
                     throw MetadataError("Error: object_get() unrecognized loc_params->type\n");
 
-                break;
+                return 0;
             }
 
             case H5VL_OBJECT_GET_NAME:
@@ -206,6 +207,7 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     {
         ObjectPointers* obj_ = (ObjectPointers*) obj;
         Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+        fmt::print(stderr, "filling token, obj = {}\n", *obj_);
 
         switch(specific_type)
         {
@@ -218,6 +220,7 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
                 // TODO: this really should call mdata_obj->search(...), but that needs to handle '.'
                 if (std::string(loc_params->loc_data.loc_by_name.name) == ".")
                 {
+                    fmt::print(stderr, "filling token, {} -> {}\n", fmt::ptr(mdata_obj), fmt::ptr(token));
                     mdata_obj->fill_token(*token);
                     return 0;
                 }
