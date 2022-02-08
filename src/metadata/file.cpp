@@ -153,10 +153,10 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
     ObjectPointers* file_ = (ObjectPointers*) file;
     fmt::print(stderr, "file_specific: {}\n", *file_);
 
-    if (match_any(name, "", passthru, true))
+    if (unwrap(file))
         return VOLBase::file_specific(unwrap(file), specific_type, dxpl_id, req, arguments);
 
-    else
+    else if (file_->mdata_obj)
     {
         if (specific_type == H5VL_FILE_FLUSH)
         {
@@ -166,4 +166,7 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
         else
             throw MetadataError(fmt::format("file_specific(): specific_type {} not implemented for in-memory regime\n", specific_type));
     }
+
+    else
+        throw MetadataError(fmt::format("file_specific(): neither passthru nor metadata are active\n"));
 }
