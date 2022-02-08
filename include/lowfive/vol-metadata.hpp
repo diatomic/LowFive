@@ -106,7 +106,7 @@ struct MetadataVOL: public LowFive::VOLBase
         {
             fmt::print("--------------------------------------------------------------------------------\n");
             fmt::print("File {}\n", f.first);
-            f.second->print();
+            f.second->print(0);
             fmt::print("--------------------------------------------------------------------------------\n");
         }
     }

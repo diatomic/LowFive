@@ -16,8 +16,9 @@ struct File: public Object
     // preorder depth-first traversal
     void print() const
     {
-        fmt::print(stderr, "Printing metadata tree for {}\n", name);
-        Object::print();
+        fmt::print(stderr, "\nPrinting metadata tree for {}\n", name);
+        Object::print(0);
+        fmt::print(stderr, "\n");
     }
 };
 

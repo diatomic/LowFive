@@ -21,10 +21,17 @@ struct Attribute: public Object
         data = buf;
     }
 
-    void print() const override
+    void print(int depth) const override
     {
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+
         fmt::print(stderr, "---- Attribute ---\n");
-        Object::print();
+        Object::print(depth);
+
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+
         fmt::print(stderr, "type = {}, space = {}, data = {}\n", type, space, fmt::ptr(data));
     }
 };

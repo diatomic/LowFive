@@ -44,11 +44,22 @@ struct Dataset : public Object
             data.emplace_back(DataTriple { type, memory, file, buf, std::unique_ptr<char[]>(nullptr) });
     }
 
-    void print() const override
+    void print(int depth) const override
     {
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+
         fmt::print(stderr, "---- Dataset ---\n");
-        Object::print();
+        Object::print(depth);
+
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+
         fmt::print(stderr, "type = {}, space = {}, ownership = {}\n", type, space, ownership);
+
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+
         for (auto& d : data)
             fmt::print("memory = {}, file = {}, data = {}\n", d.memory, d.file, fmt::ptr(d.data));
     }

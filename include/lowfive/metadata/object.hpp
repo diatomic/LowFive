@@ -47,13 +47,14 @@ struct Object
         }
     }
 
-    virtual void print() const
+    virtual void print(int depth) const
     {
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
         fmt::print(stderr, "object type = {} name = {}\n", type, name);
-        // TODO: print attributes and properties
 
         for (auto* child : children)
-            child->print();
+            child->print(depth + 1);
     }
 
     virtual void fill_token(H5O_token_t& token)
