@@ -15,15 +15,37 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
 
     ObjectPointers* result = nullptr;
     if (unwrap(obj_) && match_any(filepath,passthru))
+    {
         result = wrap(VOLBase::attr_create(unwrap(obj_), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
+        fmt::print(stderr, "created attribute name {} in passthru object {}\n", name, *result);
+    }
     else
         result = wrap(nullptr);
 
     // add attribute to our metadata; NB: attribute cannot have children, so only creating it if we have to
     if (match_any(filepath,memory))
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
-
-    fmt::print("created attribute object = {} name {}\n", *result, name);
+    {
+        // check if the attribute exists already
+        bool found = false;
+        for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
+        {
+            if (c->type == LowFive::ObjectType::Attribute && c->name == name)
+            {
+                found = true;
+                result->mdata_obj = c;
+                break;
+            }
+        }
+        if (found)
+        {
+            fmt::print(stderr, "attribute name {} exists already in metadata object {}\n", name, *result);
+        }
+        else
+        {
+            result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
+            fmt::print(stderr, "created attribute name {} in metadata object {}\n", name, *result);
+        }
+    }
 
     return result;
 }
@@ -309,11 +331,8 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
 
     if (attr_->mdata_obj)
     {
-        // save our metadata
         Attribute* a = (Attribute*) attr_->mdata_obj;
-        // skip an attribute that wasn't created or otherwise doesn't have a valide metadata object
-//         if (a)
-            a->write(Datatype(mem_type_id), buf);
+        a->write(Datatype(mem_type_id), buf);
     }
 
     if (unwrap(attr_))
