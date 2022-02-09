@@ -153,8 +153,8 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
     ObjectPointers* file_ = (ObjectPointers*) file;
     fmt::print(stderr, "file_specific: {}\n", *file_);
 
-    if (unwrap(file))
-        return VOLBase::file_specific(unwrap(file), specific_type, dxpl_id, req, arguments);
+    if (unwrap(file_))
+        return VOLBase::file_specific(unwrap(file_), specific_type, dxpl_id, req, arguments);
 
     else if (file_->mdata_obj)
     {

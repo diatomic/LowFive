@@ -15,7 +15,6 @@ struct NamedDtype : public Object
     {
         for (auto i = 0; i < depth; i++)
             fmt::print(stderr, "    ");
-
         fmt::print(stderr, "-- NamedDtype --\n");
         Object::print(depth);
         // TODO: print named datatype

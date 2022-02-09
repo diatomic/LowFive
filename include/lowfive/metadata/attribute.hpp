@@ -25,14 +25,13 @@ struct Attribute: public Object
     {
         for (auto i = 0; i < depth; i++)
             fmt::print(stderr, "    ");
-
         fmt::print(stderr, "---- Attribute ---\n");
-        Object::print(depth);
 
         for (auto i = 0; i < depth; i++)
             fmt::print(stderr, "    ");
-
         fmt::print(stderr, "type = {}, space = {}, data = {}\n", type, space, fmt::ptr(data));
+
+        Object::print(depth);
     }
 };
 
