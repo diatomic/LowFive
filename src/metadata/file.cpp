@@ -93,7 +93,7 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     // else: TODO
     else
     {
-        if (get_type == H5VL_FILE_GET_CONT_INFO)
+        if (get_type == H5VL_FILE_GET_CONT_INFO)            // file container info
         {
             H5VL_file_cont_info_t *info = va_arg(arguments, H5VL_file_cont_info_t *);
 
@@ -104,8 +104,23 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
             info->feature_flags = 0;
             info->token_size    = 8;
             info->blob_id_size  = 8;
-        } else
-            throw MetadataError(fmt::format("requested file_get(), get_type = {}, not implemented for in-memory regime\n", get_type));
+        }
+        else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FAPL not implemented in memory yet\n"));
+        else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
+            fmt::print(stderr, "Warning: file_get(): H5VL_FILE_GET_FCPL not implemented in memory yet, no-op for now\n");
+        else if (get_type == H5VL_FILE_GET_FILENO)          // file number
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet\n"));
+        else if (get_type == H5VL_FILE_GET_INTENT)          // file intent
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_INTENT not implemented in memory yet\n"));
+        else if (get_type == H5VL_FILE_GET_NAME)            // file name
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_NAME not implemented in memory yet\n"));
+        else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_COUNT not implemented in memory yet\n"));
+        else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_IDS not implemented in memory yet\n"));
+        else
+            throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}\n", get_type));
     }
 
     return result;
@@ -152,6 +167,10 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
     fmt::print(stderr, "file_specific: {}\n", *file_);
+
+    // debug
+    if (specific_type == H5VL_FILE_FLUSH)
+        fmt::print(stderr, "file_specific(): specific_type = H5VL_FILE_FLUSH\n");
 
     if (unwrap(file_))
         return VOLBase::file_specific(unwrap(file_), specific_type, dxpl_id, req, arguments);
