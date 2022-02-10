@@ -1,3 +1,4 @@
+#include <cassert>
 #include <lowfive/vol-base.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -21,6 +22,10 @@ _link_create_reissue(H5VL_link_create_type_t create_type,
 {
     // TODO: is this right? making a new object from the reissued one?
     pass_through_t *o = (pass_through_t *)obj;
+
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
+    fprintf(stderr, "------- PASS THROUGH VOL LINK Create Reissue\n");
+#endif
 
     va_list arguments;
     herr_t ret_value;
@@ -53,7 +58,7 @@ _link_create(H5VL_link_create_type_t create_type, void *obj,
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     fprintf(stderr, "------- PASS THROUGH VOL LINK Create\n");
 #endif
 
@@ -130,7 +135,7 @@ _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     fprintf(stderr, "------- PASS THROUGH VOL LINK Copy\n");
 #endif
 
@@ -194,7 +199,7 @@ _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     fprintf(stderr, "------- PASS THROUGH VOL LINK Move\n");
 #endif
 
@@ -249,7 +254,7 @@ _link_get(void *obj, const H5VL_loc_params_t *loc_params,
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     fprintf(stderr, "------- PASS THROUGH VOL LINK Get\n");
 #endif
 
@@ -288,7 +293,7 @@ _link_specific(void *obj, const H5VL_loc_params_t *loc_params,
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     fprintf(stderr, "------- PASS THROUGH VOL LINK Specific\n");
 #endif
 
@@ -327,7 +332,7 @@ _link_optional(void *obj, H5VL_link_optional_t opt_type,
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
     fprintf(stderr, "------- PASS THROUGH VOL LINK Optional\n");
 #endif
 
