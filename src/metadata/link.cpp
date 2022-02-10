@@ -12,13 +12,46 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
 
     herr_t res = 0;
     if (unwrap(obj_))
-        res = VOLBase::link_create(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
+    {
+        if(H5VL_LINK_CREATE_HARD == create_type)
+        {
+            /* Retrieve the object & loc params for the link target */
+            void* cur_obj = va_arg(arguments, void *);
+            H5VL_loc_params_t cur_params = va_arg(arguments, H5VL_loc_params_t);
+
+            ObjectPointers* cur_obj_ = (ObjectPointers*) cur_obj;
+            if (cur_obj)
+                cur_obj = unwrap(cur_obj);
+
+            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req,
+                        cur_obj, cur_params);
+        } else
+        {
+            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
+        }
+    }
     else if (obj_->mdata_obj)
         fmt::print(stderr, "Warning: link_create not implemented in metadata yet\n");
     else
         throw MetadataError(fmt::format("link_create(): either passthru or metadata must be specified\n"));
 
     return res;
+}
+
+herr_t
+LowFive::MetadataVOL::
+link_create_trampoline(H5VL_link_create_type_t create_type, void *obj,
+        const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id,
+        hid_t dxpl_id, void **req, ...)
+{
+    va_list arguments;
+    herr_t ret_value;
+
+    va_start(arguments, req);
+    ret_value = VOLBase::link_create(create_type, obj, loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
+    va_end(arguments);
+
+    return ret_value;
 }
 
 herr_t

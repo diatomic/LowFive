@@ -99,6 +99,7 @@ int main(int argc, char**argv)
     LowFive::LocationPattern none { "outfile.h5", ""};
 
     // create the vol plugin
+    //l5::VOLBase vol_plugin;
     l5::MetadataVOL vol_plugin;
     if (metadata)
         vol_plugin.memory.push_back(all);
@@ -164,7 +165,7 @@ int main(int argc, char**argv)
 
     // create a hard link to the grid at the top level of the file
     // TODO: this seg faults
-//     H5Lcreate_hard(file, "/group1/grid", file, "/grid_link", H5P_DEFAULT, H5P_DEFAULT);
+    H5Lcreate_hard(file, "/group1/grid", file, "/grid_link", H5P_DEFAULT, H5P_DEFAULT);
 
     // clean up
     H5Aclose(attr1);
