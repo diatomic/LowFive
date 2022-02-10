@@ -140,7 +140,7 @@ int main(int argc, char**argv)
 
     // create a new file and group using default properties
     hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
-    hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t group1 = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     std::vector<hsize_t> domain_cnts(DIM);
     for (auto i = 0; i < DIM; i++)
@@ -150,7 +150,7 @@ int main(int argc, char**argv)
     hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
     // create the grid dataset with default properties
-    hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t dset = H5Dcreate2(group1, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     // write the grid data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
@@ -162,40 +162,18 @@ int main(int argc, char**argv)
     hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, attr_space, H5P_DEFAULT, H5P_DEFAULT);
     H5Sclose(attr_space);
 
-    // iterate through the attributes of the grid dataset, printing their names
-    // TODO: currently LowFive ignores the iteration order, increment direction, and current index
-    // it just blindly goes through all the attributes in the order they were created
-    hsize_t n = 0;
-    H5Aiterate(dset, H5_INDEX_CRT_ORDER, H5_ITER_INC, &n, &iter_op, NULL);
-
-    // get info back about the dataset
-    H5O_info_t oinfo;
-    H5Oget_info(dset, &oinfo, H5O_INFO_ALL);
-
-    // dimension scale example
-    // make a 1-d array dataset that will be the scale for the 0th dimension of the grid data
-    // in this example, the scale is a vector of values, each associated with each point in the grid, eg, its physical space position
-    // although HDF5 makes no restrictions on how dimension scales are used, that's a typical scenario
-    // thie example only assigns a scale to one dimension, which is valid; other dimensions could be done similarly
-    // the dimension scale of another dataset is itself a dataset that needs to be created first
-    hid_t scale_space = H5Screate_simple(1, &domain_cnts[0], NULL);
-    hid_t scale = H5Dcreate2(group, "grid_scale", H5T_IEEE_F32LE, scale_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    std::vector<float> scale_data(domain_cnts[0]);
-    for (auto i = 0; i < scale_data.size(); i++)
-        scale_data[i] = i * 10;
-    H5Dwrite(scale, H5T_NATIVE_FLOAT, scale_space, scale_space, H5P_DEFAULT, &scale_data[0]);
-
-    // now attach the dimension scale dataset to the original grid dataset
-    H5DSset_scale(dset, "scale");
-    H5DSattach_scale(dset, scale, 0);
+    // create a hard link to the grid at the top level of the file
+    // TODO: this seg faults
+//     H5Lcreate_hard(file, "/group1/grid", file, "/grid_link", H5P_DEFAULT, H5P_DEFAULT);
 
     // clean up
-    H5Dclose(scale);
-    H5Sclose(scale_space);
     H5Aclose(attr1);
     H5Aclose(attr2);
     H5Dclose(dset);
     H5Sclose(filespace);
+
+    // create a group for the particles
+    hid_t group2 = H5Gcreate(file, "/group2", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     // create the file data space for the particles
     domain_cnts[0]  = global_num_points;
@@ -203,16 +181,30 @@ int main(int argc, char**argv)
     filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
 
     // create the particle dataset with default properties
-    dset = H5Dcreate2(group, "particles", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    dset = H5Dcreate2(group2, "particles", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     // write the particle data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_points(cp, dset, global_nblocks); });
 
+    // create a soft link in group 1 to the particles that are physically in group 2
+    // and vice versa, a soft link in group 2 to the grid that is physically in group 1
+    H5Lcreate_soft("/group2/particles", group1, "particles_link", H5P_DEFAULT, H5P_DEFAULT);
+    H5Lcreate_soft("/group1/grid", group2, "grid_link", H5P_DEFAULT, H5P_DEFAULT);
+
+    // make a copy of one soft link and move the other soft link
+    H5Lcopy(group1, "particles_link", group1, "copy_of_particles_link", H5P_DEFAULT, H5P_DEFAULT);
+    H5Lmove(group2, "grid_link", group2, "moved_grid_link", H5P_DEFAULT, H5P_DEFAULT);
+
+    // delete the copy and move the other link back
+    H5Ldelete(group1, "copy_of_particles_link", H5P_DEFAULT);
+    H5Lmove(group2, "moved_grid_link", group2, "grid_link", H5P_DEFAULT, H5P_DEFAULT);
+
     // clean up
     H5Dclose(dset);
     H5Sclose(filespace);
-    H5Gclose(group);
+    H5Gclose(group1);
+    H5Gclose(group2);
     H5Fclose(file);
     H5Pclose(plist);
 

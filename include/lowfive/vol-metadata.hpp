@@ -210,6 +210,13 @@ struct MetadataVOL: public LowFive::VOLBase
     void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req) override;
     herr_t          group_close(void *grp, hid_t dxpl_id, void **req) override;
 
+    herr_t          link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req) override;
+    herr_t          link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req) override;
+    herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
+
     void*           attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req) override;
     void*           attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req) override;
     herr_t          attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req) override;

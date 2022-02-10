@@ -10,6 +10,7 @@ add_library             (lowfive SHARED
                             base/object.cpp
                             base/blob.cpp
                             base/token.cpp
+                            base/link.cpp
                             metadata/dataset.cpp
                             metadata/file.cpp
                             metadata/attr.cpp
@@ -19,6 +20,7 @@ add_library             (lowfive SHARED
                             metadata/object.cpp
                             metadata/blob.cpp
                             metadata/token.cpp
+                            metadata/link.cpp
                         )
 target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY})
 target_include_directories  (lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)

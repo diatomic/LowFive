@@ -72,12 +72,12 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_group_close                                       /* close */
     },
     {                                           /* link_cls */
-        NULL, // OUR_pass_through_link_create,              /* create */
-        NULL, // OUR_pass_through_link_copy,                /* copy */
-        NULL, // OUR_pass_through_link_move,                /* move */
-        NULL, // OUR_pass_through_link_get,                 /* get */
-        NULL, // OUR_pass_through_link_specific,            /* specific */
-        NULL  // OUR_pass_through_link_optional,            /* optional */
+        &_link_create,                              /* create */
+        &_link_copy,                                /* copy */
+        &_link_move,                                /* move */
+        &_link_get,                                 /* get */
+        &_link_specific,                            /* specific */
+        &_link_optional                             /* optional */
     },
     {                                           /* object_cls */
         NULL, // OUR_pass_through_object_open,              /* open */

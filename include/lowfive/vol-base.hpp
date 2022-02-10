@@ -172,12 +172,19 @@ struct VOLBase
     virtual herr_t          group_close(void *grp, hid_t dxpl_id, void **req);
 
     //// link
-    //void link_create()              {}
-    //void link_copy()                {}
-    //void link_move()                {}
-    //void link_get()                 {}
-    //void link_specific()            {}
-    //void link_optional()            {}
+    static herr_t          _link_create_reissue(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...); // helper function for link_create()
+    static herr_t          _link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+    virtual herr_t          link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+    static herr_t          _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+    virtual herr_t          link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+    static herr_t          _link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _link_optional(void *obj, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
 
     //// object
     //void obj_open()                 {}
