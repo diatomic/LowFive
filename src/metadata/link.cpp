@@ -11,32 +11,22 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
     fmt::print(stderr, "link_create: obj = {}, create_type = {}\n", *obj_, create_type);
 
     herr_t res = 0;
-    if (unwrap(obj_))
+
+    // both metadata and native objects need to be linked, so two separate if statements
+    // but first we need to extract the shared arguments
+    //
+    void* cur_obj;
+    H5VL_loc_params_t cur_params;
+    if(H5VL_LINK_CREATE_HARD == create_type)
     {
-        if(H5VL_LINK_CREATE_HARD == create_type)
-        {
-            /* Retrieve the object & loc params for the link target */
-            void* cur_obj = va_arg(arguments, void *);
-            H5VL_loc_params_t cur_params = va_arg(arguments, H5VL_loc_params_t);
-
-            if (cur_obj)
-                cur_obj = unwrap(cur_obj);
-
-            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req,
-                        cur_obj, cur_params);
-        } else
-        {
-            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
-        }
+        /* Retrieve the object & loc params for the link target */
+        cur_obj = va_arg(arguments, void *);
+        cur_params = va_arg(arguments, H5VL_loc_params_t);
     }
-    else if (obj_->mdata_obj)
+    if (obj_->mdata_obj)
     {
         if(H5VL_LINK_CREATE_HARD == create_type)
         {
-            /* Retrieve the object & loc params for the link target */
-            void* cur_obj = va_arg(arguments, void *);
-            H5VL_loc_params_t cur_params = va_arg(arguments, H5VL_loc_params_t);
-
             // the only combination we currently support (needed for h5py)
             assert(loc_params->type == H5VL_OBJECT_BY_NAME);
             assert(cur_params.type == H5VL_OBJECT_BY_SELF);
@@ -49,8 +39,22 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
         {
             throw MetadataError(fmt::format("link_create(): only hard link is implemented in the metadata case\n"));
         }
-    } else
-        throw MetadataError(fmt::format("link_create(): either passthru or metadata must be specified\n"));
+    }
+
+    if (unwrap(obj_))
+    {
+        if(H5VL_LINK_CREATE_HARD == create_type)
+        {
+            if (cur_obj)
+                cur_obj = unwrap(cur_obj);
+
+            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req,
+                        cur_obj, cur_params);
+        } else
+        {
+            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
+        }
+    }
 
     return res;
 }
