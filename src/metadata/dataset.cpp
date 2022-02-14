@@ -26,7 +26,10 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     assert(obj_->mdata_obj);
     // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+
+    std::string name_str = name ? name : "";
+
+    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name_str);
 
     if (unwrap(obj_) && match_any(filepath, passthru))
         result = wrap(VOLBase::dataset_create(unwrap(obj_), loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req));
@@ -39,7 +42,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         own = Dataset::Ownership::user;
 
     // add the dataset
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name, type_id, space_id, own));
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_str, type_id, space_id, own));
 
     fmt::print(stderr, "dataset_create: created result {}\n", *result);
 

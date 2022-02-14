@@ -20,7 +20,7 @@ struct Object
         type(type_)
     {
         // remove path from name
-        if (remove_path)
+        if (remove_path && !name_.empty())
         {
             std::size_t found = name_.find_last_of("/");
             while (found == name_.size() - 1)          // remove any trailing slashes
