@@ -120,6 +120,12 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
             hid_t *ret = va_arg(args, hid_t*);
             *ret = dtype_id;
             fmt::print(stderr, "arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+        } else if (get_type == H5VL_DATASET_GET_DCPL)
+        {
+            hid_t *ret = va_arg(args, hid_t*);
+            // create a new empty property list;
+            // TODO: eventually probably want to maintain this in the metadata
+            *ret = H5Pcreate(H5P_DATASET_CREATE);
         } else
         {
             throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
