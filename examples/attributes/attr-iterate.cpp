@@ -160,7 +160,6 @@ int main(int argc, char**argv)
     hid_t attr_space = H5Screate_simple(1, &domain_cnts[0], NULL);
     hid_t attr1 = H5Acreate(dset, "attr1", H5T_IEEE_F32LE, attr_space, H5P_DEFAULT, H5P_DEFAULT);
     hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, attr_space, H5P_DEFAULT, H5P_DEFAULT);
-    H5Sclose(attr_space);
 
     // iterate through the attributes of the grid dataset, printing their names
     // TODO: currently LowFive ignores the iteration order, increment direction, and current index
@@ -190,6 +189,7 @@ int main(int argc, char**argv)
     H5DSattach_scale(dset, scale, 0);
 
     // clean up
+    H5Sclose(attr_space);
     H5Dclose(scale);
     H5Sclose(scale_space);
     H5Aclose(attr1);

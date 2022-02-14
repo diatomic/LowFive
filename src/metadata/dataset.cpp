@@ -41,32 +41,6 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     // add the dataset
     result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name, type_id, space_id, own));
 
-//     // from tom-dev (DEPRECATE)
-//     if (vol_properties.memory)                                              // add the dataset to our file metadata
-//     {
-//         // trace object back to root to build full path and file name
-//         std::string name_(name);
-//         std::string full_path;
-//         std::string filename;
-//         backtrack_name(name_, static_cast<Object*>(obj_->mdata_obj), filename, full_path);
-// 
-//         // check the ownership map for the full path name and file name
-//         Dataset::Ownership own = Dataset::Ownership::user;
-//         for (auto& o : data_owners)
-//         {
-//             // o.filename and o.full_path can have wildcards '*' and '?'
-//             if (match(o.filename.c_str(), filename.c_str()) && match(o.full_path.c_str(), full_path.c_str()))
-//             {
-//                 own = o.ownership;
-//                 break;
-//             }
-//         }
-// 
-//         // add the dataset
-//         result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_, type_id, space_id, own));
-// 
-//     }
-
     fmt::print(stderr, "dataset_create: created result {}\n", *result);
 
     return (void*)result;
@@ -109,7 +83,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("dset = {}, get_type = {}, req = {}\n", *dset_, get_type, fmt::ptr(req));
+    fmt::print(stderr, "dset = {}, get_type = {}, req = {}\n", *dset_, get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // TODO: Why do we prefer passthru to memory here? Only reason is that it's
@@ -122,30 +96,30 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     {
         if (get_type == H5VL_DATASET_GET_SPACE)
         {
-            fmt::print("GET_SPACE\n");
+            fmt::print(stderr, "GET_SPACE\n");
             auto& dataspace = static_cast<Dataset*>(dset_->mdata_obj)->space;
 
             hid_t space_id = dataspace.copy();
-            fmt::print("copied space id = {}, space = {}\n", space_id, Dataspace(space_id));
+            fmt::print(stderr, "copied space id = {}, space = {}\n", space_id, Dataspace(space_id));
 
             hid_t *ret = va_arg(args, hid_t*);
             *ret = space_id;
-            fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+            fmt::print(stderr, "arguments = {} -> {}\n", fmt::ptr(ret), *ret);
         } else if (get_type == H5VL_DATASET_GET_TYPE)
         {
-            fmt::print("GET_TYPE\n");
+            fmt::print(stderr, "GET_TYPE\n");
             auto& datatype = static_cast<Dataset*>(dset_->mdata_obj)->type;
 
-            fmt::print("dataset data type id = {}, datatype = {}\n",
+            fmt::print(stderr, "dataset data type id = {}, datatype = {}\n",
                     datatype.id, datatype);
 
             hid_t dtype_id = datatype.copy();
-            fmt::print("copied data type id = {}, datatype = {}\n",
+            fmt::print(stderr, "copied data type id = {}, datatype = {}\n",
                     dtype_id, Datatype(dtype_id));
 
             hid_t *ret = va_arg(args, hid_t*);
             *ret = dtype_id;
-            fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+            fmt::print(stderr, "arguments = {} -> {}\n", fmt::ptr(ret), *ret);
         } else
         {
             throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
@@ -161,7 +135,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    fmt::print("dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}\n",
+    fmt::print(stderr, "dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}\n",
                *dset_,
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
@@ -196,8 +170,8 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
                     std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
                     });
 
-            fmt::print("dst = {}\n", dst);
-            fmt::print("src = {}\n", src);
+            fmt::print(stderr, "dst = {}\n", dst);
+            fmt::print(stderr, "src = {}\n", src);
         }   // for all data triples
     }
 
@@ -210,7 +184,7 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    fmt::print("dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
+    fmt::print(stderr, "dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})\n",
                *dset_,
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
@@ -226,6 +200,86 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
         return VOLBase::dataset_write(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
     return 0;
+}
+
+herr_t
+LowFive::MetadataVOL::
+dataset_specific(void *obj, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+
+    fmt::print(stderr, "dataset_specific: dset = {} specific_type = {}\n", *obj_, specific_type);
+
+    herr_t res = 0;
+    if (unwrap(obj_))
+        res = VOLBase::dataset_specific(unwrap(obj_), specific_type, dxpl_id, req, arguments);
+    else if (obj_->mdata_obj)
+    {
+        va_list args;
+        va_copy(args,arguments);
+
+        // specific types are enumerated in H5VLconnector.h
+        switch (specific_type)
+        {
+            case H5VL_DATASET_SET_EXTENT:
+            {
+                // adapted from H5VLnative_dataset.c, H5VL__native_dataset_specific()
+                const hsize_t *size = va_arg(args, const hsize_t*);
+
+                Dataspace& space = static_cast<Dataset*>(obj_->mdata_obj)->space;
+
+                // NB: updating overall dataspace, not individual data triples
+                for (auto i = 0; i < space.dim; i++)
+                {
+                    if (space.maxdims[i] == H5S_UNLIMITED || space.maxdims[i] >= size[i])       // ensure size does not exceed max allowed
+                    {
+                        if (space.max[i] - space.min[i] != space.dims[i] - 1)                   // sanity check that max, min agree with current size
+                            throw MetadataError(fmt::format("dataset_specific: space max, min do not correspond to space size\n"));
+                        space.dims[i]   = size[i];                                              // update size
+                        space.max[i]    = space.min[i] + space.dims[i] - 1;                     // update max to reflect new size, keeping min original
+                    }
+                }
+
+                break;
+            }
+            case H5VL_DATASET_FLUSH:
+            {
+                fmt::print(stderr, "dataset_specific specific_type H5VL_DATASET_FLUSH is a no-op in metadata\n");
+                break;
+            }
+            case H5VL_DATASET_REFRESH:
+            {
+                fmt::print(stderr, "dataset_specific specific_type H5VL_DATASET_REFRESH is a no-op in metadata\n");
+                break;
+            }
+        }
+    }
+    else
+        throw MetadataError(fmt::format("dataset_specific(): either passthru or metadata must be specified\n"));
+
+    return res;
+}
+
+herr_t
+LowFive::MetadataVOL::
+dataset_optional(void *obj, H5VL_dataset_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+
+    fmt::print(stderr, "dataset_optional: dset = {} optional_type = {}\n", *obj_, opt_type);
+
+    herr_t res = 0;
+    if (unwrap(obj_))
+        res = VOLBase::dataset_optional(unwrap(obj_), opt_type, dxpl_id, req, arguments);
+    else if (obj_->mdata_obj)
+    {
+        // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_DATASET_* constants)
+        fmt::print(stderr, "Warning: dataset_optional not implemented in metadata yet\n");
+    }
+    else
+        throw MetadataError(fmt::format("dataset_optional(): either passthru or metadata must be specified\n"));
+
+    return res;
 }
 
 herr_t

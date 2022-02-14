@@ -17,8 +17,8 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_info_copy,                                /* copy    */
         NULL, //&OUR_pass_through_info_cmp,                  /* compare */
         &_info_free,                                /* free    */
-        &_info_to_str,               /* to_str  */
-        &_str_to_info,               /* from_str */
+        &_info_to_str,                              /* to_str  */
+        &_str_to_info,                              /* from_str */
     },
     {                                           /* wrap_cls */
         &_wrap_get_object,                          /* get_object   */
@@ -43,8 +43,8 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_dataset_read,                             /* read */
         &_dataset_write,                            /* write */
         &_dataset_get,                              /* get */
-        NULL, // OUR_pass_through_dataset_specific,         /* specific */
-        NULL, // OUR_pass_through_dataset_optional,         /* optional */
+        &_dataset_specific,                         /* specific */
+        &_dataset_optional,                         /* optional */
         &_dataset_close                             /* close */
     },
     {                                           /* datatype_cls */

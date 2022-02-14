@@ -131,8 +131,10 @@ struct VOLBase
     virtual herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
     static herr_t          _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    //void dset_specific()            {}
-    //void dset_optional()            {}
+    static herr_t          _dataset_specific(void *obj, H5VL_dataset_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          dataset_specific(void *obj, H5VL_dataset_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _dataset_optional(void *obj, H5VL_dataset_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          dataset_optional(void *obj, H5VL_dataset_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _dataset_close(void *dset, hid_t dxpl_id, void **req);
     virtual herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req);
 

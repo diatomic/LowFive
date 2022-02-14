@@ -205,6 +205,8 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
     herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
+    herr_t          dataset_specific(void *obj, H5VL_dataset_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          dataset_optional(void *obj, H5VL_dataset_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
 
     void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req) override;
     void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req) override;

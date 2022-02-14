@@ -163,9 +163,8 @@ int main(int argc, char**argv)
     hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, attr_space, H5P_DEFAULT, H5P_DEFAULT);
     H5Sclose(attr_space);
 
-    // create a hard link to the grid at the top level of the file
-    // TODO: this seg faults
-    H5Lcreate_hard(file, "/group1/grid", file, "/grid_link", H5P_DEFAULT, H5P_DEFAULT);
+    // create a hard link to the grid
+    H5Lcreate_hard(file, "/group1/grid", file, "/group1/grid_link", H5P_DEFAULT, H5P_DEFAULT);
 
     // clean up
     H5Aclose(attr1);

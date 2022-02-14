@@ -147,7 +147,7 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     herr_t ret_value;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
-    printf("------- PASS THROUGH VOL FILE Get\n");
+    fprintf(stderr, "------- PASS THROUGH VOL FILE Get\n");
 #endif
 
     ret_value = o->vol->file_get(o->under_object, get_type, dxpl_id, req, arguments);
@@ -217,7 +217,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
     herr_t ret_value;
 
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL FILE Specific\n");
+    fprintf(stderr, "------- PASS THROUGH VOL FILE Specific\n");
 #endif
 
     /* Unpack arguments to get at the child file pointer when mounting a file */
@@ -330,8 +330,8 @@ _file_optional(void *file, H5VL_file_optional_t opt_type,
     pass_through_t *o = (pass_through_t *)file;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
-    printf("------- PASS THROUGH VOL File Optional\n");
+#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
+    fprintf(stderr, "------- PASS THROUGH VOL File Optional\n");
 #endif
 
     ret_value = o->vol->file_optional(o->under_object, opt_type, dxpl_id, req, arguments);

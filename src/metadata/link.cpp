@@ -19,7 +19,6 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
             void* cur_obj = va_arg(arguments, void *);
             H5VL_loc_params_t cur_params = va_arg(arguments, H5VL_loc_params_t);
 
-            ObjectPointers* cur_obj_ = (ObjectPointers*) cur_obj;
             if (cur_obj)
                 cur_obj = unwrap(cur_obj);
 
