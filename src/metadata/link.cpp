@@ -30,8 +30,26 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
         }
     }
     else if (obj_->mdata_obj)
-        fmt::print(stderr, "Warning: link_create not implemented in metadata yet\n");
-    else
+    {
+        if(H5VL_LINK_CREATE_HARD == create_type)
+        {
+            /* Retrieve the object & loc params for the link target */
+            void* cur_obj = va_arg(arguments, void *);
+            H5VL_loc_params_t cur_params = va_arg(arguments, H5VL_loc_params_t);
+
+            // the only combination we currently support (needed for h5py)
+            assert(loc_params->type == H5VL_OBJECT_BY_NAME);
+            assert(cur_params.type == H5VL_OBJECT_BY_SELF);
+            assert(cur_obj);
+
+            ObjectPointers* cur_obj_ = (ObjectPointers*) cur_obj;
+            fmt::print(stderr, "  cur_obj = {}\n", *cur_obj_);
+            static_cast<Object*>(cur_obj_->mdata_obj)->name = loc_params->loc_data.loc_by_name.name;
+        } else
+        {
+            throw MetadataError(fmt::format("link_create(): only hard link is implemented in the metadata case\n"));
+        }
+    } else
         throw MetadataError(fmt::format("link_create(): either passthru or metadata must be specified\n"));
 
     return res;
