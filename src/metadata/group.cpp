@@ -22,7 +22,9 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         result = wrap(nullptr);
 
     // add group to our metadata
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Group(name));
+    auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name);
+    assert(obj_path.is_name());
+    result->mdata_obj = obj_path.obj->add_child(new Group(obj_path.path));
     fmt::print(stderr, "group created: {}\n", *result);
 
     return (void*)result;
@@ -48,7 +50,10 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 
     // find the group in our file metadata
     std::string name_(name);
-    result->mdata_obj = parent->search(name_);
+    auto obj_path = parent->search(name_);
+    if (obj_path.path.empty())
+        result->mdata_obj = obj_path.obj;
+
     if (!result->mdata_obj)
         result->mdata_obj = parent->add_child(new DummyGroup(name_));
 

@@ -71,7 +71,8 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     // find the attribute in our file metadata
     std::string name_(name);
     if (match_any(filepath, memory))
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_);
+        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_).exact();
+    // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
 
     fmt::print("attr_open search result = {} = [h5_obj {} mdata_obj {}] name {}\n",
             fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);

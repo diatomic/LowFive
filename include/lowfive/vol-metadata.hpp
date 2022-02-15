@@ -118,7 +118,8 @@ struct MetadataVOL: public LowFive::VOLBase
         auto it = files.find(filename);
         if (it == files.end())
             return NULL;
-        return it->second->search(full_path);
+
+        return it->second->search(full_path).exact();
     }
 
     // record intended ownership of a dataset

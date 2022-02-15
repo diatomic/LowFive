@@ -5,24 +5,7 @@
 
 #include    "../prod-con-multidata/prod-con-multidata.hpp"
 
-#include    <H5DSpublic.h>
-
 using communicator = diy::mpi::communicator;
-
-// user-define operator over attributes
-// returns 0: keep iterating, 1: intentional early termination, -1: failure, early termination
-herr_t iter_op(
-        hid_t               location_id,
-        const char          *attr_name,
-        const H5A_info_t    *ainfo,
-        void *              op_data)
-{
-    fmt::print(stderr, "Location type: {}\n", H5Iget_type(location_id));
-
-    // in this example, the operator simply prints the attribute name
-    fmt::print(stderr, "Iterating over attributes: name = {}\n", attr_name);
-    return 0;
-}
 
 herr_t fail_on_hdf5_error(hid_t stack_id, void*)
 {
@@ -151,26 +134,14 @@ int main(int argc, char**argv)
     hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
     // create the grid dataset with default properties
-    hid_t dset = H5Dcreate2(group1, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    //hid_t dset = H5Dcreate2(group1, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t dset = H5Dcreate2(file, "/group1/grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     // write the grid data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_grid(cp, dset); });
 
-    // add some attributes to the grid dataset
-    hid_t attr_space = H5Screate_simple(1, &domain_cnts[0], NULL);
-    hid_t attr1 = H5Acreate(dset, "attr1", H5T_IEEE_F32LE, attr_space, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, attr_space, H5P_DEFAULT, H5P_DEFAULT);
-    H5Sclose(attr_space);
-
-    vol_plugin.print_files();
-
-    // create a hard link to the grid
-    H5Lcreate_hard(file, "/group1/grid", file, "/group1/grid_link", H5P_DEFAULT, H5P_DEFAULT);
-
     // clean up
-    H5Aclose(attr1);
-    H5Aclose(attr2);
     H5Dclose(dset);
     H5Sclose(filespace);
 
@@ -189,18 +160,6 @@ int main(int argc, char**argv)
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_points(cp, dset, global_nblocks); });
 
-    // create a soft link in group 1 to the particles that are physically in group 2
-    // and vice versa, a soft link in group 2 to the grid that is physically in group 1
-    H5Lcreate_soft("/group2/particles", group1, "particles_link", H5P_DEFAULT, H5P_DEFAULT);
-    H5Lcreate_soft("/group1/grid", group2, "grid_link", H5P_DEFAULT, H5P_DEFAULT);
-
-    // make a copy of one soft link and move the other soft link
-    H5Lcopy(group1, "particles_link", group1, "copy_of_particles_link", H5P_DEFAULT, H5P_DEFAULT);
-    H5Lmove(group2, "grid_link", group2, "moved_grid_link", H5P_DEFAULT, H5P_DEFAULT);
-
-    // delete the copy and move the other link back
-    H5Ldelete(group1, "copy_of_particles_link", H5P_DEFAULT);
-    H5Lmove(group2, "moved_grid_link", group2, "grid_link", H5P_DEFAULT, H5P_DEFAULT);
 
     // clean up
     H5Dclose(dset);

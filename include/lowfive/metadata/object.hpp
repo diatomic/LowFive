@@ -13,26 +13,26 @@ struct Object
     ObjectType                      type;
     std::string                     name;
 
-    Object(ObjectType   type_,
-           std::string  name_,
-           bool         remove_path = true) :       // strip path from name
-        parent(nullptr),
-        type(type_)
+    struct ObjectPath
     {
-        // remove path from name
-        if (remove_path && !name_.empty())
+        Object*     obj;
+        std::string path;
+
+        bool        is_name() const { return path.find('/') == std::string::npos; }
+        Object*     exact() const
         {
-            std::size_t found = name_.find_last_of("/");
-            while (found == name_.size() - 1)          // remove any trailing slashes
-            {
-                name_ = name_.substr(0, found);
-                found = name_.find_last_of("/");
-            }
-            name = name_.substr(found + 1);
+            if (!path.empty())
+                throw MetadataError(fmt::format("Expected to find exact object, but got remainder: {}", path));
+            return obj;
         }
-        else
-            name = name_;
-    }
+    };
+
+    Object(ObjectType   type_,
+           std::string  name_):
+        parent(nullptr),
+        type(type_),
+        name(name_)
+    {}
 
     virtual ~Object()
     {
@@ -71,90 +71,51 @@ struct Object
         fmt::print(stderr, "\n");
     }
 
-    virtual Object* search(const char* cur_path_)
+    virtual ObjectPath search(const char* cur_path_)
     {
         std::string cur_path(cur_path_);
         return search(cur_path);
     }
 
+    virtual ObjectPath locate(const H5VL_loc_params_t& loc_params)
+    {
+        if (loc_params.type == H5VL_OBJECT_BY_SELF)
+            return ObjectPath { this, "" };
+        else if (loc_params.type == H5VL_OBJECT_BY_NAME)
+            return search(loc_params.loc_data.loc_by_name.name);
+        else
+            throw MetadataError(fmt::format("don't know how to locate by loc_params.type = {}", loc_params.type));
+    }
+
     // search for the object at the leaf of the current path in the subtree rooted at this object
     // this object can be either the root of the current path or its direct parent
-    // returns pointer to object or null if not found
-    virtual Object* search(std::string& cur_path)                       // current path to the name with objects already found removed, will be truncated further
+    // returns pointer to object and remainder of the path
+    virtual ObjectPath search(std::string path)
     {
-        // remove any trailing slashes from current path
-        std::size_t found = cur_path.find_last_of("/");
-        if (found > 0)                                                  // unless the current path is only one "/"
-        {
-            while (found == cur_path.size() - 1)
-                cur_path = cur_path.substr(0, found);
-        }
+        if (path.empty())
+            return ObjectPath { this, path };
 
-        // base case: root only
-        if (cur_path == "/")
-            return this;
-
-        size_t start, end;                                              // starting and ending position of root name in path
-        if (cur_path[0] == '/')
+        auto pos = path.find("/");
+        std::string first_name, remainder;
+        if (pos != std::string::npos)
         {
-            start   = 0;
-            end     = 1;
+            first_name = path.substr(0, pos);
+            remainder = path.substr(pos + 1);
         }
         else
         {
-            start = cur_path.find_first_not_of("/");
-            end = cur_path.find_first_of("/", start);
+            first_name = path;
+            remainder = "";
         }
 
-        if (start == std::string::npos)                                 // no name
-            return nullptr;
-        else if (end == std::string::npos)                              // current path is the leaf
-        {
-            if (name == cur_path)
-                return this;
+        if (first_name.empty())     // path started with /
+            return search(remainder);
 
-            for(auto* child : children)
-                if (child->name == cur_path)
-                    return child;
+        for(auto* child : children)
+            if (child->name == first_name)
+                return child->search(remainder);
 
-            return nullptr;
-        }
-        else                                                            // current path is not the leaf yet
-        {
-            std::string obj_name = cur_path.substr(start, end - start); // name peeled from front of path
-            Object* parent = this;                                      // parent of subtree to search
-
-            if (obj_name == "/" && type == ObjectType::File)            // root of curent path is the file (assumes file name is correct)
-                cur_path = cur_path.substr(end);
-            else if (obj_name == name)                                  // root of curent path is this object
-                cur_path = cur_path.substr(end + 1);
-            else                                                        // root of current path could be one of the direct children
-            {
-                bool found_child = false;
-                for (auto* child : children)
-                {
-                    if (child->name == obj_name)
-                    {
-                        cur_path = cur_path.substr(end + 1);
-                        found_child = true;
-                        parent = child;
-                        break;
-                    }
-                }
-                if (!found_child)
-                    return nullptr;
-            }
-
-            // recurse subtree
-            Object* obj;
-            for (auto* child : parent->children)
-            {
-                if ((obj = child->search(cur_path)) != NULL)
-                    return obj;
-            }
-            return nullptr;
-        }
-        return nullptr;
+        return ObjectPath { this, path };
     }
 
     std::pair<std::string, std::string> fullname(std::string child_path = "")     // returns filename, full path pair

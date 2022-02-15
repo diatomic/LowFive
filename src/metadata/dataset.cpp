@@ -42,7 +42,9 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         own = Dataset::Ownership::user;
 
     // add the dataset
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Dataset(name_str, type_id, space_id, own));
+    auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name_str);
+    assert(obj_path.is_name());
+    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own));
 
     fmt::print(stderr, "dataset_create: created result {}\n", *result);
 
@@ -68,11 +70,18 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         result = wrap(nullptr);
 
     if (match_any(filepath, memory))
+    {
         // find the dataset in our file metadata
-        result->mdata_obj = parent->search(name);
+        auto obj_path = parent->search(name);
+        if (obj_path.path.empty())
+            result->mdata_obj = obj_path.obj;
+    }
 
     if (!result->mdata_obj)
+    {
+        // TODO: create group structure on the fly
         result->mdata_obj = parent->add_child(new DummyDataset(name));
+    }
 
     return (void*)result;
 }

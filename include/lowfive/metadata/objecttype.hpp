@@ -9,7 +9,8 @@ enum class ObjectType
     Group,
     Dataset,
     Attribute,
-    NamedDtype
+    NamedDtype,
+    Link
 };
 
 }

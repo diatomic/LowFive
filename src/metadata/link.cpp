@@ -29,19 +29,29 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
         {
             // the only combination we currently support (needed for h5py)
             assert(loc_params->type == H5VL_OBJECT_BY_NAME);
+            std::string name = loc_params->loc_data.loc_by_name.name;
             assert(cur_obj);
             ObjectPointers* cur_obj_ = (ObjectPointers*) cur_obj;
             fmt::print(stderr, "  cur_obj = {}\n", *cur_obj_);
 
             if (cur_params.type == H5VL_OBJECT_BY_SELF)
             {
-                std::string name = loc_params->loc_data.loc_by_name.name;
+                // TODO: probably should handle the path, in case it can be given
                 assert(name.find("/") == std::string::npos);      // expecting just a name, not a path
                 static_cast<Object*>(cur_obj_->mdata_obj)->name = name;
             } else if (cur_params.type == H5VL_OBJECT_BY_NAME)
             {
-                // TODO: create a link
-                throw MetadataError(fmt::format("link_create(): creating hard links by name not yet implemented"));
+                // (obj, loc_params) -> (cur_obj, cur_params)
+                auto obj_path = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
+                assert(obj_path.is_name());
+
+                auto cur_obj_path = static_cast<Object*>(cur_obj_->mdata_obj)->locate(cur_params);
+                Object* cur_obj = cur_obj_path.exact();     // assert that we found it
+                auto target = cur_obj->fullname().second;   // TODO: this is probably the wrong thing to do for hardlink,
+                                                            //       the right thing is to link to the object directly,
+                                                            //       but Ok for now
+
+                obj_path.obj->add_child(new Link(obj_path.path, true, target));
             } else
                 throw MetadataError(fmt::format("link_create(): don't recognize cur_params.type = {}", cur_params.type));
         } else
