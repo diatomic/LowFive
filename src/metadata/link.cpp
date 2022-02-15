@@ -29,15 +29,24 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
         {
             // the only combination we currently support (needed for h5py)
             assert(loc_params->type == H5VL_OBJECT_BY_NAME);
-            assert(cur_params.type == H5VL_OBJECT_BY_SELF);
             assert(cur_obj);
-
             ObjectPointers* cur_obj_ = (ObjectPointers*) cur_obj;
             fmt::print(stderr, "  cur_obj = {}\n", *cur_obj_);
-            static_cast<Object*>(cur_obj_->mdata_obj)->name = loc_params->loc_data.loc_by_name.name;
+
+            if (cur_params.type == H5VL_OBJECT_BY_SELF)
+            {
+                std::string name = loc_params->loc_data.loc_by_name.name;
+                assert(name.find("/") == std::string::npos);      // expecting just a name, not a path
+                static_cast<Object*>(cur_obj_->mdata_obj)->name = name;
+            } else if (cur_params.type == H5VL_OBJECT_BY_NAME)
+            {
+                // TODO: create a link
+                throw MetadataError(fmt::format("link_create(): creating hard links by name not yet implemented"));
+            } else
+                throw MetadataError(fmt::format("link_create(): don't recognize cur_params.type = {}", cur_params.type));
         } else
         {
-            throw MetadataError(fmt::format("link_create(): only hard link is implemented in the metadata case\n"));
+            throw MetadataError(fmt::format("link_create(): only hard link is implemented in the metadata case"));
         }
     }
 
