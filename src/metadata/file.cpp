@@ -10,7 +10,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     // create our file metadata; NB: we build the in-memory hierarchy regardless of whether we match memory
     void* mdata = nullptr;
     std::string name_(name);
-    File* f = new File(name_);
+    File* f = new File(name_, fcpl_id, fapl_id);
     files.emplace(name_, f);
     mdata = f;
 
@@ -90,9 +90,9 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     herr_t result = 0;
     if (unwrap(file_))
         result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
-    // else: TODO
     else
     {
+        // see hdf5 H5VLnative_file.c, H5VL__native_file_get()
         if (get_type == H5VL_FILE_GET_CONT_INFO)            // file container info
         {
             H5VL_file_cont_info_t *info = va_arg(arguments, H5VL_file_cont_info_t *);
@@ -106,9 +106,16 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
             info->blob_id_size  = 8;
         }
         else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FAPL not implemented in memory yet\n"));
+        {
+            hid_t* plist_id = va_arg(arguments, hid_t*);
+            *plist_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
+        }
         else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
-            fmt::print(stderr, "Warning: file_get(): H5VL_FILE_GET_FCPL not implemented in memory yet, no-op for now\n");
+        {
+            hid_t* plist_id = va_arg(arguments, hid_t*);
+            *plist_id = static_cast<File*>(file_->mdata_obj)->fcpl.id;
+        }
+        // TODO
         else if (get_type == H5VL_FILE_GET_FILENO)          // file number
             throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet\n"));
         else if (get_type == H5VL_FILE_GET_INTENT)          // file intent

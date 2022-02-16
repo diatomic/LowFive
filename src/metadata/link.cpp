@@ -1,4 +1,5 @@
 #include <lowfive/vol-metadata.hpp>
+#include <assert.h>
 
 herr_t
 LowFive::MetadataVOL::
