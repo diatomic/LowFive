@@ -17,12 +17,17 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
     //
     void* cur_obj;
     H5VL_loc_params_t cur_params;
+    char* target_name;
     if(H5VL_LINK_CREATE_HARD == create_type)
     {
         /* Retrieve the object & loc params for the link target */
         cur_obj = va_arg(arguments, void *);
         cur_params = va_arg(arguments, H5VL_loc_params_t);
+    } else if (H5VL_LINK_CREATE_SOFT == create_type)
+    {
+        target_name = va_arg(arguments, char*);
     }
+
     if (obj_->mdata_obj)
     {
         if(H5VL_LINK_CREATE_HARD == create_type)
@@ -47,16 +52,18 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
 
                 auto cur_obj_path = static_cast<Object*>(cur_obj_->mdata_obj)->locate(cur_params);
                 Object* cur_obj = cur_obj_path.exact();     // assert that we found it
-                auto target = cur_obj->fullname().second;   // TODO: this is probably the wrong thing to do for hardlink,
-                                                            //       the right thing is to link to the object directly,
-                                                            //       but Ok for now
-
-                obj_path.obj->add_child(new Link(obj_path.path, true, target));
+                obj_path.obj->add_child(new HardLink(obj_path.path, cur_obj));
             } else
                 throw MetadataError(fmt::format("link_create(): don't recognize cur_params.type = {}", cur_params.type));
+        } else if(H5VL_LINK_CREATE_SOFT == create_type)
+        {
+                // (obj, loc_params) -> target_name
+                auto obj_path = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
+                assert(obj_path.is_name());
+                obj_path.obj->add_child(new SoftLink(obj_path.path, target_name));
         } else
         {
-            throw MetadataError(fmt::format("link_create(): only hard link is implemented in the metadata case"));
+            throw MetadataError(fmt::format("link_create(): unsupported create_type = {}", create_type));
         }
     }
 
@@ -69,6 +76,9 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
 
             res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req,
                         cur_obj, cur_params);
+        } else if(H5VL_LINK_CREATE_SOFT == create_type)
+        {
+            res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, target_name);
         } else
         {
             res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);

@@ -3,14 +3,48 @@
 namespace LowFive
 {
 
-struct Link : public Object
+struct HardLink : public Object
 {
-    bool hard;
+    Object* target;
+
+    HardLink(std::string name, Object* target_):
+        Object(ObjectType::HardLink, name), target(target_)
+    {}
+
+    void print(int depth) const override
+    {
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+        fmt::print(stderr, "---- Hard Link ---\n");
+
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+        fmt::print(stderr, "target = {}\n", target->fullname().second);
+
+        Object::print(depth);
+    }
+};
+
+struct SoftLink: public Object
+{
     std::string target;
 
-    Link(std::string name, bool hard_, std::string target_):
-        Object(ObjectType::Link, name), hard(hard_), target(target_)
+    SoftLink(std::string name, std::string target_):
+        Object(ObjectType::SoftLink, name), target(target_)
     {}
+
+    void print(int depth) const override
+    {
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+        fmt::print(stderr, "---- Soft Link ---\n");
+
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+        fmt::print(stderr, "target = {}\n", target);
+
+        Object::print(depth);
+    }
 };
 
 }

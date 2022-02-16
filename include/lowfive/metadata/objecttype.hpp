@@ -10,7 +10,8 @@ enum class ObjectType
     Dataset,
     Attribute,
     NamedDtype,
-    Link
+    HardLink,
+    SoftLink
 };
 
 }
