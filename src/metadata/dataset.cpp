@@ -44,7 +44,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     // add the dataset
     auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name_str);
     assert(obj_path.is_name());
-    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own));
+    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id));
 
     fmt::print(stderr, "dataset_create: created result {}\n", *result);
 
@@ -105,7 +105,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     if (unwrap(dset_))
         result = VOLBase::dataset_get(unwrap(dset_), get_type, dxpl_id, req, arguments);
     else if (dset_->mdata_obj)
-    {
+    {                                                       // see hdf5 H5VLnative_dataset.c, H5VL__native_dataset_get()
         if (get_type == H5VL_DATASET_GET_SPACE)
         {
             fmt::print(stderr, "GET_SPACE\n");
@@ -134,10 +134,14 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
             fmt::print(stderr, "arguments = {} -> {}\n", fmt::ptr(ret), *ret);
         } else if (get_type == H5VL_DATASET_GET_DCPL)
         {
+            fmt::print(stderr, "GET_DCPL\n");
             hid_t *ret = va_arg(args, hid_t*);
-            // create a new empty property list;
-            // TODO: eventually probably want to maintain this in the metadata
-            *ret = H5Pcreate(H5P_DATASET_CREATE);
+            *ret = static_cast<Dataset*>(dset_->mdata_obj)->dcpl.id;
+            fmt::print(stderr, "arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+
+            // DEPRECATE
+//             // create a new empty property list;
+//             *ret = H5Pcreate(H5P_DATASET_CREATE);
         } else
         {
             throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
