@@ -46,7 +46,8 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     assert(obj_path.is_name());
     result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id));
 
-    fmt::print(stderr, "dataset_create: created result {}\n", *result);
+    fmt::print(stderr, "created dataset named {} in metadata, new object {} under parent object {} named {}\n",
+            name, *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
 
     return (void*)result;
 }

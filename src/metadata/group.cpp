@@ -35,7 +35,7 @@ LowFive::MetadataVOL::
 group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
-    fmt::print(stderr, "group_open: obj = {}\n", *obj_);
+    fmt::print(stderr, "group_open: obj = {} name {}\n", *obj_, name);
 
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
     auto filepath = parent->fullname(name);
@@ -57,7 +57,7 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     if (!result->mdata_obj)
         result->mdata_obj = parent->add_child(new DummyGroup(name_));
 
-    fmt::print(stderr, "opened group: {}\n", *result);
+    fmt::print(stderr, "opened group: {} named {} in parent named {}\n", *result, name, static_cast<Object*>(parent)->name);
 
     return (void*)result;
 }

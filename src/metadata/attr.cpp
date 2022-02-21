@@ -43,7 +43,8 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
         else
         {
             result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
-            fmt::print(stderr, "created attribute name {} in metadata object {}\n", name, *result);
+            fmt::print(stderr, "created attribute named {} in metadata, new object {} under parent object {} named {}\n",
+                    name, *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
         }
     }
 
