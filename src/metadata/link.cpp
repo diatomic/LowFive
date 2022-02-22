@@ -86,7 +86,7 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
                 cur_obj = unwrap(cur_obj);
 
             res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req,
-                        cur_obj, *cur_params);
+                        cur_obj, cur_params);
         } else if(H5VL_LINK_CREATE_SOFT == create_type)
         {
             res = link_create_trampoline(create_type, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, target_name);
