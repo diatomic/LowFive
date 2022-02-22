@@ -96,15 +96,23 @@ int main(int argc, char**argv)
 
     // set location patterns
     LowFive::LocationPattern all { "outfile.h5", "*"};
-    LowFive::LocationPattern none { "outfile.h5", ""};
+    LowFive::LocationPattern grid { "outfile.h5", "/group1/grid"};
+    LowFive::LocationPattern particles { "outfile.h5", "/group1/particles"};
 
     // create the vol plugin
     l5::MetadataVOL vol_plugin;
     if (metadata)
-        vol_plugin.memory.push_back(all);
+    {
+        //vol_plugin.memory.push_back(all);
+        vol_plugin.memory.push_back(grid);
+        vol_plugin.memory.push_back(particles);
+    }
     if (passthru)
-        vol_plugin.passthru.push_back(all);
-
+    {
+        //vol_plugin.passthru.push_back(all);
+        vol_plugin.passthru.push_back(grid);
+        vol_plugin.passthru.push_back(particles);
+    }
     communicator local;
     local.duplicate(world);
 
