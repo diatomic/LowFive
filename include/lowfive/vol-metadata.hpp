@@ -149,10 +149,10 @@ struct MetadataVOL: public LowFive::VOLBase
             return partial;
 
         if (*first == '?' || *first == *second)
-            return match(first+1, second+1);
+            return match(first+1, second+1, partial);
 
         if (*first == '*')
-            return match(first+1, second) || match(first, second+1);
+            return match(first+1, second, partial) || match(first, second+1, partial);
 
         return partial;
     }

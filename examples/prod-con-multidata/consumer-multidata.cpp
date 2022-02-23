@@ -48,7 +48,10 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
 
     if (passthru)
     {
-        vol_plugin.set_passthru("outfile.h5", "*");
+        //vol_plugin.set_passthru("outfile.h5", "*");
+        vol_plugin.set_passthru("outfile.h5", "group1/grid");
+        vol_plugin.set_passthru("outfile.h5", "group1/particles");
+
         vol_plugin.set_passthru("outfile1.h5", "*");
         vol_plugin.set_passthru("outfile2.h5", "*");
     }
