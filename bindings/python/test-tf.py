@@ -1,5 +1,8 @@
-import tensorflow as tf
+import lowfive
+vol = lowfive.MetadataVOL()
+vol.set_passthru("*","*")
 
+import tensorflow as tf
 import argparse, socket, os, timeit
 
 class Logger():
