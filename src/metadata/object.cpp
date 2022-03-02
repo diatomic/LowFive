@@ -5,12 +5,10 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
-    if (unwrap(obj))
-        return VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req);
-    else
-    {
-        throw MetadataError(fmt::format("object_open(): not implemented in metadata yet\n"));
-    }
+    if (!unwrap(obj))           // memory
+        return obj;
+    else                        // passthru
+        return wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
 }
 
 herr_t
@@ -18,12 +16,18 @@ LowFive::MetadataVOL::
 object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
 {
-    if (unwrap(src_obj) && unwrap(dst_obj))
-        return VOLBase::object_copy(unwrap(src_obj), src_loc_params, src_name, unwrap(dst_obj), dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
-    else
+    if (!unwrap(src_obj) && !unwrap(dst_obj))   // memory
     {
+        ObjectPointers* src_obj_        = (ObjectPointers*) src_obj;
+        Object*         src_mdata_obj   = static_cast<Object*>(src_obj_->mdata_obj);
+        ObjectPointers* dst_obj_        = (ObjectPointers*) dst_obj;
+        Object*         dst_mdata_obj   = static_cast<Object*>(dst_obj_->mdata_obj);
+
+        // TODO
         throw MetadataError(fmt::format("object_copy(): not implemented in metadata yet\n"));
     }
+    else                                        // passthru
+        return VOLBase::object_copy(unwrap(src_obj), src_loc_params, src_name, unwrap(dst_obj), dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
 }
 
 herr_t
@@ -265,10 +269,62 @@ herr_t
 LowFive::MetadataVOL::
 object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    if (unwrap(obj))
-        return VOLBase::object_optional(unwrap(obj), op_type, dxpl_id, req, arguments);
-    else
+    if (!unwrap(obj))               // memory
     {
-        throw MetadataError(fmt::format("object_optional(): not implemented in metadata yet\n"));
+        ObjectPointers* obj_        = (ObjectPointers*) obj;
+        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+
+        // see HDF5's H5VL__native_object_optional() in H5VLnative_object.c
+        // TODO: not implemented yet
+        switch(op_type)
+        {
+            // H5Oget_comment / H5Oget_comment_by_name
+            case H5VL_NATIVE_OBJECT_GET_COMMENT:
+            {
+                // TODO
+                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_GET_COMMENT not implemented in metadata yet\n"));
+            }
+
+            // H5Oset_comment
+            case H5VL_NATIVE_OBJECT_SET_COMMENT:
+            {
+                // TODO
+                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_SET_COMMENT not implemented in metadata yet\n"));
+            }
+
+            // H5Odisable_mdc_flushes
+            case H5VL_NATIVE_OBJECT_DISABLE_MDC_FLUSHES:
+            {
+                // TODO
+                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_DISABLE_MDC_FLUSHES not implemented in metadata yet\n"));
+            }
+
+            // H5Oenable_mdc_flushes
+            case H5VL_NATIVE_OBJECT_ENABLE_MDC_FLUSHES:
+            {
+                // TODO
+                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_ENABLE_MDC_FLUSHES not implemented in metadata yet\n"));
+            }
+
+            // H5Oare_mdc_flushes_disabled
+            case H5VL_NATIVE_OBJECT_ARE_MDC_FLUSHES_DISABLED:
+            {
+                // TODO
+                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_ARE_MDC_FLUSHES_DISABLED not implemented in metadata yet\n"));
+            }
+
+            // H5Oget_native_info(_name|_by_idx)
+            case H5VL_NATIVE_OBJECT_GET_NATIVE_INFO:
+            {
+                // TODO
+                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_GET_NATIVE_INFO not implemented in metadata yet\n"));
+            }
+
+            default:
+                throw MetadataError(fmt::format("object_optional: invalid optional type\n"));
+        }
+
     }
+    else                            // passthru
+        return VOLBase::object_optional(unwrap(obj), op_type, dxpl_id, req, arguments);
 }
