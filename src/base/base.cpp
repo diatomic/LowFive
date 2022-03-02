@@ -18,14 +18,14 @@ H5VL_class_t LowFive::VOLBase::connector =
         NULL, //&OUR_pass_through_info_cmp,                  /* compare */
         &_info_free,                                /* free    */
         &_info_to_str,                              /* to_str  */
-        &_str_to_info,                              /* from_str */
+        &_str_to_info                               /* from_str */
     },
     {                                           /* wrap_cls */
         &_wrap_get_object,                          /* get_object   */
         &_get_wrap_ctx,                             /* get_wrap_ctx */
         &_wrap_object,                              /* wrap_object  */
         &_unwrap_object,                            /* unwrap_object */
-        &_free_wrap_ctx,                            /* free_wrap_ctx */
+        &_free_wrap_ctx                             /* free_wrap_ctx */
     },
     {                                           /* attribute_cls */
         &_attr_create,                              /* create */
@@ -80,15 +80,15 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_link_optional                             /* optional */
     },
     {                                           /* object_cls */
-        NULL, // OUR_pass_through_object_open,              /* open */
-        NULL, // OUR_pass_through_object_copy,              /* copy */
-        &_object_get,                                /* get */
-        &_object_specific,                           /* specific */
-        NULL  // OUR_pass_through_object_optional,          /* optional */
+        &_object_open,                              /* open */
+        &_object_copy,                              /* copy */
+        &_object_get,                               /* get */
+        &_object_specific,                          /* specific */
+        &_object_optional                           /* optional */
     },
     {                                           /* introspect_cls */
         &_introspect_get_conn_cls,                   /* get_conn_cls */
-        &_introspect_opt_query,                      /* opt_query */
+        &_introspect_opt_query                       /* opt_query */
     },
     {                                           /* request_cls */
         NULL, // OUR_pass_through_request_wait,             /* wait */

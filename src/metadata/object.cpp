@@ -1,6 +1,31 @@
 #include <lowfive/vol-metadata.hpp>
 #include <assert.h>
 
+void *
+LowFive::MetadataVOL::
+object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
+{
+    if (unwrap(obj))
+        return VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req);
+    else
+    {
+        throw MetadataError(fmt::format("object_open(): not implemented in metadata yet\n"));
+    }
+}
+
+herr_t
+LowFive::MetadataVOL::
+object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params,
+    const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
+{
+    if (unwrap(src_obj) && unwrap(dst_obj))
+        return VOLBase::object_copy(unwrap(src_obj), src_loc_params, src_name, unwrap(dst_obj), dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
+    else
+    {
+        throw MetadataError(fmt::format("object_copy(): not implemented in metadata yet\n"));
+    }
+}
+
 herr_t
 LowFive::MetadataVOL::
 object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
@@ -236,3 +261,14 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
         return VOLBase::object_specific(unwrap(obj), loc_params, specific_type, dxpl_id, req, arguments);
 }
 
+herr_t
+LowFive::MetadataVOL::
+object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    if (unwrap(obj))
+        return VOLBase::object_optional(unwrap(obj), op_type, dxpl_id, req, arguments);
+    else
+    {
+        throw MetadataError(fmt::format("object_optional(): not implemented in metadata yet\n"));
+    }
+}
