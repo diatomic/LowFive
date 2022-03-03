@@ -246,6 +246,8 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported) override;
 
     herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx) override;
+    herr_t          blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx) override;
+    herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments) override;
 
     herr_t          token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value) override;
 

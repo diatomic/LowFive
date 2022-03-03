@@ -209,8 +209,10 @@ struct VOLBase
     //// blob
     static herr_t          _blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
     virtual herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
-    //void blob_get                   {}
-    //void blob_specific              {}
+    static herr_t          _blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx);
+    virtual herr_t          blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx);
+    static herr_t          _blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments);
+    virtual herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments);
     //void blob_optional              {}
 
     //// token

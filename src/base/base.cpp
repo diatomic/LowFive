@@ -98,10 +98,10 @@ H5VL_class_t LowFive::VOLBase::connector =
         NULL, // OUR_pass_through_request_optional,         /* optional */
         NULL  // OUR_pass_through_request_free              /* free */
     },
-    {                                           /* blob_cls */
-        &_blob_put,                                  /* put */
-        NULL, // OUR_pass_through_blob_get,                 /* get */
-        NULL, // OUR_pass_through_blob_specific,            /* specific */
+    {                                                       /* blob_cls */
+        &_blob_put,                                         /* put */
+        &_blob_get,                                         /* get */
+        &_blob_specific,                                    /* specific */
         NULL, // OUR_pass_through_blob_optional             /* optional */
     },
     {                                           /* token_cls */
