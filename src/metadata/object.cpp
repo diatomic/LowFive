@@ -5,10 +5,21 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
+    ObjectPointers* result;
     if (!unwrap(obj))           // memory
-        return obj;
+        result = wrap(nullptr);
     else                        // passthru
-        return wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
+        result = wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
+
+    ObjectPointers* obj_        = (ObjectPointers*) obj;
+    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+
+    // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
+    //       I think locate will return the last parent that has mdata, which is not what we want
+    if (mdata_obj)
+        result->mdata_obj = mdata_obj->locate(*loc_params).exact();
+
+    return result;
 }
 
 herr_t
