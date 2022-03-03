@@ -47,6 +47,10 @@ def build_model(args):
 def save_model(model, args):
     model.save_weights(args.model_path + '/resnet.model.%s' % args.save_fmt, save_format=args.save_fmt)
 
+def load_model(model, args):
+    model.load_weights(args.model_path + '/resnet.model.%s' % args.save_fmt)
+    
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Keras ResNet50',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -64,4 +68,7 @@ if __name__ == "__main__":
     now = timeit.default_timer()
     save_model(model, args)
     logger.log("saved model using format %s" % args.save_fmt, now)
+    now = timeit.default_timer()
+    load_model(model, args)
+    logger.log("loaded back model using format %s" % args.save_fmt, now)
     logger.log("test completed", start)
