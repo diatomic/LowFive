@@ -54,9 +54,13 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     std::string name_(name);
     auto it = files.find(name_);
     if (it != files.end())
+    {
+        fmt::print("Found file {}\n", name_);
         mdata = it->second;
+    }
     else
     {
+        fmt::print("Didn't find file {}, creating DummyFile\n", name_);
         auto* f = new DummyFile(name);
         files.emplace(name, f);
         mdata = f;
@@ -156,8 +160,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
     {
         // we created this file
         f->print();
-        files.erase(f->name);
-        delete f;       // erases all the children too
+
+        if (!keep)
+        {
+            files.erase(f->name);
+            delete f;       // erases all the children too
+        } else
+            fmt::print("Keeping file metadata in memory\n");
     }
 
     // deliberately verbose, to emphasize checking of res

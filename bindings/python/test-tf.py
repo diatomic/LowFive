@@ -1,6 +1,7 @@
 import lowfive
 vol = lowfive.MetadataVOL()
 vol.set_passthru("*","*")
+vol.set_keep(True)
 
 import tensorflow as tf
 import argparse, socket, os, timeit

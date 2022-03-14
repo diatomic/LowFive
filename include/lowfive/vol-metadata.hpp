@@ -58,6 +58,7 @@ struct MetadataVOL: public LowFive::VOLBase
     LocationPatterns            memory;
     LocationPatterns            passthru;
     LocationPatterns            zerocopy;
+    bool                        keep = false;       // whether to keep files in the metadata after they are closed
 
                     MetadataVOL()
                     {}
@@ -136,6 +137,11 @@ struct MetadataVOL: public LowFive::VOLBase
     void set_memory(std::string filename, std::string pattern)
     {
         memory.emplace_back(LocationPattern { filename, pattern });
+    }
+
+    void set_keep(bool keep_)
+    {
+        keep = keep_;
     }
 
     // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
