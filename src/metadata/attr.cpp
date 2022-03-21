@@ -8,7 +8,7 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
     fmt::print(stderr, "Attr Create\n");
-    fmt::print("loc type = {}, name = {}\n", loc_params->type, name);
+    fmt::print(stderr, "loc type = {}, name = {}\n", loc_params->type, name);
 
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
@@ -17,7 +17,7 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     if (unwrap(obj_) && match_any(filepath,passthru))
     {
         result = wrap(VOLBase::attr_create(unwrap(obj_), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
-        fmt::print(stderr, "created attribute name {} in passthru object {}\n", name, *result);
+        fmt::print(stderr, "created attribute named {} in passthru object {}\n", name, *result);
     }
     else
         result = wrap(nullptr);
@@ -59,7 +59,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     ObjectPointers* result = nullptr;
 
     fmt::print(stderr, "Attr Open\n");
-    fmt::print("attr_open obj = {} name {}\n", *obj_, name);
+    fmt::print(stderr, "attr_open obj = {} name {}\n", *obj_, name);
 
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);

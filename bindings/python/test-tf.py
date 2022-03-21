@@ -1,6 +1,23 @@
+import sys
+
+memory = False
+if '-m' in sys.argv:
+    memory = True
+    sys.argv.remove('-m')
+file = False
+if '-f' in sys.argv:
+    file = True
+    sys.argv.remove('-f')
+if not file and not memory:
+    print("Neither -m, nor -f specified. Forcing -f")
+    file = True
+
 import lowfive
 vol = lowfive.MetadataVOL()
-vol.set_passthru("*","*")
+if file:
+    vol.set_passthru("*","*")
+if memory:
+    vol.set_memory("*","*")
 vol.set_keep(True)
 
 import tensorflow as tf

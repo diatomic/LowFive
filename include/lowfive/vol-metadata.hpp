@@ -123,6 +123,18 @@ struct MetadataVOL: public LowFive::VOLBase
         return it->second->search(full_path).exact();
     }
 
+    static H5I_type_t   get_type(Object* o)
+    {
+        if (o->type == ObjectType::File)
+            return H5I_FILE;
+        else if (o->type == ObjectType::Group)
+            return H5I_GROUP;
+        else if (o->type == ObjectType::Dataset)
+            return H5I_DATASET;
+        else
+            throw MetadataError("cannot identify object type");
+    }
+
     // record intended ownership of a dataset
     void set_zerocopy(std::string filename, std::string pattern)
     {

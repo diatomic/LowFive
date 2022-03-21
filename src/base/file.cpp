@@ -150,7 +150,18 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     fprintf(stderr, "------- PASS THROUGH VOL FILE Get\n");
 #endif
 
+    fmt::print(stderr, "file_get: get_type = {}\n", get_type);
+    va_list args;
+    va_copy(args, arguments);
+
     ret_value = o->vol->file_get(o->under_object, get_type, dxpl_id, req, arguments);
+
+    if (get_type == H5VL_FILE_GET_OBJ_COUNT)
+    {
+        unsigned types     = va_arg(args, unsigned);
+        ssize_t *ret       = va_arg(args, ssize_t *);
+        fmt::print(stderr, "file_get: H5VL_FILE_GET_OBJ_COUNT, types = {}, ret = {}\n", types, *ret);
+    }
 
     /* Check for async request */
     if(req && *req)

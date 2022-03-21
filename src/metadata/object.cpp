@@ -5,6 +5,8 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
+    *opened_type = H5I_BADID;
+
     ObjectPointers* result;
     if (!unwrap(obj))           // memory
         result = wrap(nullptr);
@@ -17,7 +19,13 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
     //       I think locate will return the last parent that has mdata, which is not what we want
     if (mdata_obj)
-        result->mdata_obj = mdata_obj->locate(*loc_params).exact();
+    {
+        Object* o = mdata_obj->locate(*loc_params).exact();
+        result->mdata_obj = o;
+
+        if (*opened_type == H5I_BADID)      // not set by native
+            *opened_type = get_type(o);
+    }
 
     return result;
 }
