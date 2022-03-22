@@ -165,6 +165,9 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     } else if (unwrap(dset_))
     {
         return VOLBase::dataset_get(unwrap(dset_), get_type, dxpl_id, req, arguments);
+    } else if (dset_->mdata_obj)
+    {
+        return MetadataVOL::dataset_get(dset_, get_type, dxpl_id, req, arguments);
     } else {
         throw MetadataError(fmt::format("In dataset_get(): neither memory, nor passthru open"));
     }
