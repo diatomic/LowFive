@@ -73,7 +73,7 @@ struct Dataspace: Hid
             std::vector<hsize_t> start_(dim), stride_(dim), count_(dim), block_(dim);
             H5Sget_regular_hyperslab(space_id, start_.data(), stride_.data(), count_.data(), block_.data());
 
-            for (size_t i = 0; i < dim; ++i)
+            for (int i = 0; i < dim; ++i)
             {
                 start[i]    = start_[i];
                 stride[i]   = stride_[i];
@@ -84,7 +84,7 @@ struct Dataspace: Hid
             selection = Selection::all;
         }
 
-        for (size_t i = 0; i < dim; ++i)
+        for (int i = 0; i < dim; ++i)
         {
             min[i]      = min_[i];
             max[i]      = max_[i];

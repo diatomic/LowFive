@@ -149,7 +149,7 @@ struct IndexQuery
             gids.push_back(decomposer.coords_to_gid(coords, decomposer.divisions));
 
             location[0]++;
-            unsigned i = 0;
+            int i = 0;
             while (i < dim-1 && location[i] == ranges[i].second - ranges[i].first)
             {
                 location[i] = 0;

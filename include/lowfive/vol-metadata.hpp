@@ -186,7 +186,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     int find_match(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
     {
-        for (int i = 0; i < patterns.size(); ++i)
+        for (int i = 0; i < static_cast<int>(patterns.size()); ++i)
         {
             auto& x = patterns[i];
             if (!match(x.filename.c_str(), filename.c_str())) continue;
@@ -200,7 +200,7 @@ struct MetadataVOL: public LowFive::VOLBase
         find_matches(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
     {
         std::vector<int> result;
-        for (int i = 0; i < patterns.size(); ++i)
+        for (int i = 0; i < static_cast<int>(patterns.size()); ++i)
         {
             auto& x = patterns[i];
             if (!match(x.filename.c_str(), filename.c_str())) continue;
