@@ -107,6 +107,10 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     H5Dclose(dset);
     H5Sclose(filespace);
     H5Gclose(group);
+
+    //vol_plugin.serve_all();
+    //H5close();
+
     H5Fclose(file);
     H5Pclose(plist);
 
