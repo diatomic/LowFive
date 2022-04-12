@@ -119,7 +119,6 @@ struct Index: public IndexQuery
 
         diy::mpi::request all_done;
         bool all_done_active = false;
-        int  done_count  = 0;
         if (local.rank() != 0)
         {
             all_done = local.ibarrier();
@@ -149,7 +148,6 @@ struct Index: public IndexQuery
 
             communicator& intercomm = *p_intercomm;
 
-            int tag    = ostatus->tag();
             int source = ostatus->source();
 
             diy::MemoryBuffer b;

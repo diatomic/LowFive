@@ -175,15 +175,17 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
                 ds->type.dtype_size != H5Tget_size(mem_type_id))
             throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
-        if (Dataspace(file_space_id).dim != ds->space.dim)
+        if (file_space_id != H5S_ALL && Dataspace(file_space_id).dim != ds->space.dim)
             throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
 
         for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
         {
             Dataspace& fs = dt.file;
 
-            hid_t mem_dst = Dataspace::project_intersection(file_space_id, mem_space_id, fs.id);
-            hid_t mem_src = Dataspace::project_intersection(fs.id,         dt.memory.id, file_space_id);
+            hid_t file_space_id_1 = (file_space_id == H5S_ALL) ? fs.id : file_space_id;
+            hid_t mem_space_id_1  = (mem_space_id == H5S_ALL)  ? fs.id : mem_space_id;
+            hid_t mem_dst = Dataspace::project_intersection(file_space_id_1, mem_space_id_1, fs.id);
+            hid_t mem_src = Dataspace::project_intersection(fs.id,           dt.memory.id,   file_space_id_1);
 
             Dataspace dst(mem_dst, true);
             Dataspace src(mem_src, true);

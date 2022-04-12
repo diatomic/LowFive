@@ -115,7 +115,6 @@ struct MetadataVOL: public LowFive::VOLBase
     // locate an object in the metadata of one file by its full path, which uniquely identifies one object
     Object*         locate(std::string filename, std::string full_path) const
     {
-        Object* obj;
         auto it = files.find(filename);
         if (it == files.end())
             return NULL;
@@ -187,7 +186,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     int find_match(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
     {
-        for (int i = 0; i < patterns.size(); ++i)
+        for (int i = 0; i < static_cast<int>(patterns.size()); ++i)
         {
             auto& x = patterns[i];
             if (!match(x.filename.c_str(), filename.c_str())) continue;
@@ -201,10 +200,10 @@ struct MetadataVOL: public LowFive::VOLBase
         find_matches(const std::string& filename, const std::string& full_path, const LocationPatterns& patterns, bool partial = false) const
     {
         std::vector<int> result;
-        for (int i = 0; i < patterns.size(); ++i)
+        for (int i = 0; i < static_cast<int>(patterns.size()); ++i)
         {
             auto& x = patterns[i];
-            if (x.filename != filename) continue;
+            if (!match(x.filename.c_str(), filename.c_str())) continue;
             if (match(x.pattern.c_str(), full_path.c_str(), partial))
                 result.push_back(i);
         }

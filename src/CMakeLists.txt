@@ -33,7 +33,7 @@ add_library             (lowfive-dist
 target_link_libraries   (lowfive-dist fmt::fmt diy)
 
 
-install                 (TARGETS lowfive
+install                 (TARGETS lowfive lowfive-dist
                         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/
                         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                         GROUP_READ GROUP_WRITE GROUP_EXECUTE

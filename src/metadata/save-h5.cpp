@@ -33,7 +33,7 @@ void save_children(const Hid& x, const Object* p)
         {
             // create dataset
             Hid attribute = H5Acreate(x.id, a->name.c_str(), a->type.id, a->space.id, H5P_DEFAULT, H5P_DEFAULT);
-            H5Awrite(attribute.id, a->mem_type.id, a->data);
+            H5Awrite(attribute.id, a->mem_type.id, a->data.get());
             H5Aclose(attribute.id);
         }
     }

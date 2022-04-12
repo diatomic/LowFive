@@ -12,13 +12,14 @@ struct Attribute: public Object
     Datatype                        type;
     Dataspace                       space;
 
-    const void*                     data     { nullptr };
+    std::unique_ptr<char>           data     { nullptr };
     Datatype                        mem_type { 0 };
 
     void write(Datatype mem_type_, const void* buf)
     {
         mem_type = mem_type_;
-        data = buf;
+        data = std::unique_ptr<char>(new char[mem_type_.dtype_size]);
+        std::memcpy(static_cast<void*>(data.get()), buf, mem_type_.dtype_size);
     }
 
     void print(int depth) const override

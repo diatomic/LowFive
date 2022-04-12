@@ -34,15 +34,18 @@ struct Dataset : public Object
 
     void write(Datatype type, Dataspace memory, Dataspace file, const void* buf)
     {
+        Dataspace& memory_ds = (memory.id != H5S_ALL ? memory : space);
+        Dataspace& file_ds   = (file.id != H5S_ALL   ? file   : space);
+
         if (ownership == Ownership::lowfive)
         {
-            size_t nbytes   = (memory.id ? memory.size() : space.size()) * type.dtype_size;
+            size_t nbytes   = memory_ds.size() * type.dtype_size;
             char* p         = new char[nbytes];
             std::memcpy(p, buf, nbytes);
-            data.emplace_back(DataTriple { type, memory, file, p, std::unique_ptr<char[]>(p) });
+            data.emplace_back(DataTriple { type, memory_ds, file_ds, p, std::unique_ptr<char[]>(p) });
         }
         else
-            data.emplace_back(DataTriple { type, memory, file, buf, std::unique_ptr<char[]>(nullptr) });
+            data.emplace_back(DataTriple { type, memory_ds, file_ds, buf, std::unique_ptr<char[]>(nullptr) });
     }
 
     void print(int depth) const override
