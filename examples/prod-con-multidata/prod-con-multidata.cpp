@@ -158,19 +158,28 @@ int main(int argc, char* argv[])
     }
     else
     {
-        local = world.split(producer);
+        if (world.size() > 1)
+        {
+            local = world.split(producer);
 
-        if (producer)
+            if (producer)
+            {
+                MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks, /* tag = */ 0, &intercomm_);
+                producer_intercomms.push_back(communicator(intercomm_));
+                producer_comm = local;
+            }
+            else
+            {
+                MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm_);
+                consumer_intercomms.push_back(communicator(intercomm_));
+                consumer_comm = local;
+            }
+        } else
         {
-            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ producer_ranks, /* tag = */ 0, &intercomm_);
-            producer_intercomms.push_back(communicator(intercomm_));
+            producer = true;
+            local = world;
+            producer_intercomms.push_back(world);
             producer_comm = local;
-        }
-        else
-        {
-            MPI_Intercomm_create(local, 0, world, /* remote_leader = */ 0, /* tag = */ 0, &intercomm_);
-            consumer_intercomms.push_back(communicator(intercomm_));
-            consumer_comm = local;
         }
     }
 
