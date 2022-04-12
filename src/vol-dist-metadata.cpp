@@ -19,6 +19,22 @@ remote_size(int intercomm_index)
     return remote_size;
 }
 
+void
+LowFive::DistMetadataVOL::
+serve_all()
+{
+    // serve datasets (producer only)
+    if (serve_data.size())              // only producer pushed any datasets to serve_data
+    {
+        Index index(local, intercomms, serve_data);
+        index.serve();
+
+        for (auto* ds : serve_data)
+            delete ds;
+        serve_data.clear();
+    }
+}
+
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -248,13 +264,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
         if (match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
         {
             fmt::print("Closing file {}\n", fmt::ptr(f));
-
-            // serve datasets (producer only)
-            if (serve_data.size())              // only producer pushed any datasets to serve_data
-            {
-                Index index(local, intercomms, serve_data);
-                index.serve();
-            }
+            serve_all();
         }
     }
 

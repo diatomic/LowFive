@@ -46,6 +46,8 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
         intercomm_indices.emplace_back(intercomm_index);
     }
 
+    void            serve_all();
+
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
     herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
     herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
