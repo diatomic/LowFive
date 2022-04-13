@@ -20,21 +20,29 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
                  int global_nblocks, int dim, size_t local_num_points)
 {
     if (intercomms.size() == 2)
-        fmt::print("producer1: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
+        fmt::print(stderr, "producer1: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
                 shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
     else
-        fmt::print("producer1: shared {} local size {} intercomms size {} intercomm1 size {}\n",
+        fmt::print(stderr, "producer1: shared {} local size {} intercomms size {} intercomm1 size {}\n",
                 shared, local.size(), intercomms.size(), intercomms[0].size());
+
+    // set up lowfive
+    l5::DistMetadataVOL vol_plugin(local, intercomms);
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
     if (passthru)
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
-    // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomms);
     l5::H5VOLProperty vol_prop(vol_plugin);
-    vol_prop.apply(plist);
+    if (!getenv("HDF5_VOL_CONNECTOR"))
+    {
+        fmt::print(stderr, "HDF5_VOL_CONNECTOR is not set; enabling VOL explicitly\n");
+        vol_prop.apply(plist);
+    } else
+    {
+        fmt::print(stderr, "HDF5_VOL_CONNECTOR is set; not enabling VOL explicitly\n");
+    }
 
     if (passthru)
         vol_plugin.set_passthru("outfile1.h5", "*");

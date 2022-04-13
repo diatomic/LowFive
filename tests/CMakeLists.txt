@@ -34,21 +34,21 @@ add_executable              (prod-con-multidata-test    ../examples/prod-con-mul
 target_link_libraries       (prod-con-multidata-test    ${libraries})
 
 # space partitioning communicating through metadata
-foreach                     (p 2 4 8)
+foreach                     (p 6 7 8)
     add_test                (NAME prod-con-multidata-no-shared-metadata-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
                             consumer-multidata-test.hx 1 0 0) # 1 0 0: memory file shared
 endforeach()
 
 # space partitioning communicating through a file
-foreach                     (p 2 4 8)
+foreach                     (p 6 7 8)
     add_test                (NAME prod-con-multidata-no-shared-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
                             consumer-multidata-test.hx 0 1 0) # 0 1 0: memory file shared
 endforeach()
 
 # space partitioning communicating through metadata but also writing a file
-foreach                     (p 2 4 8)
+foreach                     (p 6 7 8)
     add_test                (NAME prod-con-multidata-no-shared-metadata-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
                             consumer-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
@@ -59,21 +59,21 @@ endforeach()
 #if(UNIX AND NOT APPLE)
 
 #    # space sharing communicating through metadata
-#    foreach                 (p 2 4 8)
+#    foreach                 (p 6 7 8)
 #        add_test            (NAME prod-con-multidata-shared-metadata-p${p}
 #                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
 #                            consumer-multidata-test.hx 1 0 1) # 1 0 1: memory file shared
 #    endforeach()
 
 #    # space sharing communicating through a file
-#    foreach                 (p 2 4 8)
+#    foreach                 (p 6 7 8)
 #        add_test            (NAME prod-con-multidata-shared-file-p${p}
 #                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
 #                            consumer-multidata-test.hx 0 1 1) # 0 1 1: memory file shared
 #    endforeach()
 
 #    # space sharing communicating through metadata but also writing a file
-#    foreach                 (p 2 4 8)
+#    foreach                 (p 6 7 8)
 #        add_test            (NAME prod-con-multidata-shared-metadata-file-p${p}
 #                            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
 #                            consumer-multidata-test.hx 1 1 1) # 1 1 1: memory file shared

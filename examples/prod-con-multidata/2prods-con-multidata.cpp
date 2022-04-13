@@ -32,8 +32,8 @@ int main(int argc, char* argv[])
     int                       metadata          = 1;              // build in-memory metadata
     int                       passthru          = 0;              // write file to disk
     bool                      shared            = false;          // producer and consumer run on the same ranks
-    float                     prod1_frac        = 0.333;          // fraction of world ranks in producer1
-    float                     prod2_frac        = 0.333;          // fraction of world ranks in producer2
+    float                     prod1_frac        = 1.0 / 3.0;      // fraction of world ranks in producer1
+    float                     prod2_frac        = 1.0 / 3.0;      // fraction of world ranks in producer2
     size_t                    local_npoints     = 100;            // points per block
     std::string               producer1_exec    = "./producer1-multidata.hx";   // name of producer1 executable
     std::string               producer2_exec    = "./producer2-multidata.hx";   // name of producer2 executable
