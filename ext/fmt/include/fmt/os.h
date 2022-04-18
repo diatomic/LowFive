@@ -9,10 +9,8 @@
 #define FMT_OS_H_
 
 #include <cerrno>
-#include <clocale>  // locale_t
 #include <cstddef>
 #include <cstdio>
-#include <cstdlib>       // strtod_l
 #include <system_error>  // std::system_error
 
 #if defined __APPLE__ || defined(__FreeBSD__)
@@ -284,7 +282,7 @@ class buffered_file {
 // closing the file multiple times will cause a crash on Windows rather
 // than an exception. You can get standard behavior by overriding the
 // invalid parameter handler with _set_invalid_parameter_handler.
-class file {
+class FMT_API file {
  private:
   int fd_;  // File descriptor.
 
@@ -306,7 +304,7 @@ class file {
   file() noexcept : fd_(-1) {}
 
   // Opens a file and constructs a file object representing this file.
-  FMT_API file(cstring_view path, int oflag);
+  file(cstring_view path, int oflag);
 
  public:
   file(const file&) = delete;
@@ -323,43 +321,43 @@ class file {
   }
 
   // Destroys the object closing the file it represents if any.
-  FMT_API ~file() noexcept;
+  ~file() noexcept;
 
   // Returns the file descriptor.
   int descriptor() const noexcept { return fd_; }
 
   // Closes the file.
-  FMT_API void close();
+  void close();
 
   // Returns the file size. The size has signed type for consistency with
   // stat::st_size.
-  FMT_API long long size() const;
+  long long size() const;
 
   // Attempts to read count bytes from the file into the specified buffer.
-  FMT_API size_t read(void* buffer, size_t count);
+  size_t read(void* buffer, size_t count);
 
   // Attempts to write count bytes from the specified buffer to the file.
-  FMT_API size_t write(const void* buffer, size_t count);
+  size_t write(const void* buffer, size_t count);
 
   // Duplicates a file descriptor with the dup function and returns
   // the duplicate as a file object.
-  FMT_API static file dup(int fd);
+  static file dup(int fd);
 
   // Makes fd be the copy of this file descriptor, closing fd first if
   // necessary.
-  FMT_API void dup2(int fd);
+  void dup2(int fd);
 
   // Makes fd be the copy of this file descriptor, closing fd first if
   // necessary.
-  FMT_API void dup2(int fd, std::error_code& ec) noexcept;
+  void dup2(int fd, std::error_code& ec) noexcept;
 
   // Creates a pipe setting up read_end and write_end file objects for reading
   // and writing respectively.
-  FMT_API static void pipe(file& read_end, file& write_end);
+  static void pipe(file& read_end, file& write_end);
 
   // Creates a buffered_file object associated with this file and detaches
   // this file object from the file.
-  FMT_API buffered_file fdopen(const char* mode);
+  buffered_file fdopen(const char* mode);
 };
 
 // Returns the memory page size.
@@ -462,7 +460,7 @@ class FMT_API ostream final : private detail::buffer<char> {
 
   * ``<integer>``: Flags passed to `open
     <https://pubs.opengroup.org/onlinepubs/007904875/functions/open.html>`_
-    (``file::WRONLY | file::CREATE`` by default)
+    (``file::WRONLY | file::CREATE | file::TRUNC`` by default)
   * ``buffer_size=<integer>``: Output buffer size
 
   **Example**::
@@ -477,50 +475,6 @@ inline ostream output_file(cstring_view path, T... params) {
 }
 #endif  // FMT_USE_FCNTL
 
-#ifdef FMT_LOCALE
-// A "C" numeric locale.
-class locale {
- private:
-#  ifdef _WIN32
-  using locale_t = _locale_t;
-
-  static void freelocale(locale_t loc) { _free_locale(loc); }
-
-  static double strtod_l(const char* nptr, char** endptr, _locale_t loc) {
-    return _strtod_l(nptr, endptr, loc);
-  }
-#  endif
-
-  locale_t locale_;
-
- public:
-  using type = locale_t;
-  locale(const locale&) = delete;
-  void operator=(const locale&) = delete;
-
-  locale() {
-#  ifndef _WIN32
-    locale_ = FMT_SYSTEM(newlocale(LC_NUMERIC_MASK, "C", nullptr));
-#  else
-    locale_ = _create_locale(LC_NUMERIC, "C");
-#  endif
-    if (!locale_) FMT_THROW(system_error(errno, "cannot create locale"));
-  }
-  ~locale() { freelocale(locale_); }
-
-  type get() const { return locale_; }
-
-  // Converts string to floating-point number and advances str past the end
-  // of the parsed input.
-  FMT_DEPRECATED double strtod(const char*& str) const {
-    char* end = nullptr;
-    double result = strtod_l(str, &end, locale_);
-    str = end;
-    return result;
-  }
-};
-using Locale FMT_DEPRECATED_ALIAS = locale;
-#endif  // FMT_LOCALE
 FMT_MODULE_EXPORT_END
 FMT_END_NAMESPACE
 

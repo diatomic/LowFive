@@ -65,6 +65,25 @@ TEST(ranges_test, format_set) {
             "{\"one\", \"two\"}");
 }
 
+namespace adl {
+struct box {
+  int value;
+};
+
+auto begin(const box& b) -> const int* {
+  return &b.value;
+}
+
+auto end(const box& b) -> const int* {
+  return &b.value + 1;
+}
+}  // namespace adl
+
+TEST(ranges_test, format_adl_begin_end) {
+  auto b = adl::box{42};
+  EXPECT_EQ(fmt::format("{}", b), "[42]");
+}
+
 TEST(ranges_test, format_pair) {
   auto p = std::pair<int, float>(42, 1.5f);
   EXPECT_EQ(fmt::format("{}", p), "(42, 1.5)");
@@ -133,8 +152,8 @@ TEST(ranges_test, path_like) {
 struct string_like {
   const char* begin();
   const char* end();
-  explicit operator fmt::string_view() const { return "foo"; }
-  explicit operator std::string_view() const { return "foo"; }
+  operator fmt::string_view() const { return "foo"; }
+  operator std::string_view() const { return "foo"; }
 };
 
 TEST(ranges_test, format_string_like) {
@@ -364,3 +383,18 @@ TEST(ranges_test, escape_convertible_to_string_view) {
             "[\"foo\"]");
 }
 #endif  // FMT_USE_STRING_VIEW
+
+template <typename R> struct fmt_ref_view {
+  R* r;
+
+  auto begin() const -> decltype(r->begin()) { return r->begin(); }
+  auto end() const -> decltype(r->end()) { return r->end(); }
+};
+
+TEST(ranges_test, range_of_range_of_mixed_const) {
+  std::vector<std::vector<int>> v = {{1, 2, 3}, {4, 5}};
+  EXPECT_EQ(fmt::format("{}", v), "[[1, 2, 3], [4, 5]]");
+
+  fmt_ref_view<decltype(v)> r{&v};
+  EXPECT_EQ(fmt::format("{}", r), "[[1, 2, 3], [4, 5]]");
+}

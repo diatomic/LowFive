@@ -72,8 +72,10 @@ struct explicitly_convertible_to_wstring_view {
 };
 
 TEST(xchar_test, format_explicitly_convertible_to_wstring_view) {
-  EXPECT_EQ(L"foo",
-            fmt::format(L"{}", explicitly_convertible_to_wstring_view()));
+  // Types explicitly convertible to wstring_view are not formattable by
+  // default because it may introduce ODR violations.
+  static_assert(
+      !fmt::is_formattable<explicitly_convertible_to_wstring_view>::value, "");
 }
 #endif
 
@@ -218,6 +220,12 @@ std::wostream& operator<<(std::wostream& os, streamable_enum) {
   return os << L"streamable_enum";
 }
 
+namespace fmt {
+template <>
+struct formatter<streamable_enum, wchar_t> : basic_ostream_formatter<wchar_t> {
+};
+}  // namespace fmt
+
 enum unstreamable_enum {};
 
 TEST(xchar_test, enum) {
@@ -322,9 +330,11 @@ TEST(xchar_test, color) {
 }
 
 TEST(xchar_test, ostream) {
+#if !FMT_GCC_VERSION || FMT_GCC_VERSION >= 409
   std::wostringstream wos;
   fmt::print(wos, L"Don't {}!", L"panic");
-  EXPECT_EQ(L"Don't panic!", wos.str());
+  EXPECT_EQ(wos.str(), L"Don't panic!");
+#endif
 }
 
 TEST(xchar_test, to_wstring) { EXPECT_EQ(L"42", fmt::to_wstring(42)); }
@@ -360,10 +370,11 @@ template <typename Char> struct small_grouping : std::numpunct<Char> {
 
 TEST(locale_test, localized_double) {
   auto loc = std::locale(std::locale(), new numpunct<char>());
-  EXPECT_EQ("1?23", fmt::format(loc, "{:L}", 1.23));
-  EXPECT_EQ("1?230000", fmt::format(loc, "{:Lf}", 1.23));
-  EXPECT_EQ("1~234?5", fmt::format(loc, "{:L}", 1234.5));
-  EXPECT_EQ("12~000", fmt::format(loc, "{:L}", 12000.0));
+  EXPECT_EQ(fmt::format(loc, "{:L}", 1.23), "1?23");
+  EXPECT_EQ(fmt::format(loc, "{:Lf}", 1.23), "1?230000");
+  EXPECT_EQ(fmt::format(loc, "{:L}", 1234.5), "1~234?5");
+  EXPECT_EQ(fmt::format(loc, "{:L}", 12000.0), "12~000");
+  EXPECT_EQ(fmt::format(loc, "{:8L}", 1230.0), "   1~230");
 }
 
 TEST(locale_test, format) {

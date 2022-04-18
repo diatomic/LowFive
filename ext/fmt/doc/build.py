@@ -28,6 +28,9 @@ def create_build_env(venv_dir='virtualenv'):
   pip.install('six')
   # See: https://github.com/sphinx-doc/sphinx/issues/9777
   pip.install('docutils==0.17.1')
+  # Jinja2 >= 3.1 incompatible with sphinx 3.3.0
+  # See: https://github.com/sphinx-doc/sphinx/issues/10291
+  pip.install('Jinja2<3.1')
   pip.install('sphinx-doc/sphinx', 'v3.3.0')
   pip.install('michaeljones/breathe', 'v4.25.0')
 
@@ -65,6 +68,7 @@ def build_docs(version='dev', **kwargs):
                           FMT_USE_RVALUE_REFERENCES=1 \
                           FMT_USE_USER_DEFINED_LITERALS=1 \
                           FMT_USE_ALIAS_TEMPLATES=1 \
+                          FMT_USE_NONTYPE_TEMPLATE_PARAMETERS=1 \
                           FMT_API= \
                           "FMT_BEGIN_NAMESPACE=namespace fmt {{" \
                           "FMT_END_NAMESPACE=}}" \
