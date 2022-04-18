@@ -116,6 +116,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj);
     if (ds)
     {
+        //  TODO: support H5S_ALL, need to get file_space_id, mem_space_id with H5Dget_space
+        // if (file_space_id == H5S_ALL)
+        //     file_space_id = H5Dget_space(?);
         // consumer with the name of a remote dataset: query to producer
         Query* query = (Query*) ds->query;
         query->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
@@ -198,11 +201,24 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     fmt::print(stderr, "DistMetadataVOL::file_open()\n");
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
+    // if producer opens existing file
+    if (dynamic_cast<File*>((Object*) result->mdata_obj))
+        return result;
+
     if (match_any(name, "", memory, true))
     {
-        DummyFile* df = dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
-        assert(df);
-        delete df;
+
+        // if rank is producer, but file was created on another rank (as AMReX does: header is written by one rank per node, and data is written by all ranks on the node)
+        // it can be not present on some producer ranks. We create file if necessary.
+        // Assume: consumers must open file in read-only mode, otherwise it is producer
+        // TODO: find a better solution, this might fail in many cases
+        if (flags != H5F_ACC_RDONLY) {
+            fmt::print(stderr, "DistMetadataVOL::file_open(), name = {}, local file not found, but opened not in RDONLY - create empty file\n", name);
+            return MetadataVOL::file_create(name, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id, dxpl_id, req);
+        }
+
+        // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
+        delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
 
         fmt::print("Creating remote\n");
         RemoteFile* f = new RemoteFile(name);
