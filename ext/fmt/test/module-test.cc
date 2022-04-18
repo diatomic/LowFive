@@ -36,6 +36,7 @@
 #else
 #  define FMT_USE_FCNTL 0
 #endif
+#define FMT_NOEXCEPT noexcept
 #if defined(_WIN32) && !defined(__MINGW32__)
 #  define FMT_POSIX(call) _##call
 #else
