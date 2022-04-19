@@ -20,6 +20,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     //       I think locate will return the last parent that has mdata, which is not what we want
     if (mdata_obj)
     {
+        fmt::print(stderr, "In MetadataVOL::object_open(): locating\n");
         Object* o = mdata_obj->locate(*loc_params).exact();
         result->mdata_obj = o;
 
