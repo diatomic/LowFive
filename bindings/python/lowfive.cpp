@@ -4,7 +4,7 @@ namespace py = pybind11;
 #include <lowfive/vol-metadata.hpp>
 #include <lowfive/vol-dist-metadata.hpp>
 
-PYBIND11_MODULE(lowfive, m)
+PYBIND11_MODULE(_lowfive, m)
 {
     using namespace pybind11::literals;
 
