@@ -23,6 +23,7 @@ PYBIND11_MODULE(_lowfive, m)
         .def("set_memory",     &LowFive::MetadataVOL::set_memory,   "filename"_a, "pattern"_a, "set (filename,pattern) for memory")
         .def("set_zerocopy",   &LowFive::MetadataVOL::set_zerocopy, "filename"_a, "pattern"_a, "set (filename,pattern) for zerocopy")
         .def("set_keep",       &LowFive::MetadataVOL::set_keep,     "keep_a",                  "set whether to keep files in the metadata after they are closed")
+        .def("print_files",    &LowFive::MetadataVOL::print_files,                             "print file metadata")
     ;
 
     using communicator  = LowFive::DistMetadataVOL::communicator;
