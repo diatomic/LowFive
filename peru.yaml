@@ -3,20 +3,25 @@ imports:
     fmt: ./ext/fmt
     diy: ./ext/diy
     pybind11: ./ext/pybind11
+    spdlog: ./ext/spdlog
 
 git module HighFive:
-    url: gh:BlueBrain/HighFive
+    url: https://github.com/BlueBrain/HighFive
     rev: 9f61c00ecfc859c1c5a15a34e85f406e10e85fcf
 
 git module fmt:
-    url: gh:fmtlib/fmt
+    url: https://github.com/fmtlib/fmt
     rev: 8.1.1
 
 git module diy:
-    url: kgl:mrzv/diy
+    url: https://gitlab.kitware.com/mrzv/diy
     rev: 89ff7a86988753bc0291953e73815cfc723240fa
-    drop: include/diy/thirdparty/fmt
 
 git module pybind11:
-    url: gh:pybind/pybind11
+    url: https://github.com/pybind/pybind11
     rev: e8e229fa0b486118bf91321b923f8158055c053c
+
+git module spdlog:
+    url: https://github.com/gabime/spdlog
+    rev: 4ccbb5a71a014c9ac56baa7831faa4b04a121231
+

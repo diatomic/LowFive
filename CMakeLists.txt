@@ -39,6 +39,13 @@ option                      (FMT_INSTALL "" ON)
 add_subdirectory            (ext/fmt)
 set                         (libraries ${libraries} fmt::fmt)
 
+# spdlog
+option                      (SPDLOG_FMT_EXTERNAL "" ON)
+option                      (SPDLOG_BUILD_EXAMPLE "" OFF)
+option                      (SPDLOG_BUILD_TESTS "" OFF)
+add_subdirectory            (ext/spdlog)
+set                         (libraries ${libraries} spdlog)
+
 # HDF5
 if                          (HDF5_LIBRARY AND HDF5_HL_LIBRARY AND Z_LIBRARY)
   message                   ("HDF5_LIBRARY = " ${HDF5_LIBRARY})
