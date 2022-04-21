@@ -21,17 +21,21 @@ add_library             (lowfive SHARED
                             metadata/blob.cpp
                             metadata/token.cpp
                             metadata/link.cpp
+                            ${BACKWARD_ENABLE}
                         )
-target_link_libraries   (lowfive fmt::fmt ${HDF5_LIBRARY})
-target_include_directories  (lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
+
+target_link_libraries     (lowfive fmt::fmt ${HDF5_LIBRARY})
+target_include_directories(lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 target_compile_definitions(lowfive PRIVATE LOWFIVE_ENABLE_PASSTHRU_LOGGING)
+add_backward              (lowfive)
 
 add_library             (lowfive-dist
                          metadata/save-h5.cpp           # not clear, if we even need this (doesn't seem to be used anywhere),
                                                         # but it requires DIY, so it's going here for now
-                         vol-dist-metadata.cpp)
+                         vol-dist-metadata.cpp
+                         ${BACKWARD_ENABLE})
 target_link_libraries   (lowfive-dist fmt::fmt diy)
-
+add_backward            (lowfive-dist)
 
 install                 (TARGETS lowfive lowfive-dist
                         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/

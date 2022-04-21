@@ -67,6 +67,9 @@ endif                       ()
 #set                         (libraries ${libraries} ${HDF5_LIBRARY})
 include_directories         (SYSTEM ${HDF5_INCLUDE_DIR})
 
+# backward-cpp
+add_subdirectory(ext/backward-cpp)
+
 # Include dirs
 set                         (CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-isystem")
 include_directories         (${CMAKE_CURRENT_SOURCE_DIR}/include
