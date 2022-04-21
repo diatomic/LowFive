@@ -4,6 +4,7 @@ imports:
     diy: ./ext/diy
     pybind11: ./ext/pybind11
     spdlog: ./ext/spdlog
+    backward-cpp: ./ext/backward-cpp
 
 git module HighFive:
     url: https://github.com/BlueBrain/HighFive
@@ -25,3 +26,6 @@ git module spdlog:
     url: https://github.com/gabime/spdlog
     rev: 4ccbb5a71a014c9ac56baa7831faa4b04a121231
 
+git module backward-cpp:
+    url: https://github.com/bombela/backward-cpp.git
+    rev: 5ffb2c879ebdbea3bdb8477c671e32b1c984beaa
