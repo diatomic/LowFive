@@ -115,14 +115,18 @@ H5VL_class_t LowFive::VOLBase::connector =
 H5PL_type_t H5PLget_plugin_type(void) { return H5PL_TYPE_VOL; }
 const void *H5PLget_plugin_info(void)
 {
-    fmt::print(stderr, "H5PLget_plugin_info\n");
+    auto log = LowFive::get_logger();
+    log->debug("H5PLget_plugin_info\n");
+
     return &LowFive::VOLBase::connector;
 }
 
 LowFive::VOLBase::
 VOLBase()
 {
-    fmt::print(stderr, "VOLBase::VOLBase(), &info = {}\n", fmt::ptr(&info));
+    log = get_logger();
+
+    log->debug("VOLBase::VOLBase(), &info = {}\n", fmt::ptr(&info));
 
     // this is here to trigger HDF5 initialization, in case this constructor is
     // called before anything else; it would be nice to find a cleaner way to
@@ -137,21 +141,20 @@ VOLBase()
         VOLBase::info->under_vol_info = NULL;
     }
 
-    fmt::print(stderr, "VOLBase::VOLBase()\n");
     info_t::vol = this;
 }
 
 LowFive::VOLBase::
 ~VOLBase()
 {
-    // TODO: detele info
+    // TODO: delete info
 }
 
 hid_t
 LowFive::VOLBase::
 register_plugin()
 {
-    fmt::print(stderr, "registering plugin, info = {}\n", fmt::ptr(info));
+    log->debug("registering plugin, info = {}\n", fmt::ptr(info));
 
     // Singleton register the pass-through VOL connector ID
     if (connector_id < 0)
@@ -176,10 +179,13 @@ herr_t
 LowFive::VOLBase::
 _init(hid_t vipl_id)
 {
+    auto log = get_logger();
+
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL INIT\n");
+    log->debug("------- PASS THROUGH VOL INIT\n");
 #endif
-    fmt::print(stderr, "_init(), info = {}\n", fmt::ptr(info));
+
+    log->debug("_init(), info = {}\n", fmt::ptr(info));
 
     return 0;
 }
@@ -201,8 +207,10 @@ herr_t
 LowFive::VOLBase::
 _term(void)
 {
+    auto log = get_logger();
+
 #ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL TERM\n");
+    log->debug("------- PASS THROUGH VOL TERM\n");
 #endif
 
     herr_t result = 0;
