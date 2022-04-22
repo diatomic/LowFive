@@ -259,7 +259,15 @@ dataset_specific(void *obj, H5VL_dataset_specific_t specific_type, hid_t dxpl_id
                         space.dims[i]   = size[i];                                              // update size
                         space.max[i]    = space.min[i] + space.dims[i] - 1;                     // update max to reflect new size, keeping min original
                     }
+                    else
+                        throw MetadataError(fmt::format("Warning: dataset_specific(): for case H5VL_DATASET_SET_EXTENT, trying to set size larger than maxdims in dimension {}", i));
                 }
+
+                // update HDF5's internal representation
+                std::vector<hsize_t> maxdims(space.dim);
+                for (auto i = 0; i < space.dim; i++)
+                    maxdims[i] = space.dims[i];                                                 // copying size_t to hsize_t
+                H5Sset_extent_simple(space.id, space.dim, size, &maxdims[0]);
 
                 break;
             }
