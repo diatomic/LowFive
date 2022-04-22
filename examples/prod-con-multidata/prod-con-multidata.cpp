@@ -19,11 +19,6 @@ fail_on_hdf5_error(hid_t stack_id, void*)
 
 int main(int argc, char* argv[])
 {
-    // logging output from LowFive (comment out for no output)
-//     l5::create_logger("trace");         // generates the most output
-//     l5::create_logger("debug");         // generates less output
-//     l5::create_logger("info");          // generates even less output (prints metadata tree)
-
     int   dim = DIM;
 
     diy::mpi::environment     env(argc, argv, MPI_THREAD_MULTIPLE);
@@ -41,6 +36,7 @@ int main(int argc, char* argv[])
     size_t                    local_npoints     = 100;            // points per block
     std::string               producer_exec     = "./producer-multidata.hx";    // name of producer executable
     std::string               consumer_exec     = "./consumer-multidata.hx";    // name of consumer executable
+    std::string               log_level         = "";
 
 
     // default global data bounds
@@ -66,6 +62,7 @@ int main(int argc, char* argv[])
         >> Option('s', "shared",    shared,         "share ranks between producer and consumer (-p ignored)")
         >> Option('r', "prod_exec", producer_exec,  "name of producer executable")
         >> Option('c', "con_exec",  consumer_exec,  "name of consumer executable")
+        >> Option('l', "log",       log_level,      "level for the log output (trace, debug, info, ...)")
         ;
     ops
         >> Option('x',  "max-x",    domain.max[0],  "domain max x")
@@ -89,6 +86,9 @@ int main(int argc, char* argv[])
         }
         return 1;
     }
+
+    if (!log_level.empty())
+        l5::create_logger(log_level);
 
     if (metadata && !passthru)
         if (world.rank() == 0)
