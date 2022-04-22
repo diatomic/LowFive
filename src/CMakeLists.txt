@@ -26,7 +26,6 @@ add_library             (lowfive SHARED
 
 target_link_libraries     (lowfive fmt::fmt ${HDF5_LIBRARY})
 target_include_directories(lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
-target_compile_definitions(lowfive PRIVATE LOWFIVE_ENABLE_PASSTHRU_LOGGING)
 add_backward              (lowfive)
 
 add_library             (lowfive-dist

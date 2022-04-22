@@ -7,8 +7,8 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
-    fmt::print(stderr, "Group Create\n");
-    fmt::print(stderr, "loc type = {}, name = {}, obj = {}\n", loc_params->type, name, *obj_);
+    log->trace("group_create:");
+    log->trace("loc type = {}, name = {}, obj = {}", loc_params->type, name, *obj_);
 
     assert(obj_->mdata_obj);
 
@@ -25,7 +25,6 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name);
     assert(obj_path.is_name());
     result->mdata_obj = obj_path.obj->add_child(new Group(obj_path.path));
-    fmt::print(stderr, "group created: {}\n", *result);
 
     return (void*)result;
 }
@@ -35,7 +34,7 @@ LowFive::MetadataVOL::
 group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
-    fmt::print(stderr, "group_open: obj = {} name {}\n", *obj_, name);
+    log->trace("group_open: obj = {} name {}", *obj_, name);
 
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
     auto filepath = parent->fullname(name);
@@ -57,8 +56,6 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     if (!result->mdata_obj)
         result->mdata_obj = parent->add_child(new DummyGroup(name_));
 
-    fmt::print(stderr, "opened group: {} named {} in parent named {}\n", *result, name, static_cast<Object*>(parent)->name);
-
     return (void*)result;
 }
 
@@ -68,8 +65,7 @@ group_close(void *grp, hid_t dxpl_id, void **req)
 {
     ObjectPointers* grp_ = (ObjectPointers*) grp;
 
-    fmt::print(stderr, "Group Close\n");
-    fmt::print(stderr, "group_close: {}\n", *grp_);
+    log->trace("group_close: {}", *grp_);
 
     herr_t retval = 0;
 

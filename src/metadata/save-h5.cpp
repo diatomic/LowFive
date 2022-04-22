@@ -1,4 +1,5 @@
 #include <lowfive/metadata.hpp>
+#include <lowfive/log.hpp>
 
 namespace LowFive
 {
@@ -44,7 +45,9 @@ void save_children(const Hid& x, const Object* p)
 void
 LowFive::save(const File& f, std::string filename)
 {
-    fmt::print("Saving {} to {}\n", f.name, filename);
+    auto log = LowFive::get_logger();
+
+    log->trace("Saving {} to {}", f.name, filename);
 
     Hid fid = H5Fcreate(filename.c_str(),
                        H5F_ACC_TRUNC,

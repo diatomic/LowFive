@@ -5,6 +5,9 @@
 
 #include <hdf5.h>
 
+#include <spdlog/spdlog.h>
+#include <lowfive/log.hpp>
+
 namespace LowFive
 {
 
@@ -62,6 +65,8 @@ struct VOLBase
                                                                 // DM: made it static to make the environment-variable loading of VOL work;
                                                                 //     very unfortunate design, but it's the only way I can find to match HDF5 VOL design
     };
+
+    std::shared_ptr<spdlog::logger> log;
 
     static info_t* info;     // this needs to be static, since in the environment variable case, we need to configure it from _str_to_info
 

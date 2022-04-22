@@ -15,13 +15,13 @@ LowFive::VOLBase::
 _object_open(void *obj, const H5VL_loc_params_t *loc_params,
     H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *new_obj;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL OBJECT Open\n");
-#endif
+    log->debug("------- PASS THROUGH VOL OBJECT Open");
 
     under = o->vol->object_open(o->under_object, loc_params, opened_type, dxpl_id, req);
     if(under) {
@@ -61,13 +61,13 @@ _object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id,
     void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o_src = (pass_through_t *)src_obj;
     pass_through_t *o_dst = (pass_through_t *)dst_obj;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL OBJECT Copy\n");
-#endif
+    log->debug("------- PASS THROUGH VOL OBJECT Copy");
 
     // TODO: using o_src->vol->object_copy, not o_dst->vol->object_copy; is this right?
     ret_value = o_src->vol->object_copy(o_src->under_object, src_loc_params, src_name, o_dst->under_object, dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
@@ -103,12 +103,12 @@ herr_t
 LowFive::VOLBase::
 _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL OBJECT Get\n");
-#endif
+    log->debug("------- PASS THROUGH VOL OBJECT Get");
 
     ret_value = o->vol->object_get(o->under_object, loc_params, get_type, dxpl_id, req, arguments);
 
@@ -141,13 +141,13 @@ LowFive::VOLBase::
 _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     hid_t under_vol_id;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL OBJECT Specific\n");
-#endif
+    log->debug("------- PASS THROUGH VOL OBJECT Specific");
 
     // Save copy of underlying VOL connector ID and prov helper, in case of
     // refresh destroying the current object
@@ -184,12 +184,12 @@ LowFive::VOLBase::
 _object_optional(void *obj, int op_type, hid_t dxpl_id, void **req,
     va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL generic Optional\n");
-#endif
+    log->debug("------- PASS THROUGH VOL generic Optional");
 
     ret_value = o->vol->object_optional(o->under_object, op_type, dxpl_id, req, arguments);
 

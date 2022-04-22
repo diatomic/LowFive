@@ -20,12 +20,12 @@ _link_create_reissue(H5VL_link_create_type_t create_type,
     void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id,
     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...)
 {
+    auto log = get_logger();
+
     // TODO: is this right? making a new object from the reissued one?
     pass_through_t *o = (pass_through_t *)obj;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Create Reissue\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Create Reissue");
 
     va_list arguments;
     herr_t ret_value;
@@ -54,13 +54,13 @@ _link_create(H5VL_link_create_type_t create_type, void *obj,
     const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Create\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Create");
 
     /* Try to retrieve the "under" VOL id */
     if(o)
@@ -130,14 +130,14 @@ _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o_src = (pass_through_t *)src_obj;
     pass_through_t *o_dst = (pass_through_t *)dst_obj;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Copy\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Copy");
 
     /* Retrieve the "under" VOL id */
     if(o_src)
@@ -194,14 +194,14 @@ _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o_src = (pass_through_t *)src_obj;
     pass_through_t *o_dst = (pass_through_t *)dst_obj;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Move\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Move");
 
     /* Retrieve the "under" VOL id */
     if(o_src)
@@ -251,12 +251,12 @@ LowFive::VOLBase::
 _link_get(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Get\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Get");
 
     ret_value = o->vol->link_get(o->under_object, loc_params, o->under_vol_id, get_type, dxpl_id, req, arguments);
 
@@ -290,12 +290,12 @@ LowFive::VOLBase::
 _link_specific(void *obj, const H5VL_loc_params_t *loc_params, 
     H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Specific\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Specific");
 
     ret_value = o->vol->link_specific(o->under_object, loc_params, o->under_vol_id, specific_type, dxpl_id, req, arguments);
 
@@ -329,12 +329,12 @@ LowFive::VOLBase::
 _link_optional(void *obj, H5VL_link_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL LINK Optional\n");
-#endif
+    log->debug("------- PASS THROUGH VOL LINK Optional");
 
     ret_value = o->vol->link_optional(o->under_object, o->under_vol_id, opt_type, dxpl_id, req, arguments);
 

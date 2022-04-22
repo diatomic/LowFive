@@ -16,13 +16,13 @@ _attr_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id,
     hid_t aapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *attr;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Create\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Create");
 
     under = o->vol->attr_create(o->under_object, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
 
@@ -63,13 +63,13 @@ LowFive::VOLBase::
 _attr_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *attr;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Open\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Open");
 
     under = o->vol->attr_open(o->under_object, loc_params, name, aapl_id, dxpl_id, req);
     if(under) {
@@ -108,12 +108,12 @@ LowFive::VOLBase::
 _attr_read(void *attr, hid_t mem_type_id, void *buf,
     hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)attr;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Read\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Read");
 
     ret_value = o->vol->attr_read(o->under_object, mem_type_id, buf, dxpl_id, req);
 
@@ -148,12 +148,12 @@ LowFive::VOLBase::
 _attr_write(void *attr, hid_t mem_type_id, const void *buf,
     hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)attr;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Write\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Write");
 
     ret_value = o->vol->attr_write(o->under_object, mem_type_id, buf, dxpl_id, req);
 
@@ -187,12 +187,12 @@ LowFive::VOLBase::
 _attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Get\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Get");
 
     ret_value = o->vol->attr_get(o->under_object, get_type, dxpl_id, req, arguments);
 
@@ -226,12 +226,12 @@ LowFive::VOLBase::
 _attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Specific\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Specific");
 
     ret_value = o->vol->attr_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
 
@@ -265,12 +265,12 @@ LowFive::VOLBase::
 _attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
     va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Optional\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Optional");
 
     ret_value = o->vol->attr_optional(o->under_object, opt_type, dxpl_id, req, arguments);
 
@@ -303,12 +303,12 @@ herr_t
 LowFive::VOLBase::
 _attr_close(void *attr, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)attr;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL ATTRIBUTE Close\n");
-#endif
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Close");
 
     ret_value = o->vol->attr_close(o->under_object, dxpl_id, req);
 

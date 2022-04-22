@@ -2,8 +2,6 @@
 #include <lowfive/metadata/remote.hpp>
 #include <lowfive/metadata/dummy.hpp>
 
-
-
 int
 LowFive::DistMetadataVOL::
 remote_size(int intercomm_index)
@@ -41,13 +39,13 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
-    fmt::print(stderr, "Opening dataset (dist): {} {} {}\n", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
+    log->trace("Opening dataset (dist): {} {} {}", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
 
     // trace object back to root to build full path and file name
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
     auto filepath = parent->fullname(name);
 
-    fmt::print(stderr, "Opening dataset: {} {} {}\n", name, filepath.first, filepath.second);
+    log->trace("Opening dataset: {} {} {}", name, filepath.first, filepath.second);
 
     if (match_any(filepath,memory))
     {
@@ -63,7 +61,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
             // TODO: if only leaf name is given, could use backtrack_name to find full path
             // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
             if (ds->name[0] != '/')
-                throw MetadataError(fmt::format("Error: dataset_open(): Need full pathname for dataset {}", ds->name));
+                throw MetadataError(fmt::format("dataset_open(): Need full pathname for dataset {}", ds->name));
 
             // get the filename
             std::string filename = filepath.first;
@@ -73,7 +71,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
             // get the correct intercomm
             int loc = find_match(filename, ds->name, intercomm_locations);
             if (loc == -1)
-                throw MetadataError(fmt::format("Error dataset_open(): no intercomm found for dataset {}", ds->name));
+                throw MetadataError(fmt::format("dataset_open(): no intercomm found for dataset {}", ds->name));
             int intercomm_index = intercomm_indices[loc];
 
             // open a query
@@ -127,7 +125,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
     } else if (buf)
     {
-        throw MetadataError(fmt::format("Error: dataset_read(): neither memory, nor passthru open"));
+        throw MetadataError(fmt::format("dataset_read(): neither memory, nor passthru open"));
     }
 
     return 0;
@@ -142,7 +140,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("dset = {}, get_type = {}, req = {}\n", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
+    log->trace("dset = {}, get_type = {}, req = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // consumer with the name of a remote dataset
@@ -153,33 +151,33 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
 
         if (get_type == H5VL_DATASET_GET_SPACE)
         {
-            fmt::print("GET_SPACE\n");
+            log->trace("GET_SPACE");
             auto& dataspace = query->space;
 
             hid_t space_id = dataspace.copy();
-            fmt::print("copied space id = {}, space = {}\n", space_id, Dataspace(space_id));
+            log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
 
             hid_t *ret = va_arg(args, hid_t*);
             *ret = space_id;
-            fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
         } else if (get_type == H5VL_DATASET_GET_TYPE)
         {
-            fmt::print("GET_TYPE\n");
+            log->trace("GET_TYPE");
             auto& datatype = query->type;
 
-            fmt::print("dataset data type id = {}, datatype = {}\n",
+            log->trace("dataset data type id = {}, datatype = {}",
                     datatype.id, datatype);
 
             hid_t dtype_id = datatype.copy();
-            fmt::print("copied data type id = {}, datatype = {}\n",
+            log->trace("copied data type id = {}, datatype = {}",
                     dtype_id, Datatype(dtype_id));
 
             hid_t *ret = va_arg(args, hid_t*);
             *ret = dtype_id;
-            fmt::print("arguments = {} -> {}\n", fmt::ptr(ret), *ret);
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
         } else
         {
-            throw MetadataError(fmt::format("Warning, unknown get_type == {} in dataset_get()", get_type));
+            throw MetadataError(fmt::format("Unknown get_type == {} in dataset_get()", get_type));
         }
     } else if (unwrap(dset_))
     {
@@ -198,7 +196,7 @@ void*
 LowFive::DistMetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    fmt::print(stderr, "DistMetadataVOL::file_open()\n");
+    log->trace("DistMetadataVOL::file_open()");
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
     // if producer opens existing file
@@ -213,14 +211,14 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         // Assume: consumers must open file in read-only mode, otherwise it is producer
         // TODO: find a better solution, this might fail in many cases
         if (flags != H5F_ACC_RDONLY) {
-            fmt::print(stderr, "DistMetadataVOL::file_open(), name = {}, local file not found, but opened not in RDONLY - create empty file\n", name);
+            log->trace("DistMetadataVOL::file_open(), name = {}, local file not found, but opened not in RDONLY - create empty file", name);
             return MetadataVOL::file_create(name, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id, dxpl_id, req);
         }
 
         // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
         delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
 
-        fmt::print("Creating remote\n");
+        log->trace("Creating remote");
         RemoteFile* f = new RemoteFile(name);
         files.emplace(name, f);
         result->mdata_obj = f;
@@ -228,7 +226,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         // get an intercomm for this file
         auto locs = find_matches(name, "", intercomm_locations, true);
         if (locs.empty())
-            throw MetadataError(fmt::format("Error file_open(): no intercomm found for {}", name));
+            throw MetadataError(fmt::format("file_open(): no intercomm found for {}", name));
         // signal to every intercomm that we are opening the file;
         // technically ought to dedup the intercomms, but signalling open once
         // per pattern works too, as long as it matches file_close()
@@ -264,7 +262,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
         // get an intercomm for this file
         auto locs = find_matches(f->name, "", intercomm_locations, true);
         if (locs.empty())
-            throw MetadataError(fmt::format("Error file_close(): no intercomm found for {}", f->name));
+            throw MetadataError(fmt::format("file_close(): no intercomm found for {}", f->name));
         // signal to every intercomm that we are opening the file
         for (auto loc : locs)
         {
@@ -279,7 +277,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
     {
         if (match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
         {
-            fmt::print("Closing file {}\n", fmt::ptr(f));
+            log->trace("Closing file {}", fmt::ptr(f));
             serve_all();
         }
     }

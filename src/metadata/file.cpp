@@ -21,7 +21,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
 
     obj_ptrs->mdata_obj = mdata;
 
-    fmt::print("file_create: obj_ptr = {}, dxpl_id = {}\n", *obj_ptrs, dxpl_id);
+    log->trace("file_create: obj_ptr = {}, dxpl_id = {}", *obj_ptrs, dxpl_id);
 
     return obj_ptrs;
 }
@@ -32,7 +32,7 @@ file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **r
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
-    fmt::print(stderr, "file_optional: file = {}, opt_type = {}\n", *file_, opt_type);
+    log->trace("file_optional: file = {}, opt_type = {}", *file_, opt_type);
     // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
 
     herr_t res = 0;
@@ -46,7 +46,7 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    fmt::print(stderr, "MetadataVOL::file_open()\n");
+    log->trace("file_open()");
     ObjectPointers* obj_ptrs = nullptr;
 
     // find the file in the VOL
@@ -55,12 +55,12 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     auto it = files.find(name_);
     if (it != files.end())
     {
-        fmt::print("Found file {}\n", name_);
+        log->trace("Found file {}", name_);
         mdata = it->second;
     }
     else
     {
-        fmt::print("Didn't find file {}, creating DummyFile\n", name_);
+        log->trace("Didn't find file {}, creating DummyFile", name_);
         auto* f = new DummyFile(name);
         files.emplace(name, f);
         mdata = f;
@@ -73,7 +73,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
     obj_ptrs->mdata_obj = mdata;
 
-    fmt::print("Opened file {}: {}\n", name, *obj_ptrs);
+    log->trace("Opened file {}: {}", name, *obj_ptrs);
 
     return obj_ptrs;
 }
@@ -87,7 +87,7 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     va_list args;
     va_copy(args,arguments);
 
-    fmt::print("file_get: file = {}, get_type = {} req = {} dxpl_id = {}\n",
+    log->trace("file_get: file = {}, get_type = {} req = {} dxpl_id = {}",
             *file_, get_type, fmt::ptr(req), dxpl_id);
     // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
@@ -121,17 +121,17 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
         }
         // TODO
         else if (get_type == H5VL_FILE_GET_FILENO)          // file number
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet\n"));
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_INTENT)          // file intent
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_INTENT not implemented in memory yet\n"));
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_INTENT not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_NAME)            // file name
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_NAME not implemented in memory yet\n"));
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_NAME not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_COUNT not implemented in memory yet\n"));
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_COUNT not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_IDS not implemented in memory yet\n"));
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_IDS not implemented in memory yet"));
         else
-            throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}\n", get_type));
+            throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));
     }
 
     return result;
@@ -142,11 +142,11 @@ LowFive::MetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
-    fmt::print(stderr, "file_close: {}\n", *file_);
+    log->trace("file_close: {}", *file_);
 
     if (file_->tmp)
     {
-        fmt::print(stderr, "temporary reference, skipping close\n");
+        log->trace("temporary reference, skipping close");
         return 0;
     }
 
@@ -159,14 +159,15 @@ file_close(void *file, hid_t dxpl_id, void **req)
     if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
         // we created this file
-        f->print();
+        if (LowFive::get_log_level() <= spdlog::level::info)
+            f->print();
 
         if (!keep)
         {
             files.erase(f->name);
             delete f;       // erases all the children too
         } else
-            fmt::print("Keeping file metadata in memory\n");
+            log->trace("Keeping file metadata in memory");
     }
 
     // deliberately verbose, to emphasize checking of res
@@ -182,11 +183,11 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
-    fmt::print(stderr, "file_specific: {}\n", *file_);
+    log->trace("file_specific: {}", *file_);
 
     // debug
     if (specific_type == H5VL_FILE_FLUSH)
-        fmt::print(stderr, "file_specific(): specific_type = H5VL_FILE_FLUSH\n");
+        log->trace("file_specific(): specific_type = H5VL_FILE_FLUSH");
 
     if (unwrap(file_))
         return VOLBase::file_specific(unwrap(file_), specific_type, dxpl_id, req, arguments);
@@ -195,13 +196,13 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
     {
         if (specific_type == H5VL_FILE_FLUSH)
         {
-            fmt::print(stderr, "file_specific(): specific_type = H5VL_FILE_FLUSH: no-op for metadata\n");
+            log->trace("file_specific(): specific_type = H5VL_FILE_FLUSH: no-op for metadata");
             return 0;
         }
         else
-            throw MetadataError(fmt::format("file_specific(): specific_type {} not implemented for in-memory regime\n", specific_type));
+            throw MetadataError(fmt::format("file_specific(): specific_type {} not implemented for in-memory regime", specific_type));
     }
 
     else
-        throw MetadataError(fmt::format("file_specific(): neither passthru nor metadata are active\n"));
+        throw MetadataError(fmt::format("file_specific(): neither passthru nor metadata are active"));
 }

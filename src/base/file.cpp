@@ -16,29 +16,25 @@ void*
 LowFive::VOLBase::
 _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     info_t *info;
     pass_through_t *file;
     hid_t under_fapl_id;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL FILE Create\n");
-#endif
+    log->debug("------- PASS THROUGH VOL FILE Create");
 
     /* Get copy of our VOL info from FAPL */
     H5Pget_vol_info(fapl_id, (void **)&info);
 
-    fmt::print("got vol info: {} with vol {}\n", fmt::ptr(info), fmt::ptr(info->vol));
+    log->trace("got vol info: {} with vol {}", fmt::ptr(info), fmt::ptr(info->vol));
 
     /* Copy the FAPL */
     under_fapl_id = H5Pcopy(fapl_id);
 
-    fmt::print("fapl copied\n");
-
     /* Set the VOL ID and info for the underlying FAPL */
     H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
-
-    fmt::print("info->vol = {}\n", fmt::ptr(info->vol));
 
     /* Open the file with the underlying VOL connector */
     under = info->vol->file_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
@@ -82,14 +78,14 @@ void*
 LowFive::VOLBase::
 _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     info_t *info;
     pass_through_t *file;
     hid_t under_fapl_id;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL FILE Open\n");
-#endif
+    log->debug("------- PASS THROUGH VOL FILE Open");
 
     /* Get copy of our VOL info from FAPL */
     H5Pget_vol_info(fapl_id, (void **)&info);
@@ -143,14 +139,14 @@ LowFive::VOLBase::
 _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)file;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
-    fprintf(stderr, "------- PASS THROUGH VOL FILE Get\n");
-#endif
+    log->debug("------- PASS THROUGH VOL FILE Get");
 
-    fmt::print(stderr, "file_get: get_type = {}\n", get_type);
+    log->trace("file_get: get_type = {}", get_type);
     va_list args;
     va_copy(args, arguments);
 
@@ -160,7 +156,7 @@ _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     {
         unsigned types     = va_arg(args, unsigned);
         ssize_t *ret       = va_arg(args, ssize_t *);
-        fmt::print(stderr, "file_get: H5VL_FILE_GET_OBJ_COUNT, types = {}, ret = {}\n", types, *ret);
+        log->trace("file_get: H5VL_FILE_GET_OBJ_COUNT, types = {}, ret = {}", types, *ret);
     }
 
     /* Check for async request */
@@ -223,13 +219,13 @@ LowFive::VOLBase::
 _file_specific(void *file, H5VL_file_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)file;
     hid_t under_vol_id = -1;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL FILE Specific\n");
-#endif
+    log->debug("------- PASS THROUGH VOL FILE Specific");
 
     /* Unpack arguments to get at the child file pointer when mounting a file */
     if(specific_type == H5VL_FILE_MOUNT) {
@@ -338,12 +334,12 @@ LowFive::VOLBase::
 _file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)file;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL File Optional\n");
-#endif
+    log->debug("------- PASS THROUGH VOL File Optional");
 
     ret_value = o->vol->file_optional(o->under_object, opt_type, dxpl_id, req, arguments);
 
@@ -376,12 +372,12 @@ herr_t
 LowFive::VOLBase::
 _file_close(void *file, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)file;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL FILE Close\n");
-#endif
+    log->debug("------- PASS THROUGH VOL FILE Close");
 
     ret_value = o->vol->file_close(o->under_object, dxpl_id, req);
 
