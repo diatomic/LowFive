@@ -1,5 +1,7 @@
 #pragma once
 
+#include    <lowfive/log.hpp>
+
 namespace LowFive
 {
 
@@ -12,8 +14,9 @@ struct File: public Object
     File(std::string filename_, Hid fcpl_, Hid fapl_):
         Object(ObjectType::File, filename_), fcpl(fcpl_), fapl(fapl_)
     {
-        // debug
-        fmt::print(stderr, "Creating metadata for {}\n", filename_);
+        auto log = LowFive::get_logger();
+
+        log->trace("Creating metadata for {}", filename_);
     }
 
     // preorder depth-first traversal

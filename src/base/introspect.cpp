@@ -13,12 +13,12 @@ herr_t
 LowFive::VOLBase::
 _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL INTROSPECT GetConnCls\n");
-#endif
+    log->debug("------- PASS THROUGH VOL INTROSPECT GetConnCls");
 
     /* Check for querying this connector's class */
     if(H5VL_GET_CONN_LVL_CURR == lvl) {
@@ -52,12 +52,12 @@ herr_t
 LowFive::VOLBase::
 _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL INTROSPECT OptQuery\n");
-#endif
+    log->debug("------- PASS THROUGH VOL INTROSPECT OptQuery");
 
     ret_value = o->vol->introspect_opt_query(o->under_object, cls, opt_type, supported);
 

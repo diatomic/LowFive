@@ -16,12 +16,12 @@ herr_t
 LowFive::VOLBase::
 _token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL TOKEN Compare\n");
-#endif
+    log->debug("------- PASS THROUGH VOL TOKEN Compare");
 
     /* Sanity checks */
     assert(obj);

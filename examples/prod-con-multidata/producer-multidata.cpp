@@ -26,8 +26,6 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
         fmt::print(stderr, "producer: shared {} local size {} intercomms size {} intercomm1 size {}\n",
                 shared, local.size(), intercomms.size(), intercomms[0].size());
 
-    l5::create_logger("debug");
-
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomms);
 

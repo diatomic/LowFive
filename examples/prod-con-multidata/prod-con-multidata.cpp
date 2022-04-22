@@ -19,6 +19,11 @@ fail_on_hdf5_error(hid_t stack_id, void*)
 
 int main(int argc, char* argv[])
 {
+    // logging output from LowFive (comment out for no output)
+//     l5::create_logger("trace");         // generates the most output
+//     l5::create_logger("debug");         // generates less output
+//     l5::create_logger("info");          // generates even less output (prints metadata tree)
+
     int   dim = DIM;
 
     diy::mpi::environment     env(argc, argv, MPI_THREAD_MULTIPLE);

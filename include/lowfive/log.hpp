@@ -25,6 +25,17 @@ get_logger()
 }
 
 inline
+spd::level::level_enum
+get_log_level()
+{
+    auto log = spd::get("lowfive");
+    if (log)
+        return log->level();
+    else
+        return spd::level::off;
+}
+
+inline
 std::shared_ptr<spd::logger>
 create_logger(std::string log_level)
 {

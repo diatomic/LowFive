@@ -16,13 +16,13 @@ _group_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id,
     hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *group;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL GROUP Create\n");
-#endif
+    log->debug("------- PASS THROUGH VOL GROUP Create");
 
     under = o->vol->group_create(o->under_object, loc_params, name, lcpl_id, gcpl_id,  gapl_id, dxpl_id, req);
     if(under) {
@@ -62,13 +62,13 @@ LowFive::VOLBase::
 _group_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *group;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL GROUP Open\n");
-#endif
+    log->debug("------- PASS THROUGH VOL GROUP Open");
 
     under = o->vol->group_open(o->under_object, loc_params, name, gapl_id, dxpl_id, req);
     if(under) {
@@ -106,12 +106,12 @@ herr_t
 LowFive::VOLBase::
 _group_close(void *grp, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)grp;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    printf("------- PASS THROUGH VOL GROUP close\n");
-#endif
+    log->debug("------- PASS THROUGH VOL GROUP close");
 
     ret_value = o->vol->group_close(o->under_object, dxpl_id, req);
 

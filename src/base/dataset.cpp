@@ -16,13 +16,13 @@ _dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id,
     hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *dset;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Create\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Create");
 
     under = o->vol->dataset_create(o->under_object, loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
 
@@ -63,13 +63,13 @@ LowFive::VOLBase::
 _dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *dset;
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Open\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Open");
 
     under = o->vol->dataset_open(o->under_object, loc_params, name, dapl_id, dxpl_id, req);
 
@@ -108,12 +108,12 @@ herr_t
 LowFive::VOLBase::
 _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)dset;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Read\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Read");
 
     ret_value = o->vol->dataset_read(o->under_object, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
@@ -145,12 +145,12 @@ herr_t
 LowFive::VOLBase::
 _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)dset;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Write\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Write");
 
     ret_value = o->vol->dataset_write(o->under_object, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
 
@@ -182,12 +182,12 @@ herr_t
 LowFive::VOLBase::
 _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)dset;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Get\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Get");
 
     ret_value = o->vol->dataset_get(o->under_object, get_type, dxpl_id, req, arguments);
 
@@ -220,13 +220,13 @@ LowFive::VOLBase::
 _dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     hid_t under_vol_id;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL H5Dspecific\n");
-#endif
+    log->debug("------- PASS THROUGH VOL H5Dspecific");
 
     // Save copy of underlying VOL connector ID and prov helper, in case of
     // refresh destroying the current object
@@ -264,12 +264,12 @@ LowFive::VOLBase::
 _dataset_optional(void *obj, H5VL_dataset_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-#ifdef ENABLE_PASSTHRU_LOGGING
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Optional\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Optional");
 
     ret_value = o->vol->dataset_optional(o->under_object, opt_type, dxpl_id, req, arguments);
 
@@ -302,12 +302,12 @@ herr_t
 LowFive::VOLBase::
 _dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     pass_through_t *o = (pass_through_t *)dset;
     herr_t ret_value;
 
-#ifdef LOWFIVE_ENABLE_PASSTHRU_LOGGING 
-    fprintf(stderr, "------- PASS THROUGH VOL DATASET Close\n");
-#endif
+    log->debug("------- PASS THROUGH VOL DATASET Close");
 
     ret_value = o->vol->dataset_close(o->under_object, dxpl_id, req);
 
