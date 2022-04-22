@@ -246,29 +246,8 @@ dataset_specific(void *obj, H5VL_dataset_specific_t specific_type, hid_t dxpl_id
             {
                 // adapted from H5VLnative_dataset.c, H5VL__native_dataset_specific()
                 const hsize_t *size = va_arg(args, const hsize_t*);
-
                 Dataspace& space = static_cast<Dataset*>(obj_->mdata_obj)->space;
-
-                // NB: updating overall dataspace, not individual data triples
-                for (auto i = 0; i < space.dim; i++)
-                {
-                    if (space.maxdims[i] == H5S_UNLIMITED || space.maxdims[i] >= size[i])       // ensure size does not exceed max allowed
-                    {
-                        if (space.max[i] - space.min[i] != space.dims[i] - 1)                   // sanity check that max, min agree with current size
-                            throw MetadataError(fmt::format("dataset_specific: space max, min do not correspond to space size"));
-                        space.dims[i]   = size[i];                                              // update size
-                        space.max[i]    = space.min[i] + space.dims[i] - 1;                     // update max to reflect new size, keeping min original
-                    }
-                    else
-                        throw MetadataError(fmt::format("Warning: dataset_specific(): for case H5VL_DATASET_SET_EXTENT, trying to set size larger than maxdims in dimension {}", i));
-                }
-
-                // update HDF5's internal representation
-                std::vector<hsize_t> maxdims(space.dim);
-                for (auto i = 0; i < space.dim; i++)
-                    maxdims[i] = space.dims[i];                                                 // copying size_t to hsize_t
-                H5Sset_extent_simple(space.id, space.dim, size, &maxdims[0]);
-
+                space.set_extent(size); // NB: updating overall dataspace, not individual data triples
                 break;
             }
             case H5VL_DATASET_FLUSH:

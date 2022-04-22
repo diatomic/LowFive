@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 namespace LowFive
 {
 
@@ -101,6 +103,39 @@ struct Dataspace: Hid
     size_t  size() const
     {
         return H5Sget_simple_extent_npoints(id);
+    }
+
+    void    set_extent(const hsize_t* size, const hsize_t* maxsize = nullptr)
+    {
+        assert(cls == Class::simple);
+
+        if (maxsize)
+        {
+            for (auto i = 0; i < dim; i++)
+                maxdims[i] = maxsize[i];
+        }
+
+        for (auto i = 0; i < dim; i++)
+        {
+            if (maxdims[i] == H5S_UNLIMITED || maxdims[i] >= size[i])   // ensure size does not exceed max allowed
+            {
+                dims[i] = size[i];                                      // update size
+                max[i]  = min[i] + dims[i] - 1;                         // update max to reflect new size, keeping min original
+            }
+            else
+                throw MetadataError(fmt::format("Dataspace::set_extent(): trying to set size larger than maxdims in dimension {}", i));
+        }
+
+        // update HDF5's internal representation
+        if (maxsize)
+            H5Sset_extent_simple(id, dim, size, maxsize);
+        else
+        {
+            std::vector<hsize_t> maxdims(dim);
+            for (auto i = 0; i < dim; i++)
+                maxdims[i] = this->maxdims[i];  // copying size_t to hsize_t
+            H5Sset_extent_simple(id, dim, size, maxdims.data());
+        }
     }
 
     bool    intersects(const Dataspace& other) const
