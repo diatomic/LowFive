@@ -2,11 +2,6 @@ project                     (LowFive)
 cmake_minimum_required      (VERSION 3.9)
 
 option                      (wrapped_mpi    "MPI compiler wrapper requires no further MPI libs"     OFF)
-option                      (passthru_logging   "Enable passthru logging"                           ON)
-
-if                          (passthru_logging)
-add_definitions             (-DLOWFIVE_ENABLE_PASSTHRU_LOGGING)
-endif                       ()
 
 # C++11
 if                          (NOT DEFINED CMAKE_CXX_STANDARD)
