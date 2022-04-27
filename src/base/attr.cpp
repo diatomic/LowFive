@@ -1,4 +1,5 @@
 #include <lowfive/vol-base.hpp>
+#include "../log-private.hpp"
 
 /*-------------------------------------------------------------------------
  * Function:    attr_create

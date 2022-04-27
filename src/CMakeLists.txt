@@ -21,6 +21,7 @@ add_library             (lowfive SHARED
                             metadata/blob.cpp
                             metadata/token.cpp
                             metadata/link.cpp
+                            log.cpp
                             ${BACKWARD_ENABLE}
                         )
 

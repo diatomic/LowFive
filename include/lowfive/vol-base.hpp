@@ -4,8 +4,6 @@
 #include <string>
 
 #include <hdf5.h>
-
-#include <spdlog/spdlog.h>
 #include <lowfive/log.hpp>
 
 namespace LowFive

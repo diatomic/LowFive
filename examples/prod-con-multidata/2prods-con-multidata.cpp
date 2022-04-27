@@ -9,6 +9,8 @@
 
 #include    "prod-con-multidata.hpp"
 
+#include    <lowfive/log.hpp>
+
 herr_t
 fail_on_hdf5_error(hid_t stack_id, void*)
 {
@@ -43,6 +45,7 @@ int main(int argc, char* argv[])
     std::string               producer1_exec    = "./producer1-multidata.hx";   // name of producer1 executable
     std::string               producer2_exec    = "./producer2-multidata.hx";   // name of producer2 executable
     std::string               consumer_exec     = "./consumer-multidata.hx";    // name of consumer executable
+    std::string               log_level         = "";
 
     // default global data bounds
     Bounds domain { dim };
@@ -69,6 +72,7 @@ int main(int argc, char* argv[])
         >> Option(     "prod1_exec",producer1_exec, "name of producer1 executable")
         >> Option(     "prod2_exec",producer2_exec, "name of producer2 executable")
         >> Option(     "con_exec",  consumer_exec,  "name of consumer executable")
+        >> Option('l', "log",       log_level,      "level for the log output (trace, debug, info, ...)")
         ;
     ops
         >> Option('x',  "max-x",    domain.max[0],  "domain max x")
@@ -92,6 +96,9 @@ int main(int argc, char* argv[])
         }
         return 1;
     }
+
+    if (!log_level.empty())
+        l5::create_logger(log_level);
 
     if (metadata && !passthru)
         if (world.rank() == 0)

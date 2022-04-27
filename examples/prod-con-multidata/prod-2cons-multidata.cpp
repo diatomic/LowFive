@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     std::string               producer_exec     = "./producer-multidata.hx";    // name of producer executable
     std::string               consumer1_exec    = "./consumer1-multidata.hx";   // name of consumer1 executable
     std::string               consumer2_exec    = "./consumer2-multidata.hx";   // name of consumer2 executable
-
+    std::string               log_level         = "";
 
     // default global data bounds
     Bounds domain { dim };
@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
         >> Option(     "prod_exec", producer_exec,  "name of producer executable")
         >> Option(     "con1_exec", consumer1_exec, "name of consumer executable")
         >> Option(     "con2_exec", consumer2_exec, "name of consumer executable")
+        >> Option('l', "log",       log_level,      "level for the log output (trace, debug, info, ...)")
         ;
     ops
         >> Option('x',  "max-x",    domain.max[0],  "domain max x")
@@ -93,6 +94,9 @@ int main(int argc, char* argv[])
         }
         return 1;
     }
+
+    if (!log_level.empty())
+        l5::create_logger(log_level);
 
     if (metadata && !passthru)
         if (world.rank() == 0)

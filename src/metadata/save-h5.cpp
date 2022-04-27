@@ -1,5 +1,5 @@
 #include <lowfive/metadata.hpp>
-#include <lowfive/log.hpp>
+#include "../log-private.hpp"
 
 namespace LowFive
 {

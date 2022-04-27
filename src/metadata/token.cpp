@@ -1,4 +1,5 @@
 #include <lowfive/vol-metadata.hpp>
+#include "../log-private.hpp"
 
 herr_t
 LowFive::MetadataVOL::

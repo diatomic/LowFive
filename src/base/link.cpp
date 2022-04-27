@@ -2,6 +2,7 @@
 #include <lowfive/vol-base.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include "../log-private.hpp"
 
 /*-------------------------------------------------------------------------
  * Function:    pass_through_link_create_reissue

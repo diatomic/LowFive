@@ -1,6 +1,7 @@
 #include <lowfive/vol-base.hpp>
 #include <fmt/core.h>
 #include <fmt/ostream.h>
+#include "../log-private.hpp"
 
 hid_t LowFive::VOLBase::connector_id = -1;
 

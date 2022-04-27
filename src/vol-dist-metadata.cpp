@@ -1,6 +1,7 @@
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/metadata/remote.hpp>
 #include <lowfive/metadata/dummy.hpp>
+#include "log-private.hpp"
 
 int
 LowFive::DistMetadataVOL::

@@ -1,6 +1,7 @@
 #include <lowfive/vol-base.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include "../log-private.hpp"
 
 /*-------------------------------------------------------------------------
  * Function:    file_create

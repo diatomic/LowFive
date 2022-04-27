@@ -1,5 +1,6 @@
 #include <lowfive/vol-base.hpp>
 #include <assert.h>
+#include "../log-private.hpp"
 
 /*---------------------------------------------------------------------------
  * Function:    _token_cmp

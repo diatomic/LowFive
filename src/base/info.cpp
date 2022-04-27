@@ -3,6 +3,7 @@
 #include <cassert>
 #include <fmt/core.h>
 #include <fmt/ostream.h>
+#include "../log-private.hpp"
 
 LowFive::VOLBase::info_t* LowFive::VOLBase::info = NULL;
 LowFive::VOLBase* LowFive::VOLBase::info_t::vol = NULL;

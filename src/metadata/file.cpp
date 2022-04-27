@@ -1,5 +1,6 @@
 #include <lowfive/vol-metadata.hpp>
 #include <cassert>
+#include "../log-private.hpp"
 
 void*
 LowFive::MetadataVOL::
