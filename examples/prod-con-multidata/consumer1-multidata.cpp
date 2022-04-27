@@ -2,7 +2,8 @@
 #include <thread>
 #include "prod-con-multidata.hpp"
 
-using communicator = diy::mpi::communicator;
+using communicator = MPI_Comm;
+using diy_comm = diy::mpi::communicator;
 
 extern "C"
 {
@@ -21,12 +22,14 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
                  int threads, int mem_blocks,
                  int con_nblocks)
 {
-    if (intercomms.size() == 2)
-        fmt::print(stderr, "consumer1: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
-                shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
-    else
-        fmt::print(stderr, "consumer1: shared {} local size {} intercomms size {} intercomm1 size {}\n",
-                shared, local.size(), intercomms.size(), intercomms[0].size());
+    diy::mpi::communicator local_(local);
+
+    //if (intercomms.size() == 2)
+    //    fmt::print(stderr, "consumer1: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
+    //            shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
+    //else
+    //    fmt::print(stderr, "consumer1: shared {} local size {} intercomms size {} intercomm1 size {}\n",
+    //            shared, local.size(), intercomms.size(), intercomms[0].size());
 
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomms);
@@ -59,14 +62,14 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
     if (passthru && !metadata && !shared)
     {
         for (auto& intercomm: intercomms)
-            intercomm.barrier();
+            diy_comm(intercomm).barrier();
     }
 
     else if (passthru && !metadata && shared)
     {
         int a;                                  // it doesn't matter what we receive, for synchronization only
         for (auto& intercomm: intercomms)
-            intercomm.recv(local.rank(), 0, a);
+            diy_comm(intercomm).recv(local_.rank(), 0, a);
     }
 
     // open the file, dataset, dataspace
@@ -99,9 +102,9 @@ void consumer1_f (communicator& local, const std::vector<communicator>& intercom
             &Block::save,
             &Block::load);
     AddBlock                        con_create(con_master, 0, 0, con_nblocks);
-    diy::ContiguousAssigner         con_assigner(local.size(), con_nblocks);
+    diy::ContiguousAssigner         con_assigner(local_.size(), con_nblocks);
     diy::RegularDecomposer<Bounds>  con_decomposer(dim, domain, con_nblocks);
-    con_decomposer.decompose(local.rank(), con_assigner, con_create);
+    con_decomposer.decompose(local_.rank(), con_assigner, con_create);
 
     // read the grid data
     con_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)

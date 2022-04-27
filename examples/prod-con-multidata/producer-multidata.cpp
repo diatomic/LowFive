@@ -1,7 +1,8 @@
 #include <diy/mpi/communicator.hpp>
 #include "prod-con-multidata.hpp"
 
-using communicator = diy::mpi::communicator;
+using communicator = MPI_Comm;
+using diy_comm = diy::mpi::communicator;
 
 extern "C" {
 void producer_f (communicator& local, const std::vector<communicator>& intercomms,
@@ -19,12 +20,14 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
                  Bounds domain,
                  int global_nblocks, int dim, size_t local_num_points)
 {
-    if (intercomms.size() == 2)
-        fmt::print(stderr, "producer: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
-                shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
-    else
-        fmt::print(stderr, "producer: shared {} local size {} intercomms size {} intercomm1 size {}\n",
-                shared, local.size(), intercomms.size(), intercomms[0].size());
+    diy::mpi::communicator local_(local);
+
+    //if (intercomms.size() == 2)
+    //    fmt::print(stderr, "producer: shared {} local size {} intercomms size {} intercomm1 size {} intercomm2 size {}\n",
+    //            shared, local.size(), intercomms.size(), intercomms[0].size(), intercomms[1].size());
+    //else
+    //    fmt::print(stderr, "producer: shared {} local size {} intercomms size {} intercomm1 size {}\n",
+    //            shared, local:.size(), intercomms.size(), intercomms[0].size());
 
     // set up lowfive
     l5::DistMetadataVOL vol_plugin(local, intercomms);
@@ -65,9 +68,9 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
             &Block::load);
     size_t global_num_points = local_num_points * global_nblocks;
     AddBlock                        prod_create(prod_master, local_num_points, global_num_points, global_nblocks);
-    diy::ContiguousAssigner         prod_assigner(local.size(), global_nblocks);
+    diy::ContiguousAssigner         prod_assigner(local_.size(), global_nblocks);
     diy::RegularDecomposer<Bounds>  prod_decomposer(dim, domain, global_nblocks);
-    prod_decomposer.decompose(local.rank(), prod_assigner, prod_create);
+    prod_decomposer.decompose(local_.rank(), prod_assigner, prod_create);
 
     // create a new file and group using default properties
     hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
@@ -118,15 +121,15 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     if (passthru && !metadata && !shared)
     {
         for (auto& intercomm: intercomms)
-            intercomm.barrier();
+            diy_comm(intercomm).barrier();
     }
 
     else if (passthru && !metadata && shared)
     {
-        local.barrier();
+        local_.barrier();
         int a = 0;                          // it doesn't matter what we send, for synchronization only
         for (auto& intercomm : intercomms)
-            intercomm.send(local.rank(), 0, a);
+            diy_comm(intercomm).send(local_.rank(), 0, a);
     }
 }
 

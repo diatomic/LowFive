@@ -146,20 +146,20 @@ int main(int argc, char* argv[])
     H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
     // communicator management
-    using communicator = diy::mpi::communicator;
+    using communicator = MPI_Comm;
     MPI_Comm intercomm_;
     std::vector<communicator> producer_intercomms, consumer_intercomms;
     communicator p_c_intercomm;
     communicator local;
     communicator producer_comm, consumer_comm;
-    producer_comm.duplicate(world);
-    consumer_comm.duplicate(world);
+    MPI_Comm_dup(world, &producer_comm);
+    MPI_Comm_dup(world, &consumer_comm);
 
     if (shared)
     {
-        producer_comm.duplicate(world);
-        consumer_comm.duplicate(world);
-        p_c_intercomm.duplicate(world);
+        MPI_Comm_dup(world, &producer_comm);
+        MPI_Comm_dup(world, &consumer_comm);
+        MPI_Comm_dup(world, &p_c_intercomm);
         producer_intercomms.push_back(p_c_intercomm);
         consumer_intercomms.push_back(p_c_intercomm);
     }
@@ -167,7 +167,7 @@ int main(int argc, char* argv[])
     {
         if (world.size() > 1)
         {
-            local = world.split(producer);
+            MPI_Comm_split(world, producer ? 0 : 1, 0, &local);
 
             if (producer)
             {

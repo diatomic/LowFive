@@ -42,9 +42,9 @@ PYBIND11_MODULE(_lowfive, m)
              {
                 return new communicator(*static_cast<MPI_Comm*>(reinterpret_cast<void*>(comm_)));
              }))
-        .def_property_readonly("size", &communicator::size)
-        .def_property_readonly("rank", &communicator::rank)
-        .def_property_readonly("comm", &communicator::handle)
+        //.def_property_readonly("size", &communicator::size)
+        //.def_property_readonly("rank", &communicator::rank)
+        //.def_property_readonly("comm", &communicator::handle)
     ;
 
 

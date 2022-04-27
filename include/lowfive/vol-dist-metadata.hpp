@@ -1,13 +1,9 @@
 #pragma     once
 
 #include    <vector>
-#include    <fmt/core.h>
-#include    "vol-metadata.hpp"
-#include    "index.hpp"
-#include    "query.hpp"
-#include    <diy/types.hpp>
+#include    <mpi.h>
 
-#include    "metadata/serialization.hpp"
+#include    "vol-metadata.hpp"
 
 namespace LowFive
 {
@@ -15,9 +11,9 @@ namespace LowFive
 // custom VOL object for distributed metadata
 struct DistMetadataVOL: public LowFive::MetadataVOL
 {
-    using communicator      = diy::mpi::communicator;
+    using communicator      = MPI_Comm;
     using communicators     = std::vector<communicator>;
-    using ServeData         = Index::ServeData;
+    using ServeData         = Datasets;
     using DataIntercomms    = std::vector<int>;
 
     communicator    local;
@@ -29,8 +25,8 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     LocationPatterns    intercomm_locations;
     DataIntercomms      intercomm_indices;
 
-                    DistMetadataVOL(diy::mpi::communicator  local_,
-                                    diy::mpi::communicator  intercomm_):
+                    DistMetadataVOL(communicator  local_,
+                                    communicator  intercomm_):
                         DistMetadataVOL(local_, communicators { std::move(intercomm_) })
                     {}
 

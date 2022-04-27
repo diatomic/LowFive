@@ -17,7 +17,7 @@ struct Query: public IndexQuery
 
     // consumer versions of the constructor
 
-    Query(communicator& local_, communicators& intercomms_, int remote_size_, int intercomm_index_ = 0):
+    Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size_, int intercomm_index_ = 0):
                               IndexQuery(local_, intercomms_),
                               remote_size(remote_size_),
                               intercomm_index(intercomm_index_)

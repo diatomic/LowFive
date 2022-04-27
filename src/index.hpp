@@ -33,14 +33,14 @@ struct Index: public IndexQuery
     using IndexedDatasets       = std::map<std::string, IndexedDataset>;
     using IDsMap                = std::map<std::string, int>;
     using IDsVector             = std::vector<std::string>;
-    using ServeData             = std::vector<Dataset*>;            // datasets producer is serving
+    using ServeData             = Datasets;            // datasets producer is serving
 
     IndexedDatasets             index_data; // local data for multiple datasets
     IDsMap                      ids_map;
     IDsVector                   ids_vector;
 
     // producer version of the constructor
-                        Index(communicator& local_, communicators& intercomms_, const ServeData& serve_data):
+                        Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, const ServeData& serve_data):
                             IndexQuery(local_, intercomms_)
     {
         // TODO: sort serve_data by name, to make sure the order is the same on all ranks
@@ -50,7 +50,7 @@ struct Index: public IndexQuery
         {
             std::string filename, name;
             std::tie(filename,name) = ds->fullname();
-            auto it = index_data.emplace(name, IndexedDataset(ds, local.size())).first;
+            auto it = index_data.emplace(name, IndexedDataset(ds, IndexQuery::local.size())).first;
 
             ids_map[name] = id++;
             ids_vector.push_back(name);

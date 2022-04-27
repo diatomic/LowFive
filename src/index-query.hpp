@@ -36,10 +36,12 @@ struct IndexQuery
                     consumer            // communication from consumer
                 };
 
-                        IndexQuery(communicator& local_, communicators& intercomms_):
-                            local(local_),
-                            intercomms(intercomms_)
-    {}
+                        IndexQuery(MPI_Comm local_, std::vector<MPI_Comm> intercomms_):
+                            local(local_)
+    {
+        for (auto comm : intercomms_)
+            intercomms.emplace_back(comm);
+    }
 
     // serialize and send
     template<class T>

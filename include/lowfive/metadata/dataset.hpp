@@ -70,4 +70,6 @@ struct Dataset : public Object
     }
 };
 
+using Datasets = std::vector<Dataset*>;
+
 }

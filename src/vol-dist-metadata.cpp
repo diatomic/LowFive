@@ -2,6 +2,9 @@
 #include <lowfive/metadata/remote.hpp>
 #include <lowfive/metadata/dummy.hpp>
 #include "log-private.hpp"
+#include "index.hpp"
+#include "query.hpp"
+#include <lowfive/metadata/serialization.hpp>
 
 int
 LowFive::DistMetadataVOL::
@@ -11,7 +14,7 @@ remote_size(int intercomm_index)
     int remote_size;
     int is_inter; MPI_Comm_test_inter(intercomms[intercomm_index], &is_inter);
     if (!is_inter)
-        remote_size = intercomms[intercomm_index].size();
+        MPI_Comm_size(intercomms[intercomm_index], &remote_size);
     else
         MPI_Comm_remote_size(intercomms[intercomm_index], &remote_size);
 
