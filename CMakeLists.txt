@@ -35,7 +35,7 @@ add_subdirectory            (ext/diy)
 set                         (libraries ${libraries} diy)
 
 # fmt
-option                      (FMT_INSTALL "" ON)
+option                      (FMT_INSTALL "" OFF)
 add_subdirectory            (ext/fmt)
 set                         (libraries ${libraries} fmt::fmt)
 

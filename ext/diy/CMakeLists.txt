@@ -250,25 +250,25 @@ configure_package_config_file(
     "${PROJECT_BINARY_DIR}/diy-config.cmake"
     INSTALL_DESTINATION ".")
 
-# install targets
-if (NOT DEFINED diy_install_only_libraries) # defined by parent project if building for binary distribution
-    install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/${diy_prefix} DESTINATION ${diy_install_include_dir})
+## install targets
+#if (NOT DEFINED diy_install_only_libraries) # defined by parent project if building for binary distribution
+#    install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/${diy_prefix} DESTINATION ${diy_install_include_dir})
 
-    if (build_diy_mpi_lib)
-        install(FILES ${PROJECT_BINARY_DIR}/include/${diy_prefix}/mpi/mpitypes.hpp DESTINATION ${diy_install_include_dir}/${diy_prefix}/mpi)
-    endif()
-endif()
+#    if (build_diy_mpi_lib)
+#        install(FILES ${PROJECT_BINARY_DIR}/include/${diy_prefix}/mpi/mpitypes.hpp DESTINATION ${diy_install_include_dir}/${diy_prefix}/mpi)
+#    endif()
+#endif()
 
-install(TARGETS ${diy_targets} EXPORT ${diy_export_name}
-    ARCHIVE DESTINATION ${diy_install_lib_dir}
-    LIBRARY DESTINATION ${diy_install_lib_dir}
-    RUNTIME DESTINATION ${diy_install_bin_dir})
+#install(TARGETS ${diy_targets} EXPORT ${diy_export_name}
+#    ARCHIVE DESTINATION ${diy_install_lib_dir}
+#    LIBRARY DESTINATION ${diy_install_lib_dir}
+#    RUNTIME DESTINATION ${diy_install_bin_dir})
 
-if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR) # Only generate these files when diy is the main project
-  export(EXPORT ${diy_export_name} NAMESPACE DIY:: FILE "${PROJECT_BINARY_DIR}/diy-targets.cmake")
-  install(EXPORT ${diy_export_name} NAMESPACE DIY:: DESTINATION "." FILE diy-targets.cmake)
-  install(FILES "${PROJECT_BINARY_DIR}/diy-config.cmake" DESTINATION ".")
-endif()
+#if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR) # Only generate these files when diy is the main project
+#  export(EXPORT ${diy_export_name} NAMESPACE DIY:: FILE "${PROJECT_BINARY_DIR}/diy-targets.cmake")
+#  install(EXPORT ${diy_export_name} NAMESPACE DIY:: DESTINATION "." FILE diy-targets.cmake)
+#  install(FILES "${PROJECT_BINARY_DIR}/diy-config.cmake" DESTINATION ".")
+#endif()
 
 if      (python)
     add_subdirectory(bindings/python)
