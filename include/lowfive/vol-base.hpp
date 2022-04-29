@@ -2,6 +2,7 @@
 #define LOWFIVE_VOL_BASE_HPP
 
 #include <string>
+#include <memory>
 
 #include <hdf5.h>
 #include <lowfive/log.hpp>
