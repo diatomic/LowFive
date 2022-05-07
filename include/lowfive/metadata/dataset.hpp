@@ -34,8 +34,12 @@ struct Dataset : public Object
 
     void write(Datatype type, Dataspace memory, Dataspace file, const void* buf)
     {
-        Dataspace& memory_ds = (memory.id != H5S_ALL ? memory : space);
-        Dataspace& file_ds   = (file.id != H5S_ALL   ? file   : space);
+        // make copies of the file and memory dataspaces here to keep their boxes as they were at this moment
+        Dataspace& memory_ds_1 = (memory.id != H5S_ALL ? memory : space);
+        Dataspace memory_ds = Dataspace(memory_ds_1.copy(), true);
+
+        Dataspace& file_ds_1 = (file.id != H5S_ALL ? file : space);
+        Dataspace file_ds = Dataspace(file_ds_1.copy(), true);
 
         if (ownership == Ownership::lowfive)
         {
