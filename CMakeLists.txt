@@ -2,6 +2,7 @@ project                     (LowFive)
 cmake_minimum_required      (VERSION 3.9)
 
 option                      (wrapped_mpi    "MPI compiler wrapper requires no further MPI libs"     OFF)
+option                      (python         "Build python bindings"                                 ON)
 
 # C++11
 if                          (NOT DEFINED CMAKE_CXX_STANDARD)
@@ -105,5 +106,7 @@ endforeach                  ()
 install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
 install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
 
-add_subdirectory            (ext/pybind11)
-add_subdirectory            (bindings/python)
+if                          (python)
+    add_subdirectory        (ext/pybind11)
+    add_subdirectory        (bindings/python)
+endif                       ()
