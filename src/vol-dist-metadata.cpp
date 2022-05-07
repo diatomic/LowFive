@@ -6,6 +6,14 @@
 #include "query.hpp"
 #include <lowfive/metadata/serialization.hpp>
 
+
+LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
+    DistMetadataVOL(local_, communicators { std::move(intercomm_) })
+{
+    log->trace("DistMetadataVOL ctor: this = {}", fmt::ptr(this));
+}
+
+
 int
 LowFive::DistMetadataVOL::
 remote_size(int intercomm_index)
@@ -25,6 +33,8 @@ void
 LowFive::DistMetadataVOL::
 serve_all()
 {
+    log->trace("enter serve_all, serve_data.size = {}", serve_data.size());
+
     // serve datasets (producer only)
     if (serve_data.size())              // only producer pushed any datasets to serve_data
     {
@@ -35,12 +45,16 @@ serve_all()
             delete ds;
         serve_data.clear();
     }
+
+    log->trace("serve_all done");
 }
 
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
+    log->trace("enter DistMetadataVOL::dataset_open");
+
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
     log->trace("Opening dataset (dist): {} {} {}", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
@@ -93,6 +107,7 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
+    log->trace("enter DistMetadataVOL::dataset_close");
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     if (dset_->mdata_obj)
     {
@@ -113,6 +128,7 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
+    log->trace("enter DistMetadataVOL::dataset_read");
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
     RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj);
@@ -144,7 +160,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
-    log->trace("dset = {}, get_type = {}, req = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
+    log->trace("DistMetadataVOL::dataset_get dset = {}, get_type = {}, req = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // consumer with the name of a remote dataset
@@ -251,6 +267,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
+    log->trace("Enter DistMetadataVOL::file_close, mdata_obj = {}", fmt::ptr(file_->mdata_obj));
     // this is a little too closely coupled to MetadataVOL::file_close(), but
     // it closes the file before starting to serve, which may be useful in some
     // scenarios
@@ -262,6 +279,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
     if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_->mdata_obj))
     {
+        log->trace("DistMetadataVOL::file_close, remote file {}", f->name);
         // signal that we are done
         // get an intercomm for this file
         auto locs = find_matches(f->name, "", intercomm_locations, true);
@@ -279,12 +297,15 @@ file_close(void *file, hid_t dxpl_id, void **req)
         file_->mdata_obj = nullptr;
     } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
+        log->trace("DistMetadataVOL::file_close, local file {}", f->name);
         if (match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
         {
             log->trace("Closing file {}", fmt::ptr(f));
             serve_all();
         }
     }
+
+    log->trace("DistMetadataVOL: calling file_close of base class {}", fmt::ptr(file));
 
     return MetadataVOL::file_close(file, dxpl_id, req);     // this is almost redundant; removes mdata_obj, if it's a File
 }

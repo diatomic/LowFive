@@ -6,6 +6,7 @@ void*
 LowFive::MetadataVOL::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    log->trace("enter MetadataVOL::file_create, name ={}", name);
     ObjectPointers* obj_ptrs = nullptr;
 
     // create our file metadata; NB: we build the in-memory hierarchy regardless of whether we match memory
@@ -15,10 +16,15 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     files.emplace(name_, f);
     mdata = f;
 
-    if (match_any(name, "", passthru, true))
+    log->trace("MetadataVOL::file_create, name ={}, created File f= {}", name, fmt::ptr(f));
+
+    if (match_any(name, "", passthru, true)) {
+        log->trace("MetadataVOL::file_create, name ={}, calling VOLBase for passthru", name);
         obj_ptrs = wrap(VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req));
-    else
+    } else {
+        log->trace("MetadataVOL::file_create, name ={}, wrapping nullptr", name);
         obj_ptrs = wrap(nullptr);
+    }
 
     obj_ptrs->mdata_obj = mdata;
 
@@ -143,7 +149,7 @@ LowFive::MetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
-    log->trace("file_close: {}", *file_);
+    log->trace("MetadataVOL::file_close: {}", *file_);
 
     if (file_->tmp)
     {

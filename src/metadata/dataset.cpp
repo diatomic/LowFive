@@ -56,7 +56,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
-    log->trace("dataset_open {}", *obj_);
+    log->trace("MetadataVOL::dataset_open {}", *obj_);
 
     // trace object back to root to build full path and file name
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
@@ -206,7 +206,7 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    log->trace("dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})",
+    log->trace("MetadataVOL::dataset_write, dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})",
                *dset_,
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
@@ -297,7 +297,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    log->trace("Dataset Close");
+    log->trace("enter MetadataVOL::dataset_close");
     if (dset_->tmp)
     {
         log->trace("temporary reference, skipping close");

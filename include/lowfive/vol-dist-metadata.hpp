@@ -25,10 +25,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     LocationPatterns    intercomm_locations;
     DataIntercomms      intercomm_indices;
 
-                    DistMetadataVOL(communicator  local_,
-                                    communicator  intercomm_):
-                        DistMetadataVOL(local_, communicators { std::move(intercomm_) })
-                    {}
+                    DistMetadataVOL(communicator  local_, communicator  intercomm_);
 
                     DistMetadataVOL(communicator            local_,
                                     communicators           intercomms_):
