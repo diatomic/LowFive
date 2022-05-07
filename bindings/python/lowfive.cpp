@@ -4,12 +4,15 @@ namespace py = pybind11;
 
 #include <lowfive/vol-metadata.hpp>
 #include <lowfive/vol-dist-metadata.hpp>
+#include <lowfive/../../src/log-private.hpp>
 
 PYBIND11_MODULE(_lowfive, m)
 {
     using namespace pybind11::literals;
 
     m.doc() = "LowFive python bindings";
+
+    m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
 
     py::class_<LowFive::VOLBase> vol_base(m, "VOLBase", "base VOL object");
     vol_base
