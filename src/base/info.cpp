@@ -39,6 +39,7 @@ _info_copy(const void *_info)
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_info->under_vol_id = info->under_vol_id;
     H5Iinc_ref(new_info->under_vol_id);
+    log->trace("VOLBase:_info_copy, inc_ref hid = {}", new_info->under_vol_id);
     if(info->under_vol_info)
         H5VLcopy_connector_info(new_info->under_vol_id, &(new_info->under_vol_info), info->under_vol_info);
 
@@ -75,6 +76,7 @@ _info_free(void *_info)
     if(info->under_vol_info)
         H5VLfree_connector_info(info->under_vol_id, info->under_vol_info);
     H5Idec_ref(info->under_vol_id);
+    log->trace("VOLBase::_info_free, dec ref hid = {}", info->under_vol_id);
 
     H5Eset_current_stack(err_id);
 

@@ -23,6 +23,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     {
         fmt::print(stderr, "In MetadataVOL::object_open(): locating\n");
         Object* o = mdata_obj->locate(*loc_params).exact();
+        log->trace("MetadataVOL::object_open, result = {}, mdata_objj = {}", fmt::ptr(result), fmt::ptr(o));
         result->mdata_obj = o;
 
         if (*opened_type == H5I_BADID)      // not set by native
@@ -55,6 +56,7 @@ herr_t
 LowFive::MetadataVOL::
 object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    log->trace("Enter MetadataVOL::object_get");
     if (!unwrap(obj))           // look up in memory
     {
         // The following is adapted from HDF5's H5VL__native_object_get() in H5VLnative_object.c
@@ -77,6 +79,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                     Object* res = mdata_obj->find_root();
                     assert(res->type == ObjectType::File);
                     ObjectPointers* res_pair = wrap(nullptr);
+                    log->trace("MetadataVOL: res_pair = {}, mdata = {}", fmt::ptr(res_pair), fmt::ptr(res));
                     res_pair->mdata_obj = res;
                     res_pair->tmp = true;
                     *ret = res_pair;

@@ -66,7 +66,7 @@ group_close(void *grp, hid_t dxpl_id, void **req)
 {
     ObjectPointers* grp_ = (ObjectPointers*) grp;
 
-    log->trace("group_close: {}", *grp_);
+    log->trace("MetadataVOL::group_close: {}", *grp_);
 
     herr_t retval = 0;
 

@@ -59,6 +59,7 @@ _get_wrap_ctx(const void *obj, void **wrap_ctx)
     /* Increment reference count on underlying VOL ID, and copy the VOL info */
     new_wrap_ctx->under_vol_id = o->under_vol_id;
     H5Iinc_ref(new_wrap_ctx->under_vol_id);
+    log->trace("VOLBase::_get_wrap_ctx, inc ref hid = {}", new_wrap_ctx->under_vol_id);
     new_wrap_ctx->vol = o->vol;
 
     o->vol->get_wrap_ctx(o->under_object, &new_wrap_ctx->under_wrap_ctx);
@@ -182,6 +183,7 @@ _free_wrap_ctx(void *_wrap_ctx)
     /* Release underlying VOL ID and wrap context */
     if(wrap_ctx->under_wrap_ctx)
         wrap_ctx->vol->free_wrap_ctx(wrap_ctx->under_wrap_ctx);
+    log->trace("VOLBase::_free_wrap_ctx, dec_ref hid = {}", wrap_ctx->under_vol_id);
     H5Idec_ref(wrap_ctx->under_vol_id);
 
     H5Eset_current_stack(err_id);
