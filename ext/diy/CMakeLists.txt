@@ -44,7 +44,7 @@ diy_dependent_option        (BUILD_SHARED_LIBS   "Create shared libraries if on"
 diy_dependent_option        (build_diy_nompi_lib "Also build the nompi version of diy::mpi"                  OFF "mpi;build_diy_mpi_lib" OFF)
 diy_option                  (build_examples      "Build DIY examples"                                        ON)
 diy_option                  (build_tests         "Build DIY tests"                                           ON)
-diy_option                  (python              "Build Python bindings"                                     OFF)
+diy_option                  (diy_python          "Build Python bindings"                                     OFF)
 
 # Default to Release
 if                          (NOT CMAKE_BUILD_TYPE)
@@ -270,6 +270,6 @@ configure_package_config_file(
 #  install(FILES "${PROJECT_BINARY_DIR}/diy-config.cmake" DESTINATION ".")
 #endif()
 
-if      (python)
+if      (diy_python)
     add_subdirectory(bindings/python)
-endif   (python)
+endif   (diy_python)
