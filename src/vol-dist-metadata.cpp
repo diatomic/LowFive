@@ -160,7 +160,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
-    log->trace("DistMetadataVOL::dataset_get dset = {}, get_type = {}, req = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req));
+    log->trace("DistMetadataVOL::dataset_get dset = {}, get_type = {}, req = {}, dset_ = {}, dset_->mdata_ovbj = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req), fmt::ptr(dset_), fmt::ptr((Object*)dset_->mdata_obj));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     // consumer with the name of a remote dataset
@@ -268,6 +268,10 @@ file_close(void *file, hid_t dxpl_id, void **req)
     ObjectPointers* file_ = (ObjectPointers*) file;
 
     log->trace("Enter DistMetadataVOL::file_close, mdata_obj = {}", fmt::ptr(file_->mdata_obj));
+    if (file_->tmp) {
+        log->trace("DistMetadataVOL::file_close, temporary reference, skipping close");
+        return 0;
+    }
     // this is a little too closely coupled to MetadataVOL::file_close(), but
     // it closes the file before starting to serve, which may be useful in some
     // scenarios
@@ -293,6 +297,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
         }
 
         files.erase(f->name);
+        log->trace("DistMetadataVOL::file_close delete {}", fmt::ptr(f));
         delete f;       // erases all the children too
         file_->mdata_obj = nullptr;
     } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
