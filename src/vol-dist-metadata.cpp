@@ -31,7 +31,7 @@ remote_size(int intercomm_index)
 
 void
 LowFive::DistMetadataVOL::
-serve_all()
+serve_all(bool delete_data)
 {
     log->trace("enter serve_all, serve_data.size = {}", serve_data.size());
 
@@ -41,8 +41,9 @@ serve_all()
         Index index(local, intercomms, serve_data);
         index.serve();
 
-        for (auto* ds : serve_data)
-            delete ds;
+        if (delete_data)
+            for (auto* ds : serve_data)
+                delete ds;
         serve_data.clear();
     }
 
