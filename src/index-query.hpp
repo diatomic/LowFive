@@ -13,10 +13,10 @@ namespace LowFive
 // Common setup between Index and Query
 struct IndexQuery
 {
-    using Bounds                = diy::DiscreteBounds;
+    using Bounds                = diy::Bounds<size_t>;
     using Point                 = Bounds::Point;
     using Coordinate            = int;
-    using Decomposer            = diy::RegularDecomposer<diy::DiscreteBounds>;
+    using Decomposer            = diy::RegularDecomposer<Bounds>;
     using DivisionsVector       = Decomposer::DivisionsVector;
     using BlockID               = diy::BlockID;
     using Link                  = diy::RegularGridLink;
