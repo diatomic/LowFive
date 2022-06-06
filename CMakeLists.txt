@@ -1,8 +1,9 @@
 project                     (LowFive)
 cmake_minimum_required      (VERSION 3.9)
 
-option                      (wrapped_mpi    "MPI compiler wrapper requires no further MPI libs"     OFF)
-option                      (lowfive_python "Build python bindings"                                 ON)
+option                      (wrapped_mpi      "MPI compiler wrapper requires no further MPI libs"     OFF)
+option                      (lowfive_python   "Build python bindings"                                 ON)
+option                      (lowfive_backward "Use backward-cpp for debugging"                        ON)
 
 # C++11
 if                          (NOT DEFINED CMAKE_CXX_STANDARD)
@@ -69,8 +70,10 @@ endif                       ()
 #set                         (libraries ${libraries} ${HDF5_LIBRARY})
 include_directories         (SYSTEM ${HDF5_INCLUDE_DIR})
 
+if(lowfive_backward)
 # backward-cpp
 add_subdirectory(ext/backward-cpp)
+endif()
 
 # Include dirs
 set                         (CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-isystem")
