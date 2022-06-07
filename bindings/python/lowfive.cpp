@@ -35,6 +35,7 @@ PYBIND11_MODULE(_lowfive, m)
     dist_metadata_vol
         .def(py::init<communicator, communicator>(),  "local"_a, "intercomm"_a,  "construct the object")
         .def(py::init<communicator, communicators>(), "local"_a, "intercomms"_a, "construct the object")
+        .def_readwrite("serve_on_close",   &LowFive::DistMetadataVOL::serve_on_close)
         .def("set_intercomm",   &LowFive::DistMetadataVOL::set_intercomm, "filename"_a, "pattern"_a, "index"_a, "set (filename,pattern) -> intercomm index")
         .def("serve_all",       &LowFive::DistMetadataVOL::serve_all, "serve all datasets")
     ;

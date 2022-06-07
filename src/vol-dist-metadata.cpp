@@ -304,7 +304,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
     } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
-        if (match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
+        if (serve_on_close && match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
         {
             log->trace("Closing file {}", fmt::ptr(f));
             serve_all();
