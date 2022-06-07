@@ -51,6 +51,29 @@ serve_all(bool delete_data)
 }
 
 void*
+LowFive::DistMetadataVOL::dataset_create(void* obj, const H5VL_loc_params_t* loc_params, const char* name,
+        hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void** req)
+{
+    void* ds_ = MetadataVOL::dataset_create(obj, loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
+
+    Object* ds_o = static_cast<Object*>(static_cast<ObjectPointers*>(ds_)->mdata_obj);
+    if (Dataset* dset = dynamic_cast<Dataset*>(ds_o))
+        serve_data.insert(dset);
+
+    return ds_;
+}
+
+herr_t
+LowFive::DistMetadataVOL::dataset_write(void* dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void* buf, void** req)
+{
+    Object* ds_o = static_cast<Object*>(static_cast<ObjectPointers*>(dset)->mdata_obj);
+    if (Dataset* dataset = dynamic_cast<Dataset*>(ds_o))
+        serve_data.insert(dataset);
+
+    return MetadataVOL::dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+}
+
+void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
@@ -113,7 +136,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
     if (dset_->mdata_obj)
     {
         if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))                   // producer
-            serve_data.push_back(ds);   // record dataset for serving later when file closes
+            serve_data.insert(ds);   // record dataset for serving later when file closes
         else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
         {
             Query* query = (Query*) ds->query;

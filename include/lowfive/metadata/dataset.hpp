@@ -1,5 +1,7 @@
 #pragma once
 
+#include <set>
+
 namespace LowFive
 {
 
@@ -74,6 +76,6 @@ struct Dataset : public Object
     }
 };
 
-using Datasets = std::vector<Dataset*>;
+using Datasets = std::set<Dataset*>;
 
 }
