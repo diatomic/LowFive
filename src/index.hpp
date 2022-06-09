@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include "index-query.hpp"
 
 
@@ -43,10 +45,14 @@ struct Index: public IndexQuery
                         Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, const ServeData& serve_data):
                             IndexQuery(local_, intercomms_)
     {
-        // TODO: sort serve_data by name, to make sure the order is the same on all ranks
 
         int id = 0;
-        for (auto* ds : serve_data)
+
+        // sort serve_data by name, to make sure the order is the same on all ranks
+        std::vector<Dataset*> serve_data_vec(serve_data.begin(), serve_data.end());
+        std::sort(serve_data_vec.begin(), serve_data_vec.end(), [](Dataset* ds_a, Dataset* ds_b) { return ds_a->fullname() < ds_b->fullname(); });
+
+        for (auto* ds : serve_data_vec)
         {
             std::string filename, name;
             std::tie(filename,name) = ds->fullname();
