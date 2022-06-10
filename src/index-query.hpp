@@ -13,9 +13,9 @@ namespace LowFive
 // Common setup between Index and Query
 struct IndexQuery
 {
-    using Bounds                = diy::Bounds<size_t>;
+    using Bounds                = diy::Bounds<int64_t>;
     using Point                 = Bounds::Point;
-    using Coordinate            = int;
+    using Coordinate            = Bounds::Coordinate;
     using Decomposer            = diy::RegularDecomposer<Bounds>;
     using DivisionsVector       = Decomposer::DivisionsVector;
     using BlockID               = diy::BlockID;
@@ -121,7 +121,7 @@ struct IndexQuery
     std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer) const
     {
         int dim = decomposer.dim;
-        std::vector< std::pair<int, int> > ranges(dim);
+        std::vector< std::pair<Coordinate, Coordinate> > ranges(dim);
         for (int i = 0; i < dim; ++i)
         {
             Coordinate& bottom = ranges[i].first;
@@ -136,8 +136,8 @@ struct IndexQuery
 
             if (true /* !wrap[i] */)
             {
-                bottom  = std::max(0, bottom);
-                top     = std::min(decomposer.divisions[i], top);
+                bottom  = std::max(static_cast<Coordinate>(0), bottom);
+                top     = std::min(static_cast<Coordinate>(decomposer.divisions[i]), top);
             }
         }
 
