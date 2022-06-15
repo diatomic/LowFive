@@ -159,6 +159,14 @@ struct Index: public IndexQuery
             diy::MemoryBuffer b;
             int msg = recv(intercomm, source, tags::consumer, b);
 
+            if (msg == msgs::done)
+            {
+                // leave serve loop if there are no more requests
+                all_done = local.ibarrier();
+                all_done_active = true;
+                continue;
+            }
+
             if (msg == msgs::file)
             {
                 bool open = false;
@@ -236,6 +244,26 @@ struct Index: public IndexQuery
                     }
                 }
                 send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
+            } else if (msg == msgs::fnames)
+            {
+                diy::MemoryBuffer queue;
+
+                // traverse all indexed datasets and collect dataset filenames in fnames
+                std::set<std::string> fnames;
+
+                for(auto key_ds : index_data)
+                {
+                    std::string fname = key_ds.second.ds->fullname().first;
+                    fnames.insert(fname);
+                }
+
+                // send number of unique filenames and each filename
+                diy::save(queue, fnames.size());
+                for(auto&& fname : fnames)
+                    diy::save(queue, fname);
+
+                // append msgs::fnames and send
+                send(intercomm, source, tags::producer, msgs::fnames, queue);
             }
             // TODO: add other potential queries (e.g., datatype)
         }

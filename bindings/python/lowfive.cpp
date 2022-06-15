@@ -38,6 +38,8 @@ PYBIND11_MODULE(_lowfive, m)
         .def_readwrite("serve_on_close",   &LowFive::DistMetadataVOL::serve_on_close)
         .def("set_intercomm",   &LowFive::DistMetadataVOL::set_intercomm, "filename"_a, "pattern"_a, "index"_a, "set (filename,pattern) -> intercomm index")
         .def("serve_all",       &LowFive::DistMetadataVOL::serve_all, "serve all datasets")
+        .def("get_filenames",   &LowFive::DistMetadataVOL::get_filenames, "intercomm_index"_a, "get filenames produced by producer at intercomm")
+        .def("send_done",       &LowFive::DistMetadataVOL::send_done, "intercomm_index"_a, "tell producer that consumer is done, so producer can proceed")
     ;
 
     py::class_<communicator>(m, "MPIComm")

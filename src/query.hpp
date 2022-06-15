@@ -141,6 +141,57 @@ struct Query: public IndexQuery
             }
         }
     }
+
+
+    DistMetadataVOL::FileNames get_filenames()
+    {
+        DistMetadataVOL::FileNames file_names;
+
+        bool root = local.rank() == 0;
+
+        size_t n_fnames;
+        if (root)
+        {
+            send(intercomm(intercomm_index), 0, tags::consumer, msgs::fnames, true);
+
+            diy::MemoryBuffer queue;
+            int msg = recv(intercomm(intercomm_index), 0, tags::producer, queue);
+            expected(msg, msgs::fnames);
+
+            while(queue)
+            {
+                diy::load(queue, n_fnames);
+
+                std::string fname;
+
+                for(size_t i = 0; i < n_fnames; ++i)
+                {
+                    diy::load(queue, fname);
+                    file_names.push_back(fname);
+                }
+            }
+        }
+
+        // broadcast n_fnames to all ranks from root
+        diy::mpi::broadcast(local, n_fnames,  0);
+
+        if (!root)
+            file_names = DistMetadataVOL::FileNames(n_fnames, "");
+
+        // broadcast filenames to all ranks from root
+        for(auto& fname : file_names)
+            broadcast(local, fname, 0);
+
+        return file_names;
+    }
+
+    void send_done()
+    {
+        bool root = local.rank() == 0;
+        if (root)
+            send(intercomm(intercomm_index), 0, tags::consumer, msgs::done, true);
+    }
+
 };
 
 }

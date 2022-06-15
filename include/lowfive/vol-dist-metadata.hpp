@@ -15,6 +15,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     using communicators     = std::vector<communicator>;
     using ServeData         = Datasets;
     using DataIntercomms    = std::vector<int>;
+    using FileNames         = std::vector<std::string>;
 
     communicator    local;
     communicators   intercomms;
@@ -56,6 +57,9 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req) override;
 
     int             remote_size(int intercomm_index);
+
+    FileNames       get_filenames(int intercomm_index);
+    void            send_done(int intercomm_index);
 };
 
 }

@@ -359,3 +359,22 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 
     return result;
 }
+
+LowFive::DistMetadataVOL::FileNames
+LowFive::DistMetadataVOL::
+get_filenames(int intercomm_index)
+{
+    log->trace("DistMetadataVOL:get_filenames, intercomm_index={}", intercomm_index);
+    Query query {local, intercomms, remote_size(intercomm_index), intercomm_index};      // NB: because no dataset is provided will only build index based on the intercomm
+    return query.get_filenames();
+}
+
+void
+LowFive::DistMetadataVOL::
+send_done(int intercomm_index)
+{
+    log->trace("DistMetadataVOL:get_filenames, intercomm_index={}", intercomm_index);
+    Query query {local, intercomms, remote_size(intercomm_index), intercomm_index};      // NB: because no dataset is provided will only build index based on the intercomm
+    query.send_done();
+}
+
