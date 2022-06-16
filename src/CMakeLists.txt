@@ -38,6 +38,8 @@ target_include_directories(lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 add_library             (lowfive-dist
                          metadata/save-h5.cpp           # not clear, if we even need this (doesn't seem to be used anywhere),
                                                         # but it requires DIY, so it's going here for now
+                         dist/query.cpp
+                         dist/index.cpp
                          vol-dist-metadata.cpp
                          ${LOWFIVE_BACKWARD_ENABLE})
 target_link_libraries   (lowfive-dist fmt::fmt diy)

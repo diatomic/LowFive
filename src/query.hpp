@@ -1,6 +1,7 @@
 #pragma once
 
 #include "index-query.hpp"
+#include "lowfive/vol-dist-metadata.hpp"
 
 namespace LowFive
 {
@@ -17,181 +18,23 @@ struct Query: public IndexQuery
 
     // consumer versions of the constructor
 
-    Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size_, int intercomm_index_ = 0):
-                              IndexQuery(local_, intercomms_),
-                              remote_size(remote_size_),
-                              intercomm_index(intercomm_index_)
-    {}
+    Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size_, int intercomm_index_ = 0);
 
-    void                file_open()
-    {
-        bool root = local.rank() == 0;
-        if (root)
-        {
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::file, true);
-        }
-    }
+    void                file_open();
 
-    void                file_close()
-    {
-        local.barrier();
+    void                file_close();
 
-        bool root = local.rank() == 0;
-        if (root)
-        {
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::file, false);
-        }
-    }
+    void dataset_open(std::string name);
 
-    void dataset_open(std::string name)
-    {
-        bool root = local.rank() == 0;
-
-        // TODO: the broadcasts necessitate collective open; they are not
-        //       necessary (or could be triggered by a hint from the execution framework)
-
-        // query producer for dim
-        if (root)
-        {
-            int msg;
-
-            // query id using name
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::id, name);
-            msg = recv(intercomm(intercomm_index), 0, tags::producer, id); expected(msg, msgs::id);
-
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::dimension, id, 0);
-            msg = recv(intercomm(intercomm_index), 0, tags::producer, dim);   expected(msg, msgs::dimension);
-            msg = recv(intercomm(intercomm_index), 0, tags::producer, type);  expected(msg, msgs::dimension);
-            msg = recv(intercomm(intercomm_index), 0, tags::producer, space); expected(msg, msgs::dimension);
-        }
-        diy::mpi::broadcast(local, id,  0);
-        diy::mpi::broadcast(local, dim, 0);
-        broadcast(local, type, 0);
-        broadcast(local, space, 0);
-
-        // query producer for domain
-        Bounds domain { dim };
-        if (root)
-        {
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::domain, id, 0);
-            int msg = recv(intercomm(intercomm_index), 0, tags::producer, domain);
-            expected(msg, msgs::domain);
-        }
-        broadcast(local, domain, 0);
-
-        decomposer = Decomposer(dim, domain, remote_size);
-    }
-
-    void                dataset_close()             {}
+    void                dataset_close();
 
     void                query(const Dataspace&                     file_space,      // input: query in terms of file space
                               const Dataspace&                     mem_space,       // ouput: memory space of resulting data
-                              void*                                buf)             // output: resulting data, allocated by caller
-    {
-        // enqueue queried file dataspace to the ranks that are
-        // responsible for the boxes that (might) intersect them
-        Bounds b { dim };           // diy representation of the dataspace's bounding box
-        b.min = Point(file_space.min);
-        b.max = Point(file_space.max);
+                              void*                                buf);            // output: resulting data, allocated by caller
 
-        BoxLocations all_redirects;
-        auto gids = bounds_to_gids(b, decomposer);
-        for (int gid : gids)
-        {
-            // TODO: make this asynchronous (isend + irecv, etc)
-            send(intercomm(intercomm_index), gid, tags::consumer, msgs::redirect, id, file_space);
+    DistMetadataVOL::FileNames get_filenames();
 
-            BoxLocations redirects;
-            int msg = recv(intercomm(intercomm_index), gid, tags::producer, redirects); expected(msg, msgs::redirect);
-            for (auto& x : redirects)
-                all_redirects.push_back(x);
-        }
-
-        // request and receive data
-        std::set<int> blocks;
-        for (auto& y : all_redirects)
-        {
-            // TODO: make this asynchronous (isend + irecv, etc)
-
-            auto& gid = std::get<1>(y);
-            auto& ds  = std::get<0>(y);
-
-            if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
-            {
-                blocks.insert(gid);
-                send(intercomm(intercomm_index), gid, tags::consumer, msgs::data, id, file_space);
-
-                diy::MemoryBuffer queue;
-                int msg = recv(intercomm(intercomm_index), gid, tags::producer, queue); expected(msg, msgs::data);
-
-                while (queue)
-                {
-                    Dataspace ds;
-                    diy::load(queue, ds);
-
-                    if (!file_space.intersects(ds))
-                        throw MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
-
-                    Dataspace mem_dst(Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
-                    Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
-                    {
-                        std::memcpy((char*)buf + loc, queue.advance(len), len);
-                    });
-                }
-            }
-        }
-    }
-
-
-    DistMetadataVOL::FileNames get_filenames()
-    {
-        DistMetadataVOL::FileNames file_names;
-
-        bool root = local.rank() == 0;
-
-        size_t n_fnames;
-        if (root)
-        {
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::fnames, true);
-
-            diy::MemoryBuffer queue;
-            int msg = recv(intercomm(intercomm_index), 0, tags::producer, queue);
-            expected(msg, msgs::fnames);
-
-            while(queue)
-            {
-                diy::load(queue, n_fnames);
-
-                std::string fname;
-
-                for(size_t i = 0; i < n_fnames; ++i)
-                {
-                    diy::load(queue, fname);
-                    file_names.push_back(fname);
-                }
-            }
-        }
-
-        // broadcast n_fnames to all ranks from root
-        diy::mpi::broadcast(local, n_fnames,  0);
-
-        if (!root)
-            file_names = DistMetadataVOL::FileNames(n_fnames, "");
-
-        // broadcast filenames to all ranks from root
-        for(auto& fname : file_names)
-            broadcast(local, fname, 0);
-
-        return file_names;
-    }
-
-    void send_done()
-    {
-        bool root = local.rank() == 0;
-        if (root)
-            send(intercomm(intercomm_index), 0, tags::consumer, msgs::done, true);
-    }
-
+    void send_done();
 };
 
 }

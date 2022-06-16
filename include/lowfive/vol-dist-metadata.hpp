@@ -60,6 +60,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     FileNames       get_filenames(int intercomm_index);
     void            send_done(int intercomm_index);
+    void            producer_signal_done();
 };
 
 }

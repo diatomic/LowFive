@@ -1,3 +1,4 @@
+#pragma once
 #include <diy/serialization.hpp>
 
 namespace diy

@@ -40,6 +40,7 @@ PYBIND11_MODULE(_lowfive, m)
         .def("serve_all",       &LowFive::DistMetadataVOL::serve_all, "serve all datasets")
         .def("get_filenames",   &LowFive::DistMetadataVOL::get_filenames, "intercomm_index"_a, "get filenames produced by producer at intercomm")
         .def("send_done",       &LowFive::DistMetadataVOL::send_done, "intercomm_index"_a, "tell producer that consumer is done, so producer can proceed")
+        .def("producer_done",   &LowFive::DistMetadataVOL::producer_signal_done, "tell consumers that producer is done")
     ;
 
     py::class_<communicator>(m, "MPIComm")

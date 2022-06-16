@@ -373,8 +373,16 @@ void
 LowFive::DistMetadataVOL::
 send_done(int intercomm_index)
 {
-    log->trace("DistMetadataVOL:get_filenames, intercomm_index={}", intercomm_index);
+    log->trace("DistMetadataVOL:send_done, intercomm_index={}", intercomm_index);
     Query query {local, intercomms, remote_size(intercomm_index), intercomm_index};      // NB: because no dataset is provided will only build index based on the intercomm
     query.send_done();
 }
 
+void
+LowFive::DistMetadataVOL::
+producer_signal_done()
+{
+    log->trace("DistMetadataVOL:producer_signal_done");
+    Index index(local, intercomms, ServeData());
+    index.serve();
+}
