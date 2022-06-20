@@ -4,6 +4,9 @@ else                        ()
     set                     (MODULE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif                       ()
 
+list                        (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+find_package                (MPI4Py REQUIRED)
+
 # Copy lowfive/*.py
 file                        (MAKE_DIRECTORY "${MODULE_OUTPUT_DIRECTORY}/lowfive")
 file                        (GLOB LOWFIVE_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/lowfive/*.py")
@@ -15,3 +18,4 @@ pybind11_add_module         (_lowfive lowfive.cpp)
 target_link_libraries       (_lowfive PRIVATE ${libraries})
 set_target_properties       (_lowfive PROPERTIES OUTPUT_NAME lowfive/_lowfive)
 set_target_properties       (_lowfive PROPERTIES CXX_VISIBILITY_PRESET "default")
+set_target_properties       (_lowfive PROPERTIES INCLUDE_DIRECTORIES ${MPI4Py_INCLUDE_DIR})
