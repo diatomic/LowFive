@@ -1,3 +1,5 @@
+#pragma once
+
 // From https://stackoverflow.com/a/62449190/44738
 
 #include <pybind11/pybind11.h>

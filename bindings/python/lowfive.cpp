@@ -1,50 +1,18 @@
 #include <vector>
-#include <type_traits>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11;
 
 #if defined(LOWFIVE_MPI4PY)
-#include "mpi_comm.h"
+#include "mpi-comm.h"
 #endif
+
+#include "mpi-capsule.h"
 
 #include <lowfive/vol-metadata.hpp>
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/../../src/log-private.hpp>
-
-// MPI_Comm is a pointer in OpenMPI
-template<class Comm, typename std::enable_if<std::is_pointer<Comm>::value,bool>::type = true>
-py::capsule to_capsule(Comm comm)
-{
-    return py::capsule(comm);
-}
-
-template<class Comm>
-typename std::enable_if<std::is_pointer<Comm>::value, Comm>::type
-from_capsule(py::capsule c)
-{
-    return c;
-}
-
-// MPI_Comm is an integer in MPICH
-template<class Comm, typename std::enable_if<std::is_integral<Comm>::value,bool>::type = true>
-py::capsule to_capsule(Comm comm)
-{
-    intptr_t comm_ = static_cast<intptr_t>(comm);
-    void* comm__ = reinterpret_cast<void*>(comm_);
-    return py::capsule(comm__);
-}
-
-template<class Comm>
-typename std::enable_if<std::is_integral<Comm>::value, Comm>::type
-from_capsule(py::capsule c)
-{
-    void* comm_ = c;
-    intptr_t comm__ = reinterpret_cast<intptr_t>(comm_);
-    Comm comm = static_cast<Comm>(comm__);
-    return comm;
-}
 
 
 PYBIND11_MODULE(_lowfive, m)
