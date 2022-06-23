@@ -28,7 +28,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     {
         log->trace("In MetadataVOL::object_open(): locating");
         Object* o = mdata_obj->locate(*loc_params).exact();
-        log->trace("MetadataVOL::object_open, result = {}, mdata_objj = {}", fmt::ptr(result), fmt::ptr(o));
+        log->trace("MetadataVOL::object_open, result = {}, mdata_obj = {}", fmt::ptr(result), fmt::ptr(o));
         result->mdata_obj = o;
 
         if (*opened_type == H5I_BADID)      // not set by native
