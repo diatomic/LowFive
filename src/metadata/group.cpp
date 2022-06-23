@@ -8,6 +8,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
+    auto log = get_logger();
     log->trace("group_create:");
     log->trace("loc type = {}, name = {}, obj = {}", loc_params->type, name, *obj_);
 
@@ -35,6 +36,7 @@ LowFive::MetadataVOL::
 group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
+    auto log = get_logger();
     log->trace("group_open: obj = {} name {}", *obj_, name);
 
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
@@ -66,6 +68,7 @@ group_close(void *grp, hid_t dxpl_id, void **req)
 {
     ObjectPointers* grp_ = (ObjectPointers*) grp;
 
+    auto log = get_logger();
     log->trace("MetadataVOL::group_close: {}", *grp_);
 
     herr_t retval = 0;

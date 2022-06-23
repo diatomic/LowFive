@@ -6,6 +6,9 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+    log->trace("MetadataVOL::object_open");
+
     *opened_type = H5I_BADID;
 
     ObjectPointers* result;
@@ -14,6 +17,8 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     else                        // passthru
         result = wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
 
+    log->trace("MetadataVOL::object_open, result = {}", fmt::ptr(result));
+
     ObjectPointers* obj_        = (ObjectPointers*) obj;
     Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
@@ -21,7 +26,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     //       I think locate will return the last parent that has mdata, which is not what we want
     if (mdata_obj)
     {
-        fmt::print(stderr, "In MetadataVOL::object_open(): locating\n");
+        log->trace("In MetadataVOL::object_open(): locating");
         Object* o = mdata_obj->locate(*loc_params).exact();
         log->trace("MetadataVOL::object_open, result = {}, mdata_objj = {}", fmt::ptr(result), fmt::ptr(o));
         result->mdata_obj = o;
@@ -29,6 +34,8 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
         if (*opened_type == H5I_BADID)      // not set by native
             *opened_type = get_type(o);
     }
+
+    log->trace("MetadataVOL::object_open: opened_type = {}", *opened_type);
 
     return result;
 }
@@ -56,6 +63,7 @@ herr_t
 LowFive::MetadataVOL::
 object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
     log->trace("Enter MetadataVOL::object_get");
     if (!unwrap(obj))           // look up in memory
     {
@@ -254,6 +262,7 @@ LowFive::MetadataVOL::
 object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
     log->trace("object_specific: specific_type = {}", specific_type);
     if (!unwrap(obj))
     {

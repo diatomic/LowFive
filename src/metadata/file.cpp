@@ -6,6 +6,7 @@ void*
 LowFive::MetadataVOL::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
     log->trace("enter MetadataVOL::file_create, name ={}", name);
     ObjectPointers* obj_ptrs = nullptr;
 
@@ -39,6 +40,7 @@ file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **r
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
+    auto log = get_logger();
     log->trace("file_optional: file = {}, opt_type = {}", *file_, opt_type);
     // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
 
@@ -53,6 +55,7 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
     log->trace("file_open()");
     ObjectPointers* obj_ptrs = nullptr;
 
@@ -94,6 +97,7 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
     va_list args;
     va_copy(args,arguments);
 
+    auto log = get_logger();
     log->trace("file_get: file = {}, get_type = {} req = {} dxpl_id = {}",
             *file_, get_type, fmt::ptr(req), dxpl_id);
     // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
@@ -149,6 +153,7 @@ LowFive::MetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
+    auto log = get_logger();
     log->trace("MetadataVOL::file_close: {}", *file_);
 
     if (file_->tmp)
@@ -190,6 +195,7 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
+    auto log = get_logger();
     log->trace("file_specific: {}", *file_);
 
     // debug

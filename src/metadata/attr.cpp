@@ -8,6 +8,7 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
 
+    auto log = get_logger();
     log->trace("Attr Create");
     log->trace("loc type = {}, name = {}", loc_params->type, name);
 
@@ -59,6 +60,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
+    auto log = get_logger();
     log->trace("Attr Open");
     log->trace("attr_open obj = {} name {}", *obj_, name);
 
@@ -99,6 +101,7 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
     va_list args;
     va_copy(args,arguments);
 
+    auto log = get_logger();
     log->trace("attr = {}, get_type = {}, req = {}", *obj_, get_type, fmt::ptr(req));
 
     log->trace("Attr Get");
@@ -164,6 +167,7 @@ attr_exists(void *obj, va_list arguments)
             break;
         }
     }
+    auto log = get_logger();
     if (*ret)
         log->trace("Found attribute {} as a child of the parent {}", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
     else
@@ -191,6 +195,7 @@ attr_iter(void *obj, va_list arguments)
     ObjectPointers* obj_tmp = wrap(nullptr);
     *obj_tmp = *obj_;
     obj_tmp->tmp = true;
+    auto log = get_logger();
     log->trace("wrapping {}", *obj_tmp);
 
     hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
@@ -263,6 +268,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
     va_list args;
     va_copy(args,arguments);
 
+    auto log = get_logger();
     log->trace("attr_specific obj = {} specific_type = {}", *obj_, specific_type);
     log->trace("specific types H5VL_ATTR_DELETE = {} H5VL_ATTR_EXISTS = {} H5VL_ATTR_ITER = {} H5VL_ATTR_RENAME = {}",
             H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
@@ -327,6 +333,7 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
 {
     ObjectPointers* attr_ = (ObjectPointers*) attr;
 
+    auto log = get_logger();
     log->trace("Attr Write");
     log->trace("attr = {}, mem_type_id = {}, mem type = {}",
             *attr_, mem_type_id, Datatype(mem_type_id));
@@ -349,6 +356,7 @@ attr_close(void *attr, hid_t dxpl_id, void **req)
 {
     ObjectPointers* attr_ = (ObjectPointers*) attr;
 
+    auto log = get_logger();
     log->trace("Attr Close");
     log->trace("close: {}, dxpl_id = {}", *attr_, dxpl_id);
 

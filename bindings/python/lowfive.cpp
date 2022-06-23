@@ -2,15 +2,27 @@
 #include <pybind11/stl.h>
 namespace py = pybind11;
 
+#include <lowfive/log.hpp>
 #include <lowfive/vol-metadata.hpp>
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/../../src/log-private.hpp>
+
+herr_t
+fail_on_hdf5_error(hid_t stack_id, void*)
+{
+    H5Eprint(stack_id, stderr);
+    fprintf(stderr, "An HDF5 error was detected. Terminating.\n");
+    exit(1);
+}
 
 PYBIND11_MODULE(_lowfive, m)
 {
     using namespace pybind11::literals;
 
     m.doc() = "LowFive python bindings";
+
+    // set HDF5 error handler
+    H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
     m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
 

@@ -24,7 +24,9 @@ _object_open(void *obj, const H5VL_loc_params_t *loc_params,
 
     log->debug("------- PASS THROUGH VOL OBJECT Open");
 
+    log->trace("Calling o->vol->object_open()");
     under = o->vol->object_open(o->under_object, loc_params, opened_type, dxpl_id, req);
+    log->trace("Got: opened_type = {}", *opened_type);
     if(under) {
         new_obj = o->create(under);
 
@@ -43,6 +45,8 @@ LowFive::VOLBase::
 object_open(void *obj, const H5VL_loc_params_t *loc_params,
     H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+    log->trace("VOLBase::object_open()");
     return H5VLobject_open(obj, loc_params, info->under_vol_id, opened_type, dxpl_id, req);
 }
 /*-------------------------------------------------------------------------

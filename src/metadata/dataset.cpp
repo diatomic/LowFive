@@ -13,6 +13,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
+    auto log = get_logger();
     log->trace("Dataset Create");
     log->trace("dataset_create: parent obj = {}", *obj_);
     if (name)
@@ -56,6 +57,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = nullptr;
 
+    auto log = get_logger();
     log->trace("MetadataVOL::dataset_open {}", *obj_);
 
     // trace object back to root to build full path and file name
@@ -93,6 +95,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
+    auto log = get_logger();
     log->trace("dset = {}, get_type = {}, req = {}", *dset_, get_type, fmt::ptr(req));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
@@ -155,6 +158,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
+    auto log = get_logger();
     log->trace("dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}",
                *dset_,
                mem_space_id, Dataspace(mem_space_id),
@@ -206,6 +210,7 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
+    auto log = get_logger();
     log->trace("MetadataVOL::dataset_write, dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})",
                *dset_,
                mem_space_id, Dataspace(mem_space_id),
@@ -230,6 +235,7 @@ dataset_specific(void *obj, H5VL_dataset_specific_t specific_type, hid_t dxpl_id
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
+    auto log = get_logger();
     log->trace("dataset_specific: dset = {} specific_type = {}", *obj_, specific_type);
 
     herr_t res = 0;
@@ -275,6 +281,7 @@ dataset_optional(void *obj, H5VL_dataset_optional_t opt_type, hid_t dxpl_id, voi
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
+    auto log = get_logger();
     log->trace("dataset_optional: dset = {} optional_type = {}", *obj_, opt_type);
 
     herr_t res = 0;
@@ -297,6 +304,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
+    auto log = get_logger();
     log->trace("enter MetadataVOL::dataset_close");
     if (dset_->tmp)
     {

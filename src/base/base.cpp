@@ -125,8 +125,7 @@ const void *H5PLget_plugin_info(void)
 LowFive::VOLBase::
 VOLBase()
 {
-    log = get_logger();
-
+    auto log = get_logger();
     log->trace("VOLBase::VOLBase(), &info = {}\n", fmt::ptr(&info));
 
     // this is here to trigger HDF5 initialization, in case this constructor is
@@ -155,6 +154,7 @@ hid_t
 LowFive::VOLBase::
 register_plugin()
 {
+    auto log = get_logger();
     log->trace("registering plugin, info = {}\n", fmt::ptr(info));
 
     // Singleton register the pass-through VOL connector ID

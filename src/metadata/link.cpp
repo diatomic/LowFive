@@ -10,6 +10,7 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
+    auto log = get_logger();
     log->trace("link_create: obj = {}, create_type = {}", *obj_, create_type);
 
     herr_t res = 0;
@@ -125,6 +126,7 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     ObjectPointers* src_obj_ = (ObjectPointers*)src_obj;
     ObjectPointers* dst_obj_ = (ObjectPointers*)dst_obj;
 
+    auto log = get_logger();
     log->trace("link_copy: src_obj = {}, dst_obj = {}", *src_obj_, *dst_obj_);
 
     herr_t res = 0;
@@ -147,6 +149,7 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     ObjectPointers* src_obj_ = (ObjectPointers*)src_obj;
     ObjectPointers* dst_obj_ = (ObjectPointers*)dst_obj;
 
+    auto log = get_logger();
     log->trace("link_move: src_obj = {}, dst_obj = {}", *src_obj_, *dst_obj_);
 
     herr_t res = 0;
@@ -167,6 +170,7 @@ link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
+    auto log = get_logger();
     log->trace("link_get: obj = {}, get_type = {}", *obj_, get_type);
 
     herr_t res = 0;
@@ -187,6 +191,7 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
+    auto log = get_logger();
     log->trace("link_specific: obj = {}, specific_type = {}", *obj_, specific_type);
 
     herr_t res = 0;
@@ -207,6 +212,7 @@ link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type,
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
+    auto log = get_logger();
     log->trace("link_optional: obj = {}, optional_type = {}", *obj_, opt_type);
 
     herr_t res = 0;

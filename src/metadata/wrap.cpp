@@ -5,6 +5,7 @@ void *
 LowFive::MetadataVOL::
 wrap_get_object(void *obj)
 {
+    auto log = get_logger();
     bool our = ours(obj);
     if (our)
         log->trace("wrap_get_object: obj = {}", *static_cast<ObjectPointers*>(obj));
@@ -28,6 +29,7 @@ void *
 LowFive::MetadataVOL::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
+    auto log = get_logger();
     if (ours(obj))
     {
         log->trace("wrap_object: obj = {}", *static_cast<ObjectPointers*>(obj));

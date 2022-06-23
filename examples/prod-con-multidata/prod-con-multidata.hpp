@@ -13,6 +13,7 @@
 
 #include    <lowfive/H5VOLProperty.hpp>
 #include    <lowfive/vol-dist-metadata.hpp>
+#include    <lowfive/log.hpp>
 
 namespace l5 = LowFive;
 

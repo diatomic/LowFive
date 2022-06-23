@@ -10,6 +10,7 @@
 LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
     DistMetadataVOL(local_, communicators { std::move(intercomm_) })
 {
+    auto log = get_logger();
     log->trace("DistMetadataVOL ctor: this = {}", fmt::ptr(this));
 }
 
@@ -33,6 +34,7 @@ void
 LowFive::DistMetadataVOL::
 serve_all(bool delete_data)
 {
+    auto log = get_logger();
     log->trace("enter serve_all, serve_data.size = {}", serve_data.size());
 
     // serve datasets (producer only)
@@ -77,6 +79,7 @@ void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_open");
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
@@ -131,6 +134,7 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_close");
     ObjectPointers* dset_ = (ObjectPointers*) dset;
     if (dset_->mdata_obj)
@@ -152,6 +156,7 @@ herr_t
 LowFive::DistMetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
+    auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_read");
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
@@ -184,6 +189,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     va_list args;
     va_copy(args,arguments);
 
+    auto log = get_logger();
     log->trace("DistMetadataVOL::dataset_get dset = {}, get_type = {}, req = {}, dset_ = {}, dset_->mdata_ovbj = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req), fmt::ptr(dset_), fmt::ptr((Object*)dset_->mdata_obj));
     // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
@@ -240,6 +246,7 @@ void*
 LowFive::DistMetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
     log->trace("DistMetadataVOL::file_open()");
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
@@ -291,6 +298,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
 
+    auto log = get_logger();
     log->trace("Enter DistMetadataVOL::file_close, mdata_obj = {}", fmt::ptr(file_->mdata_obj));
     if (file_->tmp) {
         log->trace("DistMetadataVOL::file_close, temporary reference, skipping close");
@@ -364,6 +372,7 @@ LowFive::DistMetadataVOL::FileNames
 LowFive::DistMetadataVOL::
 get_filenames(int intercomm_index)
 {
+    auto log = get_logger();
     log->trace("DistMetadataVOL:get_filenames, intercomm_index={}", intercomm_index);
     Query query {local, intercomms, remote_size(intercomm_index), intercomm_index};      // NB: because no dataset is provided will only build index based on the intercomm
     return query.get_filenames();
@@ -373,6 +382,7 @@ void
 LowFive::DistMetadataVOL::
 send_done(int intercomm_index)
 {
+    auto log = get_logger();
     log->trace("DistMetadataVOL:send_done, intercomm_index={}", intercomm_index);
     Query query {local, intercomms, remote_size(intercomm_index), intercomm_index};      // NB: because no dataset is provided will only build index based on the intercomm
     query.send_done();
@@ -382,6 +392,7 @@ void
 LowFive::DistMetadataVOL::
 producer_signal_done()
 {
+    auto log = get_logger();
     log->trace("DistMetadataVOL:producer_signal_done");
     Index index(local, intercomms, ServeData());
     index.serve();
