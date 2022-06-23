@@ -35,5 +35,6 @@ f.create_dataset("data", data=np.ones((4, 3, 2), 'f'))
 f["data2"] = np.ones((8, 6, 4), 'f')
 
 # there is something wrong with how destructors are invoked when Python
-# terminates, so for now need to delete f explicitly
+# terminates, so for now need to delete f and grp explicitly
+del grp
 del f
