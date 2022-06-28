@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 #include <diy/mpi/communicator.hpp>
 #include "prod-con-multidata.hpp"
 

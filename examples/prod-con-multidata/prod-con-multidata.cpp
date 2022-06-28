@@ -1,5 +1,7 @@
 #include    <thread>
 
+#include    <stddef.h> // for size_t
+
 #include    <diy/master.hpp>
 #include    <diy/decomposition.hpp>
 #include    <diy/assigner.hpp>
