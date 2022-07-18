@@ -163,22 +163,25 @@ struct client::object
 {
     using class_proxy = client::module::class_proxy;
 
-                        object(size_t id, const class_proxy& cp, client* self):
-                            id_(id), cp_(cp), self_(self)               { self_->ref_count(id_)++; }
+                        object(int rank, size_t id, const class_proxy& cp, client* self):
+                            rank_(rank), id_(id), cp_(cp), self_(self)
+                                                                    { self_->ref_count(id_)++; }
 
                         object(const object& o):
-                            id_(o.id_), cp_(o.cp_), self_(o.self_)      { self_->ref_count(id_)++; }
+                            rank_(o.rank_), id_(o.id_), cp_(o.cp_), self_(o.self_)
+                                                                    { self_->ref_count(id_)++; }
     object&             operator=(const object&)    =delete;
     object&             operator=(object&&)         =delete;
 
     template<class R, class... Args>
-    R                   call(std::string name, Args... args)        { return self_->call_mem_fn<R,Args...>(id_, cp_.find<R, Args...>(name, args...), args...); }
+    R                   call(std::string name, Args... args)        { return self_->call_mem_fn<R,Args...>(rank_, id_, cp_.find<R, Args...>(name, args...), args...); }
 
     size_t              hash() const                                { return cp_.hash(); }
     size_t              id() const                                  { return id_; }
 
-                        ~object()                                   { self_->ref_count(id_)--; if (self_->ref_count(id_) == 0) { self_->send(ops::destroy); self_->send(id_); self_->flush(); } }
+                        ~object()                                   { self_->ref_count(id_)--; if (self_->ref_count(id_) == 0) { self_->destroy(rank_, id_); } }
 
+    int                 rank_;
     size_t              id_;
     const class_proxy&  cp_;
     client*             self_;
