@@ -6,6 +6,8 @@
 #include <vector>
 #include <memory>
 
+#include <lowfive/metadata/serialization.hpp>
+
 #include "../util.h"
 
 namespace LowFive
@@ -18,11 +20,14 @@ struct server::module
 {
     struct FunctionBase;
     template<class R, class... Args> struct Function;
+
     struct class_proxy_base;
     template<class C>
     struct class_proxy;
+
     struct MemberFunctionBase;
     template<class C, class R, class... Args> struct MemberFunction;
+
     struct ConstructorBase;
     template<class C, class... Args> struct Constructor;
 
@@ -35,22 +40,81 @@ struct server::module
     template<class C>
     class_proxy<C>& class_(std::string name);
 
-    void*           create(size_t id, size_t constructor_id, server* self) const;
+    void*           create(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
+    void            destroy(diy::MemoryBuffer& in);
 
-    inline void     call(size_t id, server* self) const;
-    inline void     call_mem_fn(size_t id, server* self) const;
+    inline void     call(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const;
+    inline void     call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const;
 
     const class_proxy_base&
                     proxy(size_t id) const          { return *classes_[id]; }
 
+    // load a tuple
+    template<class... Args> struct load_impl;
+    template<class... Args>
+    std::tuple<Args...>
+                    load(diy::MemoryBuffer& in)     { return load_impl<Args...>()(in, this); }
+
     std::vector<std::unique_ptr<FunctionBase>>      functions_;     // NB: identifiable only by their index
     std::vector<std::unique_ptr<class_proxy_base>>  classes_;
+
+    struct ObjectWithClass
+    {
+        void*   obj;
+        size_t  cls;
+    };
+    std::vector<ObjectWithClass>        objects_;
 };
+
+// load_impl
+template<class T, class... Args>
+struct server::module::load_impl<T, Args...>
+{
+    std::tuple<T, Args...>  operator()(diy::MemoryBuffer& in, module* self) const
+    {
+        T x;
+        diy::load(in, x);
+        return std::tuple_cat(std::make_tuple(x), load_impl<Args...>()(in, self));
+    }
+};
+
+// T*
+template<class T, class... Args>
+struct server::module::load_impl<T*, Args...>
+{
+    std::tuple<T*, Args...> operator()(diy::MemoryBuffer& in, module* self) const
+    {
+        size_t obj_id;
+        diy::load(in, obj_id);
+        return std::tuple_cat(std::make_tuple(static_cast<T*>(self->objects_[obj_id].obj)), load_impl<Args...>()(in, self));
+    }
+};
+
+// T&
+template<class T, class... Args>
+struct server::module::load_impl<T&, Args...>
+{
+    std::tuple<T&, Args...> operator()(diy::MemoryBuffer& in, module* self) const
+    {
+        size_t obj_id;
+        diy::load(in, obj_id);
+        T& x = *static_cast<T*>(self->objects_[obj_id].obj);
+        return std::tuple_cat(std::tuple<T&>(x), load_impl<Args...>()(in,self));
+    }
+};
+
+template<>
+struct server::module::load_impl<>
+{
+    std::tuple<>            operator()(diy::MemoryBuffer& in, module* self) const      { return std::tuple<>(); }
+};
+
+
 
 /* Functions */
 struct server::module::FunctionBase
 {
-    virtual void    call(server* self)  =0;
+    virtual void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self)  =0;
 };
 
 template<class R, class... Args>
@@ -59,10 +123,10 @@ struct server::module::Function: public FunctionBase
                     Function(R (*f)(Args...)):
                         f_(f)                       {}
 
-    void    call(server* self) override
+    void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
-        R res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->receive<Args...>());
-        self->send(res);
+        R res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
+        diy::save(out, res);
     }
 
     private:
@@ -81,9 +145,9 @@ struct server::module::Function<void,Args...>: public FunctionBase
                     Function(void (*f)(Args...)):
                         f_(f)                       {}
 
-    void    call(server* self) override
+    void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
-        call_impl(typename detail::gens<sizeof...(Args)>::type(), self->receive<Args...>());
+        call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
     }
 
     private:
@@ -99,14 +163,19 @@ struct server::module::Function<void,Args...>: public FunctionBase
 
 void
 server::module::
-call(size_t id, server* self) const
-{ functions_[id]->call(self); }
+call(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const
+{
+    size_t id;
+    diy::load(in, id);
+
+    functions_[id]->call(in, out, this);
+}
 
 
 /* MemberFunctions */
 struct server::module::MemberFunctionBase
 {
-    virtual void    call(size_t obj_id, server* self)  =0;
+    virtual void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self)  =0;
 };
 
 template<class C, class R, class... Args>
@@ -115,12 +184,12 @@ struct server::module::MemberFunction: public MemberFunctionBase
                     MemberFunction(R (C::*f)(Args...)):
                         f_(f)                       {}
 
-    void    call(size_t obj_id, server* self) override
+    void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
-        C* x = (C*) self->objects_[obj_id];
+        C* x = (C*) self->objects_[obj_id].obj;
 
-        R res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->receive<Args...>());
-        self->send(res);
+        R res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
+        diy::save(out, res);
     }
 
     private:
@@ -139,11 +208,11 @@ struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
                     MemberFunction(void (C::*f)(Args...)):
                         f_(f)                       {}
 
-    void    call(size_t obj_id, server* self) override
+    void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& /* out */, module* self) override
     {
-        C* x = (C*) self->objects_[obj_id];
+        C* x = (C*) self->objects_[obj_id].obj;
 
-        call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->receive<Args...>());
+        call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
     }
 
     private:
@@ -156,18 +225,34 @@ struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
         void    (C::*f_)(Args...);
 };
 
+void
+server::module::
+call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const
+{
+    size_t obj_id;
+    diy::load(in, obj_id);
+
+    size_t class_id = objects_[obj_id].cls;
+    auto& cp = m_.proxy(class_id);
+    size_t fn_id;
+    diy::load(in, fn_id);
+
+    cp.call(fn_id, obj_id, in, out);
+}
+
+
 /* Constructor */
 struct server::module::ConstructorBase
 {
-    virtual void*   create(server* self)    =0;
+    virtual void*   create(diy::MemoryBuffer& in, module* self)    =0;
 };
 
 template<class C, class... Args>
 struct server::module::Constructor: public ConstructorBase
 {
-    void*           create(server* self) override
+    void*           create(diy::MemoryBuffer& in, module* self) override
     {
-        return create_impl(typename detail::gens<sizeof...(Args)>::type(), self->receive<Args...>());
+        return create_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
     }
 
     private:
@@ -182,15 +267,15 @@ struct server::module::Constructor: public ConstructorBase
 /* class_proxy */
 struct server::module::class_proxy_base
 {
-    virtual void*   create(size_t constructor_id, server* self) const =0;
-    virtual void    call(size_t id, size_t obj_id, server* self) const =0;
+    virtual void*   create(size_t constructor_id, diy::MemoryBuffer& in, module* self) const =0;
+    virtual void    call(size_t id, size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) const =0;
     virtual void    destroy(void* o) const =0;
 };
 
 template<class C>
 struct server::module::class_proxy: public class_proxy_base
 {
-    void*           create(size_t id, server* self) const override      { return constructors_[id]->create(self); }
+    void*           create(size_t id, diy::MemoryBuffer& in, module* self) const override      { return constructors_[id]->create(in, self); }
 
     template<class... Args>
     class_proxy&    constructor()
@@ -207,9 +292,9 @@ struct server::module::class_proxy: public class_proxy_base
         return *this;
     }
 
-    void            call(size_t id, size_t obj_id, server* self) const override
+    void            call(size_t id, size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) const override
     {
-        functions_[id]->call(obj_id, self);
+        functions_[id]->call(obj_id, in, out, self);
     }
 
     void            destroy(void* o) const override     { delete static_cast<C*>(o); }
@@ -231,8 +316,28 @@ class_(std::string name)
 
 void*
 server::module::
-create(size_t class_id, size_t constructor_id, server* self) const
-{ return classes_[class_id]->create(constructor_id, self); }
+create(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
+{
+    size_t class_id, constructor_id;
+    diy::load(in, class_id);
+    diy::load(in, constructor_id);
+
+    objects_.emplace_back(classes_[class_id]->create(constructor_id, in, this), class_id);
+
+    size_t obj_id = objects_.size() - 1;
+    diy::save(out, obj_id);
+}
+
+void
+server::module::
+destroy(diy::MemoryBuffer& in)
+{
+    size_t obj_id;
+    diy::load(in, obj_id);
+    m_.proxy(obj_id).destroy(objects_[obj_id].obj);
+
+    objects_[obj_id].obj = 0;
+}
 
 
 }   // namespace rpc
