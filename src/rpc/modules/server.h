@@ -40,11 +40,11 @@ struct server::module
     template<class C>
     class_proxy<C>& class_(std::string name);
 
-    void*           create(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
+    void            create(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
     void            destroy(diy::MemoryBuffer& in);
 
-    inline void     call(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const;
-    inline void     call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const;
+    inline void     call(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
+    inline void     call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
 
     const class_proxy_base&
                     proxy(size_t id) const          { return *classes_[id]; }
@@ -163,7 +163,7 @@ struct server::module::Function<void,Args...>: public FunctionBase
 
 void
 server::module::
-call(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const
+call(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
 {
     size_t id;
     diy::load(in, id);
@@ -224,22 +224,6 @@ struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
 
         void    (C::*f_)(Args...);
 };
-
-void
-server::module::
-call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out) const
-{
-    size_t obj_id;
-    diy::load(in, obj_id);
-
-    size_t class_id = objects_[obj_id].cls;
-    auto& cp = m_.proxy(class_id);
-    size_t fn_id;
-    diy::load(in, fn_id);
-
-    cp.call(fn_id, obj_id, in, out);
-}
-
 
 /* Constructor */
 struct server::module::ConstructorBase
@@ -314,7 +298,22 @@ class_(std::string name)
     return *x;
 }
 
-void*
+void
+server::module::
+call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
+{
+    size_t obj_id;
+    diy::load(in, obj_id);
+
+    size_t class_id = objects_[obj_id].cls;
+    auto& cp = proxy(class_id);
+    size_t fn_id;
+    diy::load(in, fn_id);
+
+    cp.call(fn_id, obj_id, in, out, this);
+}
+
+void
 server::module::
 create(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
 {
@@ -322,7 +321,7 @@ create(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
     diy::load(in, class_id);
     diy::load(in, constructor_id);
 
-    objects_.emplace_back(classes_[class_id]->create(constructor_id, in, this), class_id);
+    objects_.emplace_back(ObjectWithClass { classes_[class_id]->create(constructor_id, in, this), class_id });
 
     size_t obj_id = objects_.size() - 1;
     diy::save(out, obj_id);
@@ -334,7 +333,7 @@ destroy(diy::MemoryBuffer& in)
 {
     size_t obj_id;
     diy::load(in, obj_id);
-    m_.proxy(obj_id).destroy(objects_[obj_id].obj);
+    proxy(obj_id).destroy(objects_[obj_id].obj);
 
     objects_[obj_id].obj = 0;
 }

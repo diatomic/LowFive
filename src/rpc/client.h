@@ -25,7 +25,7 @@ struct client
     template<class... Args> struct save_impl;
     template<class R>       struct load_impl;
 
-                    client(const module& m, MPI_Comm comm, int default_target)
+                    client(const module& m, MPI_Comm comm, int default_target):
                         m_(m), comm_(comm), default_target_(default_target)
                                                                         {}
 
@@ -42,7 +42,7 @@ struct client
     R               call_mem_fn(int target, size_t obj, size_t fn, Args... args);
 
     template<class... Args>
-    object          create(std::string name, Args... args)              { return create(default_target_, name, args...); }
+    object          create(std::string name, Args... args);
 
     template<class... Args>
     object          create(int target, std::string name, Args... args);
@@ -54,7 +54,7 @@ struct client
 
     private:
         const module&               m_;
-        MPI_Comm                    comm_;
+        diy::mpi::communicator      comm_;
 
         int                         default_target_;
 
@@ -81,7 +81,8 @@ call(int target, std::string name, Args... args)
     diy::save(out, ops::function);
     diy::save(out, id);
 
-    save_impl<Args...>(out)(args...);
+    save_impl<Args...> s(out);
+    s(args...);
 
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
@@ -101,7 +102,8 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
     diy::save(out, obj);
     diy::save(out, fn);
 
-    save_impl<Args...>(out)(args...);
+    save_impl<Args...> s(out);
+    s(args...);
 
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
@@ -122,7 +124,8 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
     diy::save(out, id);
     diy::save(out, constructor_id);
 
-    save_impl<Args...>(out)(args...);
+    save_impl<Args...> s(out);
+    s(args...);
 
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
@@ -132,12 +135,19 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
     return object(target, obj_id, m_.proxy(id), this);
 }
 
+template<class... Args>
+LowFive::rpc::client::object
+LowFive::rpc::client::create(std::string name, Args... args)
+{
+    return create(default_target_, name, args...);
+}
+
 void
 LowFive::rpc::client::destroy(int target, size_t id)
 {
     diy::MemoryBuffer out;
     diy::save(out, ops::destroy);
-    diy::save(out, id_);
+    diy::save(out, id);
 
     comm_.send(target, tags::consumer, out.buffer);
 }
@@ -179,7 +189,7 @@ struct client::save_impl<rpc::client::object*, Args...>
 
     void                    operator()(object* o, Args... args) const   { diy::save(out_, o->id()); save_impl<Args...> s(out_); s(args...); }
 
-    client* self_;
+    diy::MemoryBuffer&      out_;
 };
 
 template<>

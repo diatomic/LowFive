@@ -6,6 +6,8 @@
 #include "query.hpp"
 #include <lowfive/metadata/serialization.hpp>
 
+#include "rpc/server.h"
+#include "rpc/client.h"
 
 LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
     DistMetadataVOL(local_, communicators { std::move(intercomm_) })
