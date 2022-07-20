@@ -47,10 +47,10 @@ struct client
     template<class... Args>
     object          create(int target, std::string name, Args... args);
 
-    void            destroy(int target, size_t id);
+    inline void     destroy(int target, size_t id);
 
-    size_t&         ref_count(size_t obj_id)            { return ref_count_[obj_id]; }
-    void            finish(int target) const            { diy::MemoryBuffer out; diy::save(out, ops::finish); comm_.send(target, tags::consumer, out.buffer); }
+    inline size_t&  ref_count(size_t obj_id)            { return ref_count_[obj_id]; }
+    inline void     finish(int target) const            { diy::MemoryBuffer out; diy::save(out, ops::finish); comm_.send(target, tags::consumer, out.buffer); }
 
     private:
         const module&               m_;
@@ -78,7 +78,7 @@ namespace rpc
 template<class R>
 struct client::load_impl
 {
-                            load_impl(diy::MemoryBuffer& in, int, client*):
+                            load_impl(diy::MemoryBuffer& in, int, client*, bool):
                                 in_(in)                 {}
 
     R                       operator()() const          { R x; diy::load(in_, x); return x; }
@@ -89,7 +89,7 @@ struct client::load_impl
 template<>
 struct client::load_impl<client::object>
 {
-                            load_impl(diy::MemoryBuffer& in, int target, client* self):
+                            load_impl(diy::MemoryBuffer& in, int target, client* self, bool own):
                                 in_(in), target_(target), self_(self)
                                                         {}
 
@@ -99,18 +99,19 @@ struct client::load_impl<client::object>
         diy::load(in_, cls_id);
         diy::load(in_, obj_id);
 
-        return object(target_, obj_id, self_->m_.proxy(cls_id), self_);
+        return object(target_, obj_id, self_->m_.proxy(cls_id), self_, own_);
     }
 
     diy::MemoryBuffer&      in_;
     int                     target_;
     client*                 self_;
+    bool                    own_;
 };
 
 template<>
 struct client::load_impl<void>
 {
-                            load_impl(diy::MemoryBuffer&, int, client*)   {}
+                            load_impl(diy::MemoryBuffer&, int, client*, bool)   {}
 
     void                    operator()() const          {}
 };
@@ -139,7 +140,7 @@ call(int target, std::string name, Args... args)
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<R>(in, target, this)();
+    return load_impl<R>(in, target, this, false)();
 }
 
 template<class R, class... Args>
@@ -160,7 +161,7 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<R>(in, target, this)();
+    return load_impl<R>(in, target, this, false)();
 }
 
 template<class... Args>
@@ -182,7 +183,7 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<object>(in, target, this)();
+    return load_impl<object>(in, target, this, true)();     // true indicates that we own this object (and will automatically delete it, when all references go out of scope)
 }
 
 template<class... Args>

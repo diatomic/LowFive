@@ -8,6 +8,7 @@
 
 #include <lowfive/metadata/serialization.hpp>
 
+#include "../log-private.hpp"
 #include "operations.h"
 
 namespace LowFive

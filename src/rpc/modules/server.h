@@ -40,8 +40,8 @@ struct server::module
     template<class C>
     class_proxy<C>& class_(std::string name);
 
-    void            create(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
-    void            destroy(diy::MemoryBuffer& in);
+    inline void     create(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
+    inline void     destroy(diy::MemoryBuffer& in);
 
     inline void     call(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
     inline void     call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out);
@@ -119,6 +119,7 @@ struct server::module::load_impl<>
 struct server::module::FunctionBase
 {
     virtual void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self)  =0;
+    virtual         ~FunctionBase() {}
 };
 
 template<class R, class... Args>
@@ -210,6 +211,7 @@ call(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
 struct server::module::MemberFunctionBase
 {
     virtual void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self)  =0;
+    virtual         ~MemberFunctionBase()   {}
 };
 
 template<class C, class R, class... Args>
@@ -295,6 +297,7 @@ struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
 struct server::module::ConstructorBase
 {
     virtual void*   create(diy::MemoryBuffer& in, module* self)    =0;
+    virtual         ~ConstructorBase()  {}
 };
 
 template<class C, class... Args>
@@ -320,6 +323,7 @@ struct server::module::class_proxy_base
     virtual void*   create(size_t constructor_id, diy::MemoryBuffer& in, module* self) const =0;
     virtual void    call(size_t id, size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) const =0;
     virtual void    destroy(void* o) const =0;
+    virtual         ~class_proxy_base()     {}
 };
 
 template<class C>
