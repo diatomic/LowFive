@@ -3,7 +3,6 @@
 #include <string>
 #include <functional>
 #include <tuple>
-#include <typeindex>
 #include <map>
 #include <vector>
 
@@ -140,7 +139,7 @@ class_(std::string name)
 {
     size_t c = classes_.size();
     classes_[name] = c;
-    size_t class_hash = std::type_index(typeid(C)).hash_code();
+    size_t class_hash = hash_class<C>();
     class_proxies_.push_back(class_proxy(class_hash));
     return class_proxies_.back();
 }
@@ -200,7 +199,7 @@ struct client::module::hash_parameters<T, Args...>
 {
     size_t      operator()() const
     {
-        return hash_combine(hash_parameters<Args...>()(), std::type_index(typeid(T)).hash_code());
+        return hash_combine(hash_parameters<Args...>()(), hash_class<T>());
     }
 };
 
@@ -211,7 +210,7 @@ struct client::module::hash_parameters<T&, Args...>
     {
         size_t seed = hash_parameters<Args...>()();
         seed = hash_combine(seed, 1);
-        seed = hash_combine(seed, std::type_index(typeid(T)).hash_code());
+        seed = hash_combine(seed, hash_class<T>());
         return seed;
     }
 };
@@ -223,7 +222,7 @@ struct client::module::hash_parameters<T*, Args...>
     {
         size_t seed = hash_parameters<Args...>()();
         seed = hash_combine(seed, 2);
-        seed = hash_combine(seed, std::type_index(typeid(T)).hash_code());
+        seed = hash_combine(seed, hash_class<T>());
         return seed;
     }
 };
@@ -240,7 +239,7 @@ struct client::module::hash_arguments<T, Args...>
 {
     size_t      operator()(T x, Args... args) const
     {
-        return hash_combine(hash_arguments<Args...>()(args...), std::type_index(typeid(T)).hash_code());
+        return hash_combine(hash_arguments<Args...>()(args...), hash_class<T>());
     }
 };
 

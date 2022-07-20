@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 #include <stdexcept>
+#include <typeindex>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,6 +35,9 @@ inline size_t hash_combine(std::size_t seed, size_t v)
 {
     return seed ^ (v + 0x9e3779b9 + (seed<<6) + (seed>>2));
 }
+
+template<class C>
+size_t hash_class() { return std::type_index(typeid(C)).hash_code(); }
 
 }
 }

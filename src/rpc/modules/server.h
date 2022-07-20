@@ -49,6 +49,9 @@ struct server::module
     const class_proxy_base&
                     proxy(size_t id) const          { return *classes_[id]; }
 
+    template<class C>
+    size_t          class_id() const                { return class_hashes_.at(hash_class<C>()); }
+
     // load a tuple
     template<class... Args> struct load_impl;
     template<class... Args>
@@ -57,6 +60,7 @@ struct server::module
 
     std::vector<std::unique_ptr<FunctionBase>>      functions_;     // NB: identifiable only by their index
     std::vector<std::unique_ptr<class_proxy_base>>  classes_;
+    std::map<size_t, size_t>                        class_hashes_;
 
     struct ObjectWithClass
     {
@@ -139,6 +143,36 @@ struct server::module::Function: public FunctionBase
         R   (*f_)(Args...);
 };
 
+// specialization for returning pointers
+template<class R, class... Args>
+struct server::module::Function<R*, Args...>: public FunctionBase
+{
+                    Function(R* (*f)(Args...)):
+                        f_(f)                       {}
+
+    void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
+    {
+        R* res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
+
+        size_t cls = self->class_id<R>();
+
+        self->objects_.emplace_back(ObjectWithClass { res, cls });
+        size_t obj_id = self->objects_.size() - 1;
+
+        diy::save(out, cls);
+        diy::save(out, obj_id);
+    }
+
+    private:
+        template<int... S>
+        R*       call_impl(detail::seq<S...>, std::tuple<Args...> params)
+        {
+            return (*f_)(std::get<S>(params)...);
+        }
+
+        R*   (*f_)(Args...);
+};
+
 template<class... Args>
 struct server::module::Function<void,Args...>: public FunctionBase
 {
@@ -202,6 +236,38 @@ struct server::module::MemberFunction: public MemberFunctionBase
         R   (C::*f_)(Args...);
 };
 
+// specialization for returning pointers
+template<class C, class R, class... Args>
+struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
+{
+                    MemberFunction(R* (C::*f)(Args...)):
+                        f_(f)                       {}
+
+    void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
+    {
+        C* x = (C*) self->objects_[obj_id].obj;
+
+        R* res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
+
+        size_t cls = self->class_id<R>();
+
+        self->objects_.emplace_back(ObjectWithClass { res, cls });
+        size_t res_obj_id = self->objects_.size() - 1;
+
+        diy::save(out, cls);
+        diy::save(out, res_obj_id);
+    }
+
+    private:
+        template<int... S>
+        R*      call_impl(C* x, detail::seq<S...>, std::tuple<Args...> params)
+        {
+            return (x->*f_)(std::get<S>(params)...);
+        }
+
+        R*  (C::*f_)(Args...);
+};
+
 template<class C, class... Args>
 struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
 {
@@ -259,7 +325,10 @@ struct server::module::class_proxy_base
 template<class C>
 struct server::module::class_proxy: public class_proxy_base
 {
-    void*           create(size_t id, diy::MemoryBuffer& in, module* self) const override      { return constructors_[id]->create(in, self); }
+                    class_proxy():
+                        class_hash_(hash_class<C>())                                        {}
+
+    void*           create(size_t id, diy::MemoryBuffer& in, module* self) const override   { return constructors_[id]->create(in, self); }
 
     template<class... Args>
     class_proxy&    constructor()
@@ -283,8 +352,11 @@ struct server::module::class_proxy: public class_proxy_base
 
     void            destroy(void* o) const override     { delete static_cast<C*>(o); }
 
+    size_t          hash() const                        { return class_hash_; }
+
     std::vector<std::unique_ptr<MemberFunctionBase>>    functions_;
     std::vector<std::unique_ptr<ConstructorBase>>       constructors_;
+    size_t                                              class_hash_;
 };
 
 
@@ -295,6 +367,9 @@ class_(std::string name)
 {
     class_proxy<C>* x = new class_proxy<C>;
     classes_.emplace_back(x);
+
+    class_hashes_.emplace(x->hash(), classes_.size() - 1);
+
     return *x;
 }
 
@@ -305,8 +380,8 @@ call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
     size_t obj_id;
     diy::load(in, obj_id);
 
-    size_t class_id = objects_[obj_id].cls;
-    auto& cp = proxy(class_id);
+    size_t cls = objects_[obj_id].cls;
+    auto& cp = proxy(cls);
     size_t fn_id;
     diy::load(in, fn_id);
 
@@ -317,13 +392,14 @@ void
 server::module::
 create(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
 {
-    size_t class_id, constructor_id;
-    diy::load(in, class_id);
+    size_t cls, constructor_id;
+    diy::load(in, cls);
     diy::load(in, constructor_id);
 
-    objects_.emplace_back(ObjectWithClass { classes_[class_id]->create(constructor_id, in, this), class_id });
+    objects_.emplace_back(ObjectWithClass { classes_[cls]->create(constructor_id, in, this), cls });
 
     size_t obj_id = objects_.size() - 1;
+    diy::save(out, cls);        // redundant, but matches the reading on the client, designed to support returning objects from function calls
     diy::save(out, obj_id);
 }
 

@@ -67,6 +67,58 @@ struct client
 
 #include "modules/client.h"
 
+// Re-open the namespace for specializations to work around a GCC bug;
+// see http://stackoverflow.com/a/25594741
+namespace LowFive
+{
+namespace rpc
+{
+
+// load_impl exists to deal with void returns and custom handling of objects
+template<class R>
+struct client::load_impl
+{
+                            load_impl(diy::MemoryBuffer& in, int, client*):
+                                in_(in)                 {}
+
+    R                       operator()() const          { R x; diy::load(in_, x); return x; }
+
+    diy::MemoryBuffer&      in_;
+};
+
+template<>
+struct client::load_impl<client::object>
+{
+                            load_impl(diy::MemoryBuffer& in, int target, client* self):
+                                in_(in), target_(target), self_(self)
+                                                        {}
+
+    object                  operator()() const
+    {
+        size_t obj_id, cls_id;
+        diy::load(in_, cls_id);
+        diy::load(in_, obj_id);
+
+        return object(target_, obj_id, self_->m_.proxy(cls_id), self_);
+    }
+
+    diy::MemoryBuffer&      in_;
+    int                     target_;
+    client*                 self_;
+};
+
+template<>
+struct client::load_impl<void>
+{
+                            load_impl(diy::MemoryBuffer&, int, client*)   {}
+
+    void                    operator()() const          {}
+};
+
+}
+}
+
+
 template<class R, class... Args>
 R
 LowFive::rpc::client::
@@ -87,7 +139,7 @@ call(int target, std::string name, Args... args)
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<R>(in)();
+    return load_impl<R>(in, target, this)();
 }
 
 template<class R, class... Args>
@@ -108,20 +160,20 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<R>(in)();
+    return load_impl<R>(in, target, this)();
 }
 
 template<class... Args>
 LowFive::rpc::client::object
 LowFive::rpc::client::create(int target, std::string name, Args... args)
 {
-    size_t id, constructor_id;
-    std::tie(id,constructor_id) = m_.find_class_constructor(name, args...);
+    size_t cls_id, constructor_id;
+    std::tie(cls_id,constructor_id) = m_.find_class_constructor(name, args...);
 
     diy::MemoryBuffer out, in;
 
     diy::save(out, ops::create);
-    diy::save(out, id);
+    diy::save(out, cls_id);
     diy::save(out, constructor_id);
 
     save_impl<Args...> s(out);
@@ -130,9 +182,7 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    size_t obj_id;
-    diy::load(in, obj_id);
-    return object(target, obj_id, m_.proxy(id), this);
+    return load_impl<object>(in, target, this)();
 }
 
 template<class... Args>
@@ -196,26 +246,6 @@ template<>
 struct client::save_impl<>
 {
                             save_impl(diy::MemoryBuffer&)   {}
-
-    void                    operator()() const          {}
-};
-
-// load_impl exists to deal with void returns
-template<class R>
-struct client::load_impl
-{
-                            load_impl(diy::MemoryBuffer& in):
-                                in_(in)                 {}
-
-    R                       operator()() const          { R x; diy::load(in_, x); return x; }
-
-    diy::MemoryBuffer&      in_;
-};
-
-template<>
-struct client::load_impl<void>
-{
-                            load_impl(diy::MemoryBuffer&)   {}
 
     void                    operator()() const          {}
 };
