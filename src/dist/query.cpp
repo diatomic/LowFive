@@ -5,22 +5,26 @@
 
 #include "../log-private.hpp"
 
+#include "core.hpp"
+
+
 namespace LowFive {
 
 Query::Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size_, int intercomm_index_):
         IndexQuery(local_, intercomms_),
         remote_size(remote_size_),
-        intercomm_index(intercomm_index_)
-{}
+        intercomm_index(intercomm_index_),
+        c(m, intercomms_[intercomm_index_], 0)      // FIXME: default target should not be 0
+{
+    export_core(m, nullptr);        // client doesn't need IndexServe
+}
 
 void
 Query::file_open()
 {
     bool root = local.rank() == 0;
-    if (root)
-    {
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::file, true);
-    }
+    //if (root)
+        c.call<void>("file_open");
 }
 
 void
@@ -29,47 +33,24 @@ Query::file_close()
     local.barrier();
 
     bool root = local.rank() == 0;
-    if (root)
-    {
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::file, false);
-    }
+    //if (root)
+        c.call<void>("file_close");
 }
 
 void Query::dataset_open(std::string name)
 {
+    name_ = name;
+
     bool root = local.rank() == 0;
 
     // TODO: the broadcasts necessitate collective open; they are not
     //       necessary (or could be triggered by a hint from the execution framework)
 
     // query producer for dim
-    if (root)
-    {
-        int msg;
-
-        // query id using name
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::id, name);
-        msg = recv(intercomm(intercomm_index), 0, tags::producer, id); expected(msg, msgs::id);
-
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::dimension, id, 0);
-        msg = recv(intercomm(intercomm_index), 0, tags::producer, dim);   expected(msg, msgs::dimension);
-        msg = recv(intercomm(intercomm_index), 0, tags::producer, type);  expected(msg, msgs::dimension);
-        msg = recv(intercomm(intercomm_index), 0, tags::producer, space); expected(msg, msgs::dimension);
-    }
-    diy::mpi::broadcast(local, id,  0);
-    diy::mpi::broadcast(local, dim, 0);
-    broadcast(local, type, 0);
-    broadcast(local, space, 0);
-
-    // query producer for domain
-    Bounds domain { dim };
-    if (root)
-    {
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::domain, id, 0);
-        int msg = recv(intercomm(intercomm_index), 0, tags::producer, domain);
-        expected(msg, msgs::domain);
-    }
-    broadcast(local, domain, 0);
+    using object = rpc::client::object;
+    ids = decltype(ids)(new object(c.call<object>("dataset_open", name)));
+    std::tie(dim, type, space) = ids->call<std::tuple<int, Datatype, Dataspace>>("metadata");
+    auto domain = ids->call<Bounds>("domain");
 
     decomposer = Decomposer(dim, domain, remote_size);
 }
@@ -77,6 +58,7 @@ void Query::dataset_open(std::string name)
 void
 Query::dataset_close()
 {
+    c.call<void>("dataset_close");
 }
 
 void
@@ -95,10 +77,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
     for (int gid : gids)
     {
         // TODO: make this asynchronous (isend + irecv, etc)
-        send(intercomm(intercomm_index), gid, tags::consumer, msgs::redirect, id, file_space);
-
-        BoxLocations redirects;
-        int msg = recv(intercomm(intercomm_index), gid, tags::producer, redirects); expected(msg, msgs::redirect);
+        BoxLocations redirects = ids->call<BoxLocations>("redirects", file_space);
         for (auto& x : redirects)
             all_redirects.push_back(x);
     }
@@ -115,10 +94,12 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
         if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
         {
             blocks.insert(gid);
-            send(intercomm(intercomm_index), gid, tags::consumer, msgs::data, id, file_space);
 
-            diy::MemoryBuffer queue;
-            int msg = recv(intercomm(intercomm_index), gid, tags::producer, queue); expected(msg, msgs::data);
+            // open the object on the right rank
+            using object = rpc::client::object;
+            auto rids = c.call<object>(gid, "dataset_open", name_);
+
+            auto queue = rids.call<diy::MemoryBuffer>("get_data", file_space);
 
             while (queue)
             {
@@ -150,42 +131,22 @@ Query::get_filenames()
     log->trace("Enter Query::get_filenames()");
 
     FileNames file_names;
-    size_t n_file_names {0};
 
     bool root = local.rank() == 0;
 
     if (root)
-    {
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::fnames, true);
-        log->trace("Query::get_filenames() sent msgs::fnames");
-
-        diy::MemoryBuffer queue;
-        int msg = recv(intercomm(intercomm_index), 0, tags::producer, queue);
-        log->trace("Query::get_filenames() recv done");
-        expected(msg, msgs::fnames);
-
-        if(queue)
-        {
-            diy::load(queue, n_file_names);
-            log->trace("Query::get_filenames() loaded n_fnames = {}", n_file_names);
-            file_names = FileNames(n_file_names, "");
-            for(size_t i = 0; i < n_file_names; ++i) {
-                diy::load(queue, file_names[i]);
-            }
-        } else
-        {
-            log->trace("Query::get_filenames() queue is empty");
-        }
-    }
+        file_names = c.call<std::vector<std::string>>("get_filenames");
 
     // broadcast file_names to all ranks from root
 
+    auto n_file_names = file_names.size();
     diy::mpi::broadcast(local, n_file_names,  0);
     log->trace("Query::get_filenames() broadcast n_file_names = {}", n_file_names);
 
     if (!root)
         file_names = FileNames(n_file_names, "");
 
+    // FIXME: this is a terrible way to do this
     for(size_t i = 0; i < n_file_names; ++i) {
         broadcast(local, file_names[i], 0);
     }
@@ -201,10 +162,8 @@ Query::send_done()
     log->trace("Enter Query::send_done()");
 
     bool root = local.rank() == 0;
-    if (root) {
-        send(intercomm(intercomm_index), 0, tags::consumer, msgs::done, true);
-        log->trace("Query::send_done(): sent msgs::done to intercomm index = {}", intercomm_index);
-    }
+    if (root)
+        c.finish(0);
 }
 
 

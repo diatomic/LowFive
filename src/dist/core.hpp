@@ -32,9 +32,39 @@ struct IndexedDataset
         decomposer = Decomposer(dim, domain, comm_size);
     }
 
-    auto                metadata()
+    Bounds                  domain()        { return decomposer.domain; }
+
+    BoxLocations            redirects(Dataspace ds)
     {
-        return std::make_tuple(dim, type, space);
+        BoxLocations redirects;
+        for (auto& y : boxes)
+        {
+            auto& ds2 = std::get<0>(y);
+            if (ds.intersects(ds2))
+                redirects.push_back(y);
+        }
+        return redirects;
+    }
+
+    diy::MemoryBuffer       get_data(Dataspace fs)
+    {
+        diy::MemoryBuffer queue;
+
+        for (auto& y : ds->data)
+        {
+            if (y.file.intersects(fs))
+            {
+                Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   fs.id), true);
+                Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, fs.id), true);
+                diy::save(queue, file_src);
+                Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                {
+                  diy::save(queue, (char*) y.data + loc, len);
+                });
+            }
+        }
+
+        return queue;
     }
 
     Dataset*                ds;
@@ -50,20 +80,23 @@ using IndexedDatasets       = std::map<std::string, IndexedDataset>;
 struct IndexServe
 {
 
-    void                    file_open()     { ++open_files; }
-    void                    file_close()    { --open_files; }
-    std::set<std::string>   get_filenames()
+    void                        file_open()     { ++open_files; }
+    void                        file_close()    { --open_files; }
+    std::vector<std::string>    get_filenames()
     {
         // traverse all indexed datasets and collect dataset filenames in fnames
         std::set<std::string> fnames;
-
         for(auto key_ds : *index_data)
         {
             std::string fname = key_ds.second.ds->fullname().first;
             fnames.insert(fname);
         }
 
-        return fnames;
+        std::vector<std::string> result;
+        for (auto& fn : fnames)
+            result.emplace_back(fn);
+
+        return result;
     }
 
     IndexedDatasets*    index_data;
@@ -73,20 +106,20 @@ struct IndexServe
 template<class module>
 void export_core(module& m, IndexServe* idx)
 {
-    m.template class_<IndexedDataset>("Dataset")
-        //.function("metadata", [](IndexedDataset* ids) { return std::make_tuple(ids->dim, ids->type, ids->space); })
-        .function("metadata", &IndexedDataset::metadata);
+    m.template class_<IndexedDataset>("IndexedDataset")
+        .function("metadata",   [](IndexedDataset* ids) { return std::make_tuple(ids->dim, ids->type, ids->space); })
+        .function("domain",     &IndexedDataset::domain)
+        .function("redirects",  &IndexedDataset::redirects)
+        .function("get_data",   &IndexedDataset::get_data)
     ;
 
-    //m.function("file_open", [idx]() { idx->file_open(); });
-    //m.function("file_close", [idx]() { idx->file_close(); });
+    m.function("file_open", [idx]() { idx->file_open(); });
+    m.function("file_close", [idx]() { idx->file_close(); });
 
-    //m.function("dataset_open", [idx](std::string name) { return &(idx->index_data->at(name)); });
-    //m.function("dataset_close", []() {});       // nothing for now
+    m.function("dataset_open", [idx](std::string name) { return &(idx->index_data->at(name)); });
+    m.function("dataset_close", []() {});       // nothing for now
 
-    ////m.function("query", &query);
-
-    //m.function("get_filenames", [idx]() { return idx->get_filenames(); });
+    m.function("get_filenames", [idx]() { return idx->get_filenames(); });
 
     //m.function("finish", &finish);
 }

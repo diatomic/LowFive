@@ -26,7 +26,10 @@ namespace diy
         Bounds(int dim): min(dim), max(dim)                                 {}
         Bounds(const Point& _min, const Point& _max) : min(_min), max(_max) {}
 
-        private:
+        // !!!
+        // LowFive::rpc change: make the default constructor public; need it for deserialization in RPC
+        // !!!
+        //private:
             // make default constructor private to explicitly break old deprecated behavior;
             // any call to the default constructor should be replaced by a call to Bounds(0)
             Bounds():
