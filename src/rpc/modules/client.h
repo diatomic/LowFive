@@ -23,8 +23,20 @@ struct client::module
     template<class... Args> struct hash_arguments;      // for call
     template<class... Args> struct hash_parameters;     // for function
 
+    template<class F>
+    void            function(std::string name, F f)
+    {
+        function(name, to_function(f));
+    }
+
     template<class R, class... Args>
-    void        function(std::string name, R (*)(Args...))
+    void        function(std::string name, R (*f)(Args...))
+    {
+        function(name, to_function(f));
+    }
+
+    template<class R, class... Args>
+    void        function(std::string name, std::function<R(Args...)>)
     {
         size_t hash = hash_parameters<Args...>()();
         //std::cout << "Recording function " << name << " with parameter hash " << hash << std::endl;
@@ -88,8 +100,20 @@ struct client::module::class_proxy
         return *this;
     }
 
+    template<class F>
+    class_proxy&    function(std::string name, F f)
+    {
+        return function(name, to_function(f));
+    }
+
     template<class R, class T, class... Args>
-    class_proxy&    function(std::string name, R (T::*)(Args...))
+    class_proxy&    function(std::string name, R (T::*f)(Args...))
+    {
+        return function(name, to_function(f));
+    }
+
+    template<class R, class T, class... Args>
+    class_proxy&    function(std::string name, std::function<R(T*, Args...)>)
     {
         size_t hash = client::module::hash_parameters<Args...>()();
         //std::cout << "Recording member function " << name << " with parameter hash " << hash << std::endl;

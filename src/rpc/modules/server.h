@@ -31,8 +31,20 @@ struct server::module
     struct ConstructorBase;
     template<class C, class... Args> struct Constructor;
 
+    template<class F>
+    void            function(std::string name, F f)
+    {
+        function(name, to_function(f));
+    }
+
     template<class R, class... Args>
-    void            function(std::string name, R (*f)(Args...))
+    void        function(std::string name, R (*f)(Args...))
+    {
+        function(name, to_function(f));
+    }
+
+    template<class R, class... Args>
+    void            function(std::string name, std::function<R(Args...)> f)
     {
         functions_.emplace_back(new Function<R, Args...>(f));
     }
@@ -125,7 +137,7 @@ struct server::module::FunctionBase
 template<class R, class... Args>
 struct server::module::Function: public FunctionBase
 {
-                    Function(R (*f)(Args...)):
+                    Function(std::function<R(Args...)> f):
                         f_(f)                       {}
 
     void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
@@ -138,17 +150,17 @@ struct server::module::Function: public FunctionBase
         template<int... S>
         R       call_impl(detail::seq<S...>, std::tuple<Args...> params)
         {
-            return (*f_)(std::get<S>(params)...);
+            return f_(std::get<S>(params)...);
         }
 
-        R   (*f_)(Args...);
+        std::function<R(Args...)> f_;
 };
 
 // specialization for returning pointers
 template<class R, class... Args>
 struct server::module::Function<R*, Args...>: public FunctionBase
 {
-                    Function(R* (*f)(Args...)):
+                    Function(std::function<R*(Args...)> f):
                         f_(f)                       {}
 
     void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
@@ -168,16 +180,16 @@ struct server::module::Function<R*, Args...>: public FunctionBase
         template<int... S>
         R*       call_impl(detail::seq<S...>, std::tuple<Args...> params)
         {
-            return (*f_)(std::get<S>(params)...);
+            return f_(std::get<S>(params)...);
         }
 
-        R*   (*f_)(Args...);
+        std::function<R*(Args...)> f_;
 };
 
 template<class... Args>
 struct server::module::Function<void,Args...>: public FunctionBase
 {
-                    Function(void (*f)(Args...)):
+                    Function(std::function<void(Args...)> f):
                         f_(f)                       {}
 
     void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
@@ -189,10 +201,10 @@ struct server::module::Function<void,Args...>: public FunctionBase
         template<int... S>
         void    call_impl(detail::seq<S...>, std::tuple<Args...> params)
         {
-            (*f_)(std::get<S>(params)...);
+            f_(std::get<S>(params)...);
         }
 
-        void    (*f_)(Args...);
+        std::function<void(Args...)> f_;
 };
 
 
@@ -217,7 +229,7 @@ struct server::module::MemberFunctionBase
 template<class C, class R, class... Args>
 struct server::module::MemberFunction: public MemberFunctionBase
 {
-                    MemberFunction(R (C::*f)(Args...)):
+                    MemberFunction(std::function<R(C*, Args...)> f):
                         f_(f)                       {}
 
     void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
@@ -232,17 +244,17 @@ struct server::module::MemberFunction: public MemberFunctionBase
         template<int... S>
         R       call_impl(C* x, detail::seq<S...>, std::tuple<Args...> params)
         {
-            return (x->*f_)(std::get<S>(params)...);
+            return f_(x, std::get<S>(params)...);
         }
 
-        R   (C::*f_)(Args...);
+        std::function<R(C*, Args...)> f_;
 };
 
 // specialization for returning pointers
 template<class C, class R, class... Args>
 struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
 {
-                    MemberFunction(R* (C::*f)(Args...)):
+                    MemberFunction(std::function<R*(C*, Args...)> f):
                         f_(f)                       {}
 
     void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
@@ -264,16 +276,16 @@ struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
         template<int... S>
         R*      call_impl(C* x, detail::seq<S...>, std::tuple<Args...> params)
         {
-            return (x->*f_)(std::get<S>(params)...);
+            return f_(x, std::get<S>(params)...);
         }
 
-        R*  (C::*f_)(Args...);
+        std::function<R*(C*, Args...)> f_;
 };
 
 template<class C, class... Args>
 struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
 {
-                    MemberFunction(void (C::*f)(Args...)):
+                    MemberFunction(std::function<void(C*, Args...)> f):
                         f_(f)                       {}
 
     void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& /* out */, module* self) override
@@ -287,10 +299,10 @@ struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
         template<int... S>
         void    call_impl(C* x, detail::seq<S...>, std::tuple<Args...> params)
         {
-            (x->*f_)(std::get<S>(params)...);
+            f_(x, std::get<S>(params)...);
         }
 
-        void    (C::*f_)(Args...);
+        std::function<void(C*, Args...)> f_;
 };
 
 /* Constructor */
@@ -343,10 +355,22 @@ struct server::module::class_proxy: public class_proxy_base
 
 
     template<class R, class... Args>
-    class_proxy&    function(std::string name, R (C::*f)(Args...))
+    class_proxy&    function(std::string name, std::function<R(C*, Args...)> f)
     {
         functions_.emplace_back(new MemberFunction<C, R, Args...>(f));
         return *this;
+    }
+
+    template<class R, class... Args>
+    class_proxy&    function(std::string name, R (C::*f)(Args...))
+    {
+        return function(name, to_function(f));
+    }
+
+    template<class F>
+    class_proxy&    function(std::string name, F f)
+    {
+        return function(name, to_function(f));
     }
 
     void            call(size_t id, size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) const override
