@@ -30,13 +30,13 @@ struct client
                                                                         {}
 
     template<class R, class... Args>
-    R               call(std::string name, Args... args)                { return call(default_target_, name, args...); }
+    R               call(std::string name, Args... args)                { return call<R, Args...>(default_target_, name, args...); }
 
     template<class R, class... Args>
     R               call(int target, std::string name, Args... args);
 
     template<class R, class... Args>
-    R               call_mem_fn(size_t obj, size_t fn, Args... args)    { return call_mem_fn(default_target_, obj, fn, args...); }
+    R               call_mem_fn(size_t obj, size_t fn, Args... args)    { return call_mem_fn<R, Args...>(default_target_, obj, fn, args...); }
 
     template<class R, class... Args>
     R               call_mem_fn(int target, size_t obj, size_t fn, Args... args);
