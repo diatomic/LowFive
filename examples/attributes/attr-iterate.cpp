@@ -47,6 +47,7 @@ int main(int argc, char**argv)
     int                       passthru          = 0;              // write file to disk
     bool                      shared            = false;          // producer and consumer run on the same ranks
     size_t                    local_num_points  = 20;            // points per block
+    std::string               log_level         = "";
 
     // default global data bounds
     Bounds domain { dim };
@@ -67,6 +68,7 @@ int main(int argc, char**argv)
         >> Option(     "prefix",    prefix,         "prefix for external storage")
         >> Option('m', "memory",    metadata,       "build and use in-memory metadata")
         >> Option('f', "file",      passthru,       "write file to disk")
+        >> Option('l', "log",       log_level,      "level for the log output (trace, debug, info, ...)")
         ;
     ops
         >> Option('x',  "max-x",    domain.max[0],  "domain max x")
@@ -90,6 +92,9 @@ int main(int argc, char**argv)
         }
         return 1;
     }
+
+    if (!log_level.empty())
+        l5::create_logger(log_level);
 
     // set HDF5 error handler
     H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
@@ -149,6 +154,10 @@ int main(int argc, char**argv)
     // create a new file and group using default properties
     hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    // get info back about the group
+    H5G_info_t group_info;
+    H5Gget_info(group, &group_info);
 
     std::vector<hsize_t> domain_cnts(DIM);
     for (auto i = 0; i < DIM; i++)

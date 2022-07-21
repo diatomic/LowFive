@@ -154,7 +154,6 @@ struct VOLBase
     virtual void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
     static herr_t          _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    //void file_get()                 {}
     static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
     static herr_t          _file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
@@ -168,11 +167,14 @@ struct VOLBase
     virtual void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     static void*           _group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
     virtual void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
-    //void group_get()                {}
-    //void group_specific()           {}
-    //void group_optional()           {}
-    static herr_t          _group_close(void *grp, hid_t dxpl_id, void **req);
-    virtual herr_t          group_close(void *grp, hid_t dxpl_id, void **req);
+    static herr_t          _group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _group_specific(void *obj, H5VL_group_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          group_specific(void *obj, H5VL_group_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _group_optional(void *obj, H5VL_group_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          group_optional(void *obj, H5VL_group_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _group_close(void *obj, hid_t dxpl_id, void **req);
+    virtual herr_t          group_close(void *obj, hid_t dxpl_id, void **req);
 
     //// link
     static herr_t          _link_create_reissue(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...); // helper function for link_create()

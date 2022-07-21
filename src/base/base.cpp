@@ -67,10 +67,10 @@ H5VL_class_t LowFive::VOLBase::connector =
     {                                           /* group_cls */
         &_group_create,                              /* create */
         &_group_open,                                /* open */
-        NULL, // OUR_pass_through_group_get,                /* get */
-        NULL, // OUR_pass_through_group_specific,           /* specific */
-        NULL, // OUR_pass_through_group_optional,           /* optional */
-        &_group_close                                       /* close */
+        &_group_get,                                 /* get */
+        &_group_specific,                            /* specific */
+        &_group_optional,                            /* optional */
+        &_group_close                                /* close */
     },
     {                                           /* link_cls */
         &_link_create,                              /* create */
