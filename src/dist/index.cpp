@@ -87,7 +87,7 @@ void
 Index::serve()
 {
     auto log = get_logger();
-    log->trace("Enter Index::serve");
+    log->debug("Enter Index::serve");
     local.barrier();
     //if (local.rank() == 0)
     //{
@@ -130,6 +130,8 @@ Index::serve()
                 }
         }
     }
+
+    log->debug("Done with Index::serve");
 }
 
 void

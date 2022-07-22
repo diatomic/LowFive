@@ -48,6 +48,9 @@ struct IndexedDataset
 
     diy::MemoryBuffer       get_data(Dataspace fs)
     {
+        auto log = get_logger();
+        log->info("In IndexedDatasets::get_data(): {}", fs);
+
         diy::MemoryBuffer queue;
 
         for (auto& y : ds->data)
@@ -63,6 +66,8 @@ struct IndexedDataset
                 });
             }
         }
+
+        log->info("In IndexedDatasets::get_data(): returning queue.size() = {}", queue.size());
 
         return queue;
     }

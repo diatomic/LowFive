@@ -22,6 +22,9 @@ Query::Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size
 void
 Query::file_open()
 {
+    auto log = get_logger();
+    log->info("Query::file_open()");
+
     bool root = local.rank() == 0;
     //if (root)
         c.call<void>("file_open");
@@ -66,6 +69,9 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
              const Dataspace&  mem_space,       // ouput: memory space of resulting data
              void*             buf)             // output: resulting data, allocated by caller
 {
+    auto log = get_logger();
+    log->debug("Query::query: file_space = {}", file_space);
+
     // enqueue queried file dataspace to the ranks that are
     // responsible for the boxes that (might) intersect them
     Bounds b { dim };           // diy representation of the dataspace's bounding box
@@ -77,7 +83,13 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
     for (int gid : gids)
     {
         // TODO: make this asynchronous (isend + irecv, etc)
-        BoxLocations redirects = ids->call<BoxLocations>("redirects", file_space);
+
+        // TODO: this is not terribly efficient; make the proper helper function
+        // open the object on the right rank
+        using object = rpc::client::object;
+        auto rids = c.call<object>(gid, "dataset_open", name_);
+
+        BoxLocations redirects = rids.call<BoxLocations>("redirects", file_space);
         for (auto& x : redirects)
             all_redirects.push_back(x);
     }
@@ -90,6 +102,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
 
         auto& gid = std::get<1>(y);
         auto& ds  = std::get<0>(y);
+        log->debug("Processing redirect: gid = {}, ds = {}", gid, ds);
 
         if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
         {
@@ -98,13 +111,18 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             // open the object on the right rank
             using object = rpc::client::object;
             auto rids = c.call<object>(gid, "dataset_open", name_);
+            log->debug("Opened dataset on {}", gid);
 
             auto queue = rids.call<diy::MemoryBuffer>("get_data", file_space);
+            queue.reset();      // move position to 0
+            log->debug("Received queue of size: {}", queue.size());
 
             while (queue)
             {
                 Dataspace ds;
                 diy::load(queue, ds);
+
+                log->debug("Received {} to requested {}", ds, file_space);
 
                 if (!file_space.intersects(ds))
                     throw MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
@@ -117,6 +135,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             }
         }
     }
+    log->debug("Leaving Query::query");
 }
 
 
