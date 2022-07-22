@@ -49,8 +49,8 @@ struct client
 
     inline void     destroy(int target, size_t id);
 
-    inline size_t&  ref_count(size_t obj_id)            { return ref_count_[obj_id]; }
-    inline void     finish(int target) const            { diy::MemoryBuffer out; diy::save(out, ops::finish); comm_.send(target, tags::consumer, out.buffer); }
+    inline size_t&  ref_count(int target, size_t obj_id)    { return ref_count_[std::make_tuple(target, obj_id)]; }
+    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); comm_.send(target, tags::consumer, out.buffer); }
 
     private:
         const module&               m_;
@@ -58,7 +58,7 @@ struct client
 
         int                         default_target_;
 
-        std::map<size_t, size_t>    ref_count_;
+        std::map<std::tuple<int,size_t>, size_t>    ref_count_;
 
 };
 

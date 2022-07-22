@@ -49,7 +49,7 @@ struct IndexedDataset
     diy::MemoryBuffer       get_data(Dataspace fs)
     {
         auto log = get_logger();
-        log->info("In IndexedDatasets::get_data(): {}", fs);
+        log->trace("In IndexedDataset::get_data(): {}", fs);
 
         diy::MemoryBuffer queue;
 
@@ -67,7 +67,7 @@ struct IndexedDataset
             }
         }
 
-        log->info("In IndexedDatasets::get_data(): returning queue.size() = {}", queue.size());
+        log->trace("In IndexedDatasets::get_data(): returning queue.size() = {}", queue.size());
 
         return queue;
     }
@@ -86,7 +86,15 @@ struct IndexServe
 {
 
     void                        file_open()     { ++open_files; }
-    void                        file_close()    { --open_files; }
+    void                        file_close()
+    {
+        auto log = get_logger();
+        log->trace("IndexServe::file_close()");
+
+        --open_files;
+        if (open_files == 0)
+            done = true;
+    }
     std::vector<std::string>    get_filenames()
     {
         // traverse all indexed datasets and collect dataset filenames in fnames
@@ -106,6 +114,7 @@ struct IndexServe
 
     IndexedDatasets*    index_data;
     int                 open_files = 0;
+    bool                done = false;
 };
 
 template<class module>

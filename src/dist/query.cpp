@@ -26,7 +26,7 @@ Query::file_open()
     log->info("Query::file_open()");
 
     bool root = local.rank() == 0;
-    //if (root)
+    if (root)
         c.call<void>("file_open");
 }
 
@@ -36,15 +36,13 @@ Query::file_close()
     local.barrier();
 
     bool root = local.rank() == 0;
-    //if (root)
+    if (root)
         c.call<void>("file_close");
 }
 
 void Query::dataset_open(std::string name)
 {
     name_ = name;
-
-    bool root = local.rank() == 0;
 
     // TODO: the broadcasts necessitate collective open; they are not
     //       necessary (or could be triggered by a hint from the execution framework)
@@ -70,7 +68,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
              void*             buf)             // output: resulting data, allocated by caller
 {
     auto log = get_logger();
-    log->debug("Query::query: file_space = {}", file_space);
+    log->trace("Query::query: file_space = {}", file_space);
 
     // enqueue queried file dataspace to the ranks that are
     // responsible for the boxes that (might) intersect them
@@ -102,7 +100,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
 
         auto& gid = std::get<1>(y);
         auto& ds  = std::get<0>(y);
-        log->debug("Processing redirect: gid = {}, ds = {}", gid, ds);
+        log->trace("Processing redirect: gid = {}, ds = {}", gid, ds);
 
         if (file_space.intersects(ds) && blocks.find(gid) == blocks.end())
         {
@@ -111,18 +109,18 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             // open the object on the right rank
             using object = rpc::client::object;
             auto rids = c.call<object>(gid, "dataset_open", name_);
-            log->debug("Opened dataset on {}", gid);
+            log->trace("Opened dataset on {}", gid);
 
             auto queue = rids.call<diy::MemoryBuffer>("get_data", file_space);
             queue.reset();      // move position to 0
-            log->debug("Received queue of size: {}", queue.size());
+            log->trace("Received queue of size: {}", queue.size());
 
             while (queue)
             {
                 Dataspace ds;
                 diy::load(queue, ds);
 
-                log->debug("Received {} to requested {}", ds, file_space);
+                log->trace("Received {} to requested {}", ds, file_space);
 
                 if (!file_space.intersects(ds))
                     throw MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
@@ -135,7 +133,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             }
         }
     }
-    log->debug("Leaving Query::query");
+    log->trace("Leaving Query::query");
 }
 
 

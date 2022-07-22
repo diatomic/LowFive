@@ -87,8 +87,11 @@ void
 Index::serve()
 {
     auto log = get_logger();
-    log->debug("Enter Index::serve");
+    log->trace("Enter Index::serve");
     local.barrier();
+
+    bool root = (local.rank() == 0);
+
     //if (local.rank() == 0)
     //{
     //    // signal to consumer that we are ready
@@ -97,7 +100,7 @@ Index::serve()
 
     diy::mpi::request all_done;
     bool all_done_active = false;
-    if (local.rank() != 0)
+    if (!root)
     {
         all_done = local.ibarrier();
         all_done_active = true;
@@ -123,15 +126,21 @@ Index::serve()
         {
             int source = s.probe();
             if (source >= 0)
-                if (s.process(source)) // true indicates that finish was called
+                if (s.process(source))   // true indicates that finish was called
                 {
                     all_done = local.ibarrier();
                     all_done_active = true;
                 }
+
+            if (root && idx_srv.done)
+            {
+                all_done = local.ibarrier();
+                all_done_active = true;
+            }
         }
     }
 
-    log->debug("Done with Index::serve");
+    log->trace("Done with Index::serve");
 }
 
 void

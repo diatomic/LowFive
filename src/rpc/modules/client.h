@@ -9,6 +9,8 @@
 
 #include "../util.h"
 
+#include "../../log-private.hpp"
+
 namespace LowFive
 {
 
@@ -189,11 +191,16 @@ struct client::object
 
                         object(int rank, size_t id, const class_proxy& cp, client* self, bool own):
                             rank_(rank), id_(id), cp_(cp), self_(self), own_(own)
-                                                                    { self_->ref_count(id_)++; }
+    {
+        auto log = get_logger();
+        log->trace("object(): own = {}", own_);
+
+        self_->ref_count(rank_, id_)++;
+    }
 
                         object(const object& o):
                             rank_(o.rank_), id_(o.id_), cp_(o.cp_), self_(o.self_), own_(o.own_)
-                                                                    { self_->ref_count(id_)++; }
+                                                                    { self_->ref_count(rank_, id_)++; }
     object&             operator=(const object&)    =delete;
     object&             operator=(object&&)         =delete;
 
@@ -203,7 +210,15 @@ struct client::object
     size_t              hash() const                                { return cp_.hash(); }
     size_t              id() const                                  { return id_; }
 
-                        ~object()                                   { self_->ref_count(id_)--; if (self_->ref_count(id_) == 0 && own_) { self_->destroy(rank_, id_); } }
+                        ~object()
+    {
+        auto log = get_logger();
+        log->trace("~object: own = {}", own_);
+
+        self_->ref_count(rank_, id_)--;
+        if (self_->ref_count(rank_, id_) == 0 && own_)
+            self_->destroy(rank_, id_);
+    }
 
     int                 rank_;
     size_t              id_;

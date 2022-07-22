@@ -46,7 +46,7 @@ struct server::module
     template<class R, class... Args>
     void            function(std::string name, std::function<R(Args...)> f)
     {
-        functions_.emplace_back(new Function<R, Args...>(f));
+        functions_.emplace_back(new Function<R, Args...>(name, f));
     }
 
     template<class C>
@@ -130,18 +130,25 @@ struct server::module::load_impl<>
 /* Functions */
 struct server::module::FunctionBase
 {
+                    FunctionBase(std::string name):
+                        name_(name)                         {}
     virtual void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self)  =0;
     virtual         ~FunctionBase() {}
+
+    std::string     name_;
 };
 
 template<class R, class... Args>
 struct server::module::Function: public FunctionBase
 {
-                    Function(std::function<R(Args...)> f):
+                    Function(std::string name, std::function<R(Args...)> f):
+                        FunctionBase(name),
                         f_(f)                       {}
 
     void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
+        auto log = get_logger();
+        log->trace("Called function {}", name_);
         R res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
         diy::save(out, res);
     }
@@ -160,11 +167,15 @@ struct server::module::Function: public FunctionBase
 template<class R, class... Args>
 struct server::module::Function<R*, Args...>: public FunctionBase
 {
-                    Function(std::function<R*(Args...)> f):
+                    Function(std::string name, std::function<R*(Args...)> f):
+                        FunctionBase(name),
                         f_(f)                       {}
 
     void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
+        auto log = get_logger();
+        log->trace("Called function {}", name_);
+
         R* res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
 
         size_t cls = self->class_id<R>();
@@ -189,11 +200,15 @@ struct server::module::Function<R*, Args...>: public FunctionBase
 template<class... Args>
 struct server::module::Function<void,Args...>: public FunctionBase
 {
-                    Function(std::function<void(Args...)> f):
+                    Function(std::string name, std::function<void(Args...)> f):
+                        FunctionBase(name),
                         f_(f)                       {}
 
     void    call(diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
+        auto log = get_logger();
+        log->trace("Called function {}", name_);
+
         call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
     }
 
