@@ -47,11 +47,20 @@ void Query::dataset_open(std::string name)
     // TODO: the broadcasts necessitate collective open; they are not
     //       necessary (or could be triggered by a hint from the execution framework)
 
-    // query producer for dim
-    using object = rpc::client::object;
-    ids = decltype(ids)(new object(c.call<object>("dataset_open", name)));
-    std::tie(dim, type, space) = ids->call<std::tuple<int, Datatype, Dataspace>>("metadata");
-    auto domain = ids->call<Bounds>("domain");
+    // query producer
+    Bounds domain {0};
+    bool root = (local.rank() == 0);
+    if (root)
+    {
+        using object = rpc::client::object;
+        ids = decltype(ids)(new object(c.call<object>("dataset_open", name)));
+        std::tie(dim, type, space) = ids->call<std::tuple<int, Datatype, Dataspace>>("metadata");
+        domain = ids->call<Bounds>("domain");
+    }
+    diy::mpi::broadcast(local, dim, 0);
+    broadcast(local, type, 0);
+    broadcast(local, space, 0);
+    broadcast(local, domain, 0);
 
     decomposer = Decomposer(dim, domain, remote_size);
 }
