@@ -106,15 +106,15 @@ Index::serve()
         all_done_active = true;
     }
 
-    std::vector<rpc::server::module> modules;
-    std::vector<rpc::server>         servers;
+    std::vector<std::unique_ptr<rpc::server::module>>   modules;
+    std::vector<rpc::server>                            servers;
 
     for (auto& intercom : intercomms)
     {
-        modules.emplace_back();
-        export_core(modules.back(), &idx_srv);
+        modules.emplace_back(new rpc::server::module);
+        export_core(*(modules.back()), &idx_srv);
 
-        servers.emplace_back(modules.back(), intercom);
+        servers.emplace_back(*(modules.back()), intercom);
     }
 
     while (true)
@@ -126,16 +126,18 @@ Index::serve()
         {
             int source = s.probe();
             if (source >= 0)
+            {
                 if (s.process(source))   // true indicates that finish was called
                 {
                     all_done = local.ibarrier();
                     all_done_active = true;
                 }
 
-            if (root && idx_srv.done)
-            {
-                all_done = local.ibarrier();
-                all_done_active = true;
+                if (root && idx_srv.done)
+                {
+                    all_done = local.ibarrier();
+                    all_done_active = true;
+                }
             }
         }
     }
