@@ -95,6 +95,12 @@ struct client::load_impl<client::object>
 
     object                  operator()() const
     {
+        // XXX: without this log->trace(), we sometimes get a completely weird
+        //      behavior, where own_ = true, despite it actually being false.
+        //      I have not been able to figure out why this happens.
+        auto log = get_logger();
+        log->trace("In load_impl, returning object: own = {}", own_);
+
         size_t obj_id, cls_id;
         diy::load(in_, cls_id);
         diy::load(in_, obj_id);

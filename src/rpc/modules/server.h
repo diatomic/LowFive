@@ -237,18 +237,26 @@ call(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
 /* MemberFunctions */
 struct server::module::MemberFunctionBase
 {
+                    MemberFunctionBase(std::string name):
+                        name_(name)         {}
     virtual void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self)  =0;
     virtual         ~MemberFunctionBase()   {}
+
+    std::string     name_;
 };
 
 template<class C, class R, class... Args>
 struct server::module::MemberFunction: public MemberFunctionBase
 {
-                    MemberFunction(std::function<R(C*, Args...)> f):
+                    MemberFunction(std::string name, std::function<R(C*, Args...)> f):
+                        MemberFunctionBase(name),
                         f_(f)                       {}
 
     void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
+        auto log = get_logger();
+        log->trace("Called member function {}", name_);
+
         C* x = (C*) self->objects_[obj_id].obj;
 
         R res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
@@ -269,11 +277,15 @@ struct server::module::MemberFunction: public MemberFunctionBase
 template<class C, class R, class... Args>
 struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
 {
-                    MemberFunction(std::function<R*(C*, Args...)> f):
+                    MemberFunction(std::string name, std::function<R*(C*, Args...)> f):
+                        MemberFunctionBase(name),
                         f_(f)                       {}
 
     void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& out, module* self) override
     {
+        auto log = get_logger();
+        log->trace("Called member function {}", name_);
+
         C* x = (C*) self->objects_[obj_id].obj;
 
         R* res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
@@ -300,11 +312,15 @@ struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
 template<class C, class... Args>
 struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
 {
-                    MemberFunction(std::function<void(C*, Args...)> f):
+                    MemberFunction(std::string name, std::function<void(C*, Args...)> f):
+                        MemberFunctionBase(name),
                         f_(f)                       {}
 
     void    call(size_t obj_id, diy::MemoryBuffer& in, diy::MemoryBuffer& /* out */, module* self) override
     {
+        auto log = get_logger();
+        log->trace("Called member function {}", name_);
+
         C* x = (C*) self->objects_[obj_id].obj;
 
         call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
@@ -372,7 +388,7 @@ struct server::module::class_proxy: public class_proxy_base
     template<class R, class... Args>
     class_proxy&    function(std::string name, std::function<R(C*, Args...)> f)
     {
-        functions_.emplace_back(new MemberFunction<C, R, Args...>(f));
+        functions_.emplace_back(new MemberFunction<C, R, Args...>(name, f));
         return *this;
     }
 
