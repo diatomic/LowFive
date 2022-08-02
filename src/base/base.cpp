@@ -110,7 +110,7 @@ H5VL_class_t LowFive::VOLBase::connector =
         NULL, // OUR_pass_through_token_to_str,             /* to_str */
         NULL, // OUR_pass_through_token_from_str              /* from_str */
     },
-    NULL // OUR_pass_through_optional                  /* optional */
+    &_optional                                              /* optional */
 };
 
 H5PL_type_t H5PLget_plugin_type(void) { return H5PL_TYPE_VOL; }
@@ -216,3 +216,36 @@ _term(void)
 
     return result;
 }
+
+/*-------------------------------------------------------------------------
+ * Function:    optional
+ *
+ * Purpose:     Handles the generic 'optional' callback
+ *
+ * Return:      SUCCEED / FAIL
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL generic Optional");
+
+    ret_value = o->vol->optional(o->under_object, op_type, dxpl_id, req, arguments);
+
+    return ret_value;
+}
+
+herr_t
+LowFive::VOLBase::
+optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    return H5VLoptional(obj, info->under_vol_id, op_type, dxpl_id, req, arguments);
+}
+

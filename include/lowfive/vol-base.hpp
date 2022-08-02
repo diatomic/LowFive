@@ -231,6 +231,9 @@ struct VOLBase
     //void req_specific()             {}
     //void req_optional()             {}
     //void req_free()                 {}
+
+    static herr_t          _optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
 };
 
 }
