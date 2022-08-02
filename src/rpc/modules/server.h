@@ -65,10 +65,14 @@ struct server::module
     size_t          class_id() const                { return class_hashes_.at(hash_class<C>()); }
 
     // load a tuple
-    template<class... Args> struct load_impl;
     template<class... Args>
     std::tuple<Args...>
-                    load(diy::MemoryBuffer& in)     { return load_impl<Args...>()(in, this); }
+                    load(diy::MemoryBuffer& in)     { return std::tuple<Args...> { load_value<Args>(in)... }; }
+                                                    // NB: must use braced initializer list, instead of a function call to make_tuple,
+                                                    //     to ensure the correct order
+
+    template<class T>
+    T               load_value(diy::MemoryBuffer& in);
 
     std::vector<std::unique_ptr<FunctionBase>>      functions_;     // NB: identifiable only by their index
     std::vector<std::unique_ptr<class_proxy_base>>  classes_;
@@ -82,50 +86,28 @@ struct server::module
     std::vector<ObjectWithClass>        objects_;
 };
 
-// load_impl
-template<class T, class... Args>
-struct server::module::load_impl<T, Args...>
+template<class T>
+T
+server::module::
+load_value(diy::MemoryBuffer& in)
 {
-    std::tuple<T, Args...>  operator()(diy::MemoryBuffer& in, module* self) const
+    if constexpr (std::is_pointer_v<T>)
+    {
+        size_t obj_id;
+        diy::load(in, obj_id);
+        return static_cast<T>(objects_[obj_id].obj);
+    } else if constexpr (std::is_reference_v<T>)
+    {
+        size_t obj_id;
+        diy::load(in, obj_id);
+        return *static_cast<std::add_pointer_t<T>>(objects_[obj_id].obj);
+    } else
     {
         T x;
         diy::load(in, x);
-        return std::tuple_cat(std::make_tuple(x), load_impl<Args...>()(in, self));
+        return x;
     }
-};
-
-// T*
-template<class T, class... Args>
-struct server::module::load_impl<T*, Args...>
-{
-    std::tuple<T*, Args...> operator()(diy::MemoryBuffer& in, module* self) const
-    {
-        size_t obj_id;
-        diy::load(in, obj_id);
-        return std::tuple_cat(std::make_tuple(static_cast<T*>(self->objects_[obj_id].obj)), load_impl<Args...>()(in, self));
-    }
-};
-
-// T&
-template<class T, class... Args>
-struct server::module::load_impl<T&, Args...>
-{
-    std::tuple<T&, Args...> operator()(diy::MemoryBuffer& in, module* self) const
-    {
-        size_t obj_id;
-        diy::load(in, obj_id);
-        T& x = *static_cast<T*>(self->objects_[obj_id].obj);
-        return std::tuple_cat(std::tuple<T&>(x), load_impl<Args...>()(in,self));
-    }
-};
-
-template<>
-struct server::module::load_impl<>
-{
-    std::tuple<>            operator()(diy::MemoryBuffer& in, module* self) const      { return std::tuple<>(); }
-};
-
-
+}
 
 /* Functions */
 struct server::module::FunctionBase

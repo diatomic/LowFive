@@ -192,12 +192,6 @@ struct client::object
                         object(int rank, size_t id, const class_proxy& cp, client* self, bool own):
                             rank_(rank), id_(id), cp_(cp), self_(self), own_(own)
     {
-        // XXX: without this log->trace(), we sometimes get a completely weird
-        //      behavior, where own_ = true, despite it actually being false.
-        //      I have not been able to figure out why this happens.
-        auto log = get_logger();
-        log->trace("object(): own = {}", own_);
-
         self_->ref_count(rank_, id_)++;
     }
 

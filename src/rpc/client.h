@@ -22,8 +22,6 @@ struct client
 {
     struct module;
     struct object;
-    template<class... Args> struct save_impl;
-    template<class R>       struct load_impl;
 
                     client(const module& m, MPI_Comm comm, int default_target):
                         m_(m), comm_(comm), default_target_(default_target)
@@ -53,6 +51,13 @@ struct client
     inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); comm_.send(target, tags::consumer, out.buffer); }
 
     private:
+        template<class R>
+        R           load(diy::MemoryBuffer& in, int target, bool own);
+
+        template<class... Args>
+        void        save(diy::MemoryBuffer& out, Args... args);
+
+    private:
         const module&               m_;
         diy::mpi::communicator      comm_;
 
@@ -67,64 +72,40 @@ struct client
 
 #include "modules/client.h"
 
-// Re-open the namespace for specializations to work around a GCC bug;
-// see http://stackoverflow.com/a/25594741
-namespace LowFive
-{
-namespace rpc
-{
-
-// load_impl exists to deal with void returns and custom handling of objects
 template<class R>
-struct client::load_impl
+R
+LowFive::rpc::client::
+load(diy::MemoryBuffer& in, int target, bool own)
 {
-                            load_impl(diy::MemoryBuffer& in, int, client*, bool):
-                                in_(in)                 {}
-
-    R                       operator()() const          { R x; diy::load(in_, x); return x; }
-
-    diy::MemoryBuffer&      in_;
-};
-
-template<>
-struct client::load_impl<client::object>
-{
-                            load_impl(diy::MemoryBuffer& in, int target, client* self, bool own):
-                                in_(in), target_(target), self_(self)
-                                                        {}
-
-    object                  operator()() const
+    if constexpr (std::is_same_v<R, object>)
     {
-        // XXX: without this log->trace(), we sometimes get a completely weird
-        //      behavior, where own_ = true, despite it actually being false.
-        //      I have not been able to figure out why this happens.
-        auto log = get_logger();
-        log->trace("In load_impl, returning object: own = {}", own_);
-
         size_t obj_id, cls_id;
-        diy::load(in_, cls_id);
-        diy::load(in_, obj_id);
-
-        return object(target_, obj_id, self_->m_.proxy(cls_id), self_, own_);
+        diy::load(in, cls_id);
+        diy::load(in, obj_id);
+        return object(target, obj_id, m_.proxy(cls_id), this, own);
+    } else if constexpr (!std::is_void_v<R>)
+    {
+        R x;
+        diy::load(in, x);
+        return x;
     }
+}
 
-    diy::MemoryBuffer&      in_;
-    int                     target_;
-    client*                 self_;
-    bool                    own_;
-};
-
-template<>
-struct client::load_impl<void>
+template<class... Args>
+void
+LowFive::rpc::client::
+save(diy::MemoryBuffer& out, Args... args)
 {
-                            load_impl(diy::MemoryBuffer&, int, client*, bool)   {}
-
-    void                    operator()() const          {}
-};
-
+    ([&out](auto x)
+     {
+        if constexpr (std::is_same_v<decltype(x), object>)
+            diy::save(out, x.id());
+        else if constexpr (std::is_same_v<decltype(x), object*>)
+            diy::save(out, x->id());
+        else
+            diy::save(out, x);
+     } (args), ...);
 }
-}
-
 
 template<class R, class... Args>
 R
@@ -140,13 +121,12 @@ call(int target, std::string name, Args... args)
     diy::save(out, ops::function);
     diy::save(out, id);
 
-    save_impl<Args...> s(out);
-    s(args...);
+    save(out, args...);
 
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<R>(in, target, this, false)();
+    return load<R>(in, target, false);
 }
 
 template<class R, class... Args>
@@ -161,13 +141,12 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
     diy::save(out, obj);
     diy::save(out, fn);
 
-    save_impl<Args...> s(out);
-    s(args...);
+    save(out, args...);
 
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<R>(in, target, this, false)();
+    return load<R>(in, target, false);
 }
 
 template<class... Args>
@@ -183,13 +162,12 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
     diy::save(out, cls_id);
     diy::save(out, constructor_id);
 
-    save_impl<Args...> s(out);
-    s(args...);
+    save(out, args...);
 
     comm_.send(target, tags::consumer, out.buffer);
     comm_.recv(target, tags::producer, in.buffer);
 
-    return load_impl<object>(in, target, this, true)();     // true indicates that we own this object (and will automatically delete it, when all references go out of scope)
+    return load<object>(in, target, true);     // true indicates that we own this object (and will automatically delete it, when all references go out of scope)
 }
 
 template<class... Args>
@@ -208,54 +186,3 @@ LowFive::rpc::client::destroy(int target, size_t id)
 
     comm_.send(target, tags::consumer, out.buffer);
 }
-
-// Re-open the namespace for specializations to work around a GCC bug;
-// see http://stackoverflow.com/a/25594741
-namespace LowFive
-{
-namespace rpc
-{
-
-template<class T, class... Args>
-struct client::save_impl<T, Args...>
-{
-                            save_impl(diy::MemoryBuffer& out):
-                                out_(out)       {}
-
-    void                    operator()(T x, Args... args)               { diy::save(out_, x); save_impl<Args...> s(out_); s(args...); }
-
-    diy::MemoryBuffer&      out_;
-};
-
-template<class... Args>
-struct client::save_impl<rpc::client::object, Args...>
-{
-                            save_impl(diy::MemoryBuffer& out):
-                                out_(out)       {}
-
-    void                    operator()(object& o, Args... args) const   { diy::save(out_, o.id()); save_impl<Args...> s(out_); s(args...); }
-
-    diy::MemoryBuffer&      out_;
-};
-
-template<class... Args>
-struct client::save_impl<rpc::client::object*, Args...>
-{
-                            save_impl(diy::MemoryBuffer& out):
-                                out_(out)       {}
-
-    void                    operator()(object* o, Args... args) const   { diy::save(out_, o->id()); save_impl<Args...> s(out_); s(args...); }
-
-    diy::MemoryBuffer&      out_;
-};
-
-template<>
-struct client::save_impl<>
-{
-                            save_impl(diy::MemoryBuffer&)   {}
-
-    void                    operator()() const          {}
-};
-
-}   // namespace rpc
-}   // namespace LowFive
