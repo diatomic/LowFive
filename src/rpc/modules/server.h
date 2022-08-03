@@ -82,6 +82,7 @@ struct server::module
     {
         void*   obj;
         size_t  cls;
+        bool    own;
     };
     std::vector<ObjectWithClass>        objects_;
 };
@@ -162,7 +163,7 @@ struct server::module::Function<R*, Args...>: public FunctionBase
 
         size_t cls = self->class_id<R>();
 
-        self->objects_.emplace_back(ObjectWithClass { res, cls });
+        self->objects_.emplace_back(ObjectWithClass { res, cls, false });
         size_t obj_id = self->objects_.size() - 1;
 
         diy::save(out, cls);
@@ -274,7 +275,7 @@ struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
 
         size_t cls = self->class_id<R>();
 
-        self->objects_.emplace_back(ObjectWithClass { res, cls });
+        self->objects_.emplace_back(ObjectWithClass { res, cls, false });
         size_t res_obj_id = self->objects_.size() - 1;
 
         diy::save(out, cls);
@@ -437,7 +438,7 @@ create(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
     diy::load(in, cls);
     diy::load(in, constructor_id);
 
-    objects_.emplace_back(ObjectWithClass { classes_[cls]->create(constructor_id, in, this), cls });
+    objects_.emplace_back(ObjectWithClass { classes_[cls]->create(constructor_id, in, this), cls, true });
 
     size_t obj_id = objects_.size() - 1;
     diy::save(out, cls);        // redundant, but matches the reading on the client, designed to support returning objects from function calls
@@ -450,8 +451,15 @@ destroy(diy::MemoryBuffer& in)
 {
     size_t obj_id;
     diy::load(in, obj_id);
-    proxy(obj_id).destroy(objects_[obj_id].obj);
 
+    if (!objects_[obj_id].own)
+    {
+        auto log = get_logger();
+        log->error("Destroying an object we don't own: {}", obj_id);
+        throw std::runtime_error("Destroying an object we don't own");
+    }
+
+    proxy(obj_id).destroy(objects_[obj_id].obj);
     objects_[obj_id].obj = 0;
 }
 
