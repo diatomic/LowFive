@@ -42,6 +42,8 @@ Query::file_close()
 
 void Query::dataset_open(std::string name)
 {
+    auto log = get_logger();
+
     name_ = name;
 
     // TODO: the broadcasts necessitate collective open; they are not
@@ -54,6 +56,7 @@ void Query::dataset_open(std::string name)
     {
         using object = rpc::client::object;
         ids = decltype(ids)(new object(c.call<object>("dataset_open", name)));
+        log->trace("Opened object: {} (own = {})", ids->id_, ids->own_);
         std::tie(dim, type, space) = ids->call<std::tuple<int, Datatype, Dataspace>>("metadata");
         domain = ids->call<Bounds>("domain");
     }
@@ -95,6 +98,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
         // open the object on the right rank
         using object = rpc::client::object;
         auto rids = c.call<object>(gid, "dataset_open", name_);
+        log->trace("Opened object: {} (own = {})", rids.id_, rids.own_);
 
         BoxLocations redirects = rids.call<BoxLocations>("redirects", file_space);
         for (auto& x : redirects)
@@ -118,6 +122,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             // open the object on the right rank
             using object = rpc::client::object;
             auto rids = c.call<object>(gid, "dataset_open", name_);
+            log->trace("Opened object: {} (own = {})", rids.id_, rids.own_);
             log->trace("Opened dataset on {}", gid);
 
             auto queue = rids.call<diy::MemoryBuffer>("get_data", file_space);

@@ -198,6 +198,10 @@ struct client::object
                         object(const object& o):
                             rank_(o.rank_), id_(o.id_), cp_(o.cp_), self_(o.self_), own_(o.own_)
                                                                     { self_->ref_count(rank_, id_)++; }
+                        object(object&& o):
+                            rank_(o.rank_), id_(o.id_), cp_(o.cp_), self_(o.self_), own_(o.own_)
+                                                                    { o.self_ = nullptr; } // leave o in invalid state
+
     object&             operator=(const object&)    =delete;
     object&             operator=(object&&)         =delete;
 
@@ -209,11 +213,14 @@ struct client::object
 
                         ~object()
     {
+        if (!self_)      // invalid state
+            return;
+
         auto log = get_logger();
-        log->trace("~object: own = {}", own_);
+        log->trace("~object: own = {}, this = {}", own_, fmt::ptr(this));
 
         self_->ref_count(rank_, id_)--;
-        if (self_->ref_count(rank_, id_) == 0 && own_)
+        if (own_ && self_->ref_count(rank_, id_) == 0)
             self_->destroy(rank_, id_);
     }
 
