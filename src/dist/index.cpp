@@ -3,28 +3,16 @@
 #include "../index.hpp"
 #include "../log-private.hpp"
 
+#include "core.hpp"
+
 namespace LowFive {
 
-Index::IndexedDataset::IndexedDataset(Dataset* ds_, int comm_size):
-            ds(ds_)
-{
-    dim = ds->space.dims.size();
-    type = ds->type;
-    space = ds->space;
-
-    Bounds domain { dim };
-    domain.max = ds->space.dims;
-
-    decomposer = Decomposer(dim, domain, comm_size);
-}
-
 // producer version of the constructor
-Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, const ServeData& serve_data): IndexQuery(local_, intercomms_)
+Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, const ServeData& serve_data):
+    IndexQuery(local_, intercomms_)
 {
     auto log = get_logger();
     log->trace("Index ctor, number of intercomms: {}, serve_data.size = {}", intercomms_.size(), serve_data.size());
-
-    int id = 0;
 
     // sort serve_data by name, to make sure the order is the same on all ranks
     std::vector<Dataset*> serve_data_vec(serve_data.begin(), serve_data.end());
@@ -36,11 +24,10 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, const ServeData
         std::tie(filename,name) = ds->fullname();
         auto it = index_data.emplace(name, IndexedDataset(ds, IndexQuery::local.size())).first;
 
-        ids_map[name] = id++;
-        ids_vector.push_back(name);
-
         index(it->second);
     }
+
+    idx_srv.index_data = &index_data;
 }
 
 // TODO: index-query are written with the bulk-synchronous assumption;
@@ -96,26 +83,43 @@ Index::index(IndexedDataset& data)
     log->trace("Exit Index::index");
 }
 
+// DM: I don't quite understand why this works in the multi-consumer case. In
+//     particular, what's stopping one consumer from opening and closing
+//     everything, which would trigger all_done, before another consumer gets a
+//     chance to do something.
+//     TODO: Revisit this when the rest of the logic is fully updated.
 void
 Index::serve()
 {
     auto log = get_logger();
     log->trace("Enter Index::serve");
     local.barrier();
+
+    bool root = (local.rank() == 0);
+
     //if (local.rank() == 0)
     //{
     //    // signal to consumer that we are ready
     //    send(intercomm, 0, tags::producer, msgs::ready, 0);
     //}
 
-    int open_files = 0;
-
     diy::mpi::request all_done;
     bool all_done_active = false;
-    if (local.rank() != 0)
+    if (!root)
     {
         all_done = local.ibarrier();
         all_done_active = true;
+    }
+
+    std::vector<std::unique_ptr<rpc::server::module>>   modules;
+    std::vector<rpc::server>                            servers;
+
+    for (auto& intercom : intercomms)
+    {
+        modules.emplace_back(new rpc::server::module);
+        export_core(*(modules.back()), &idx_srv);
+
+        servers.emplace_back(*(modules.back()), intercom);
     }
 
     while (true)
@@ -123,142 +127,27 @@ Index::serve()
         if (all_done_active && all_done.test())
             break;
 
-        bool found_request = false;
-        communicator* p_intercomm = nullptr;
-        diy::mpi::optional<diy::mpi::status> ostatus;
-        for (auto& intercomm : intercomms)
+        for (auto& s : servers)
         {
-            ostatus = intercomm.iprobe(diy::mpi::any_source, tags::consumer);
-            if (ostatus)
+            int source = s.probe();
+            if (source >= 0)
             {
-                found_request = true;
-                p_intercomm = &intercomm;
-                break;
-            }
-        }
-        if (!found_request)
-            continue;
-
-        communicator& intercomm = *p_intercomm;
-
-        int source = ostatus->source();
-
-        diy::MemoryBuffer b;
-        int msg = recv(intercomm, source, tags::consumer, b);
-
-        if (msg == msgs::done)
-        {
-            // leave serve loop if there are no more requests
-            all_done = local.ibarrier();
-            all_done_active = true;
-            continue;
-        }
-
-        if (msg == msgs::file)
-        {
-            bool open = false;
-            diy::load(b, open);
-            if (open)
-                open_files++;
-            else
-                open_files--;
-
-            // NB: this will only get triggered after a file has been open;
-            //     might need to tweak this, if need to make sure multiple files have been opened
-            if (open_files == 0)
-            {
-                all_done = local.ibarrier();
-                all_done_active = true;
-            }
-
-            continue;
-        }
-
-        if (msg == msgs::fnames)
-        {
-            diy::MemoryBuffer queue;
-
-            // traverse all indexed datasets and collect dataset filenames in fnames
-            std::set<std::string> fnames;
-
-            for(auto key_ds : index_data)
-            {
-                std::string fname = key_ds.second.ds->fullname().first;
-                fnames.insert(fname);
-            }
-
-            // to be explicit about type
-            size_t n_fnames = fnames.size();
-            diy::save(queue, n_fnames);
-            for(auto fname : fnames)
-                diy::save(queue, fname);
-
-            // append msgs::fnames and send
-            send(intercomm, source, tags::producer, msgs::fnames, queue);
-
-            continue;
-        }
-
-        if (msg == msgs::id)
-        {
-            std::string name;
-            diy::load(b, name);
-            send(intercomm, source, tags::producer, msgs::id, ids_map[name]);
-            continue;
-        }
-
-        int id;
-        diy::load(b, id);
-
-        IndexedDataset& data = index_data.find(ids_vector[id])->second;
-
-        if (msg == msgs::dimension)
-        {
-            diy::MemoryBuffer out;
-            send(intercomm, source, tags::producer, msgs::dimension, data.dim);
-            send(intercomm, source, tags::producer, msgs::dimension, data.type);
-            send(intercomm, source, tags::producer, msgs::dimension, data.space);
-        } else if (msg == msgs::domain)
-        {
-            send(intercomm, source, tags::producer, msgs::domain, data.decomposer.domain);
-        } else if (msg == msgs::redirect)
-        {
-            Dataspace ds(0);               // dummy to be filled
-            diy::load(b, ds);
-
-            BoxLocations redirects;
-            for (auto& y : data.boxes)
-            {
-                auto& ds2 = std::get<0>(y);
-                if (ds.intersects(ds2))
-                    redirects.push_back(y);
-            }
-
-            send(intercomm, source, tags::producer, msgs::redirect, redirects);
-        } else if (msg == msgs::data)
-        {
-            Dataspace ds;
-            diy::load(b, ds);
-
-            diy::MemoryBuffer queue;
-
-            for (auto& y : data.ds->data)
-            {
-                if (y.file.intersects(ds))
+                if (s.process(source))   // true indicates that finish was called
                 {
-                    Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   ds.id), true);
-                    Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, ds.id), true);
-                    diy::save(queue, file_src);
-                    Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
-                    {
-                      diy::save(queue, (char*) y.data + loc, len);
-                    });
+                    all_done = local.ibarrier();
+                    all_done_active = true;
+                }
+
+                if (root && idx_srv.done)
+                {
+                    all_done = local.ibarrier();
+                    all_done_active = true;
                 }
             }
-            send(intercomm, source, tags::producer, msgs::data, queue);     // append msgs::data and send
         }
-        // TODO: add other potential queries (e.g., datatype)
     }
+
+    log->trace("Done with Index::serve");
 }
 
 void

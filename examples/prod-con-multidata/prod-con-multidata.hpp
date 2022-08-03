@@ -257,7 +257,7 @@ struct PointBlock
             if (grid[i] != read_grid[i])
             {
                 success = false;
-                fmt::print("Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
+                fmt::print(stderr, "Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
 //                 exit(0);
             }
         }
@@ -266,7 +266,7 @@ struct PointBlock
         status = H5Sclose(memspace);
 
         if (success)
-            fmt::print("read_block_grid() gid {} success.\n", cp.gid());
+            fmt::print(stderr, "read_block_grid() gid {} success.\n", cp.gid());
     }
 
     // read the block particle data in parallel to an HDF5 file using native HDF5 API

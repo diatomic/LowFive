@@ -3,6 +3,8 @@
 #include "index-query.hpp"
 #include "lowfive/vol-dist-metadata.hpp"
 
+#include "rpc/client.h"
+
 namespace LowFive
 {
 
@@ -35,6 +37,13 @@ struct Query: public IndexQuery
     DistMetadataVOL::FileNames get_filenames();
 
     void send_done();
+
+    rpc::client::module m;
+    rpc::client         c;
+
+    std::unique_ptr<rpc::client::object> ids;
+
+    std::string         name_;
 };
 
 }

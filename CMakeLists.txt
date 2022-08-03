@@ -5,9 +5,9 @@ option                      (wrapped_mpi      "MPI compiler wrapper requires no 
 option                      (lowfive_python   "Build python bindings"                                 ON)
 option                      (lowfive_backward "Use backward-cpp for debugging"                        ON)
 
-# C++11
+# C++17
 if                          (NOT DEFINED CMAKE_CXX_STANDARD)
-    set                     (CMAKE_CXX_STANDARD 11)
+    set                     (CMAKE_CXX_STANDARD 17)
 endif                       ()
 
 set                         (CMAKE_POSITION_INDEPENDENT_CODE ON)
