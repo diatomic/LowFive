@@ -16,7 +16,8 @@ git module fmt:
 
 git module diy:
     url: https://gitlab.kitware.com/mrzv/diy
-    rev: 89ff7a86988753bc0291953e73815cfc723240fa
+    rev: 3b31e3e9ab12b648cfc332cf8dffc9cc6c34c02b
+    drop: include/diy/thirdparty/fmt
 
 git module pybind11:
     url: https://github.com/pybind/pybind11
