@@ -15,6 +15,8 @@ struct Object
     ObjectType                      type;
     std::string                     name;
 
+    void*                           extra = nullptr;        // currently only used to store IndexedDataset for each Dataset
+
     struct ObjectPath
     {
         Object*     obj;
@@ -128,7 +130,7 @@ struct Object
 
         while (o->type != ObjectType::File)
         {
-            full_path = "/" + o->name + full_path;
+            full_path = ((!o->name.empty() && o->name[0] != '/')? "/" : "") + o->name + full_path;
             o = o->parent;
         }
 

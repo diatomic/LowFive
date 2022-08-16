@@ -119,7 +119,8 @@ struct IndexQuery
     communicators       intercomms;
 
     // TODO: move this into RegularDecomposer itself (this is a slightly modified point_to_gids)
-    std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer) const
+    static
+    std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer)
     {
         int dim = decomposer.dim;
         std::vector< std::pair<Coordinate, Coordinate> > ranges(dim);

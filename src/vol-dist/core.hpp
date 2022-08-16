@@ -9,6 +9,7 @@
 
 #include "../metadata.hpp"
 #include "../metadata/serialization.hpp"
+#include "../metadata/remote.hpp"
 
 namespace LowFive
 {
@@ -31,8 +32,6 @@ struct IndexedDataset
 
         decomposer = Decomposer(dim, domain, comm_size);
     }
-
-    Bounds                  domain()        { return decomposer.domain; }
 
     BoxLocations            redirects(Dataspace ds)
     {
@@ -84,54 +83,129 @@ using IndexedDatasets       = std::map<std::string, IndexedDataset>;
 
 struct IndexServe
 {
+    using Files = MetadataVOL::Files;
 
-    void                        file_open()     { ++open_files; }
-    void                        file_close()
+                                IndexServe(Files* files_):
+                                    files(files_)       {}
+
+
+    File*                       file_open(std::string name)
     {
         auto log = get_logger();
-        log->trace("IndexServe::file_close()");
+        log->trace("IndexServe::file_open({})", name);
+
+        File* f = dynamic_cast<File*>(files->at(name));
+        if (!f)
+        {
+            log->error("{} is not a File", name);
+            throw std::runtime_error(fmt::format("Cannot open {}", name));
+        }
+        ++open_files;
+
+        return f;
+    }
+
+    void                        file_close(File* f)
+    {
+        auto log = get_logger();
+        log->trace("IndexServe::file_close({})", f->name);
 
         --open_files;
         if (open_files == 0)
             done = true;
     }
+
     std::vector<std::string>    get_filenames()
     {
-        // traverse all indexed datasets and collect dataset filenames in fnames
-        std::set<std::string> fnames;
-        for(auto key_ds : *index_data)
-        {
-            std::string fname = key_ds.second.ds->fullname().first;
-            fnames.insert(fname);
-        }
-
         std::vector<std::string> result;
-        for (auto& fn : fnames)
-            result.emplace_back(fn);
-
+        for (auto& x : *files)      // Files is a map, so keys are already sorted
+            result.emplace_back(x.first);
         return result;
     }
 
-    IndexedDatasets*    index_data;
+    Files*              files;
     int                 open_files = 0;
     bool                done = false;
 };
 
+// same function for files and groups
+inline Dataset* dataset_open(Object* parent, std::string name)
+{
+    auto log = get_logger();
+    Object* obj = parent->search(name).exact();
+    Dataset* ds = dynamic_cast<Dataset*>(obj);
+    if (!ds)
+    {
+        log->error("{} is not a Dataset", name);
+        throw std::runtime_error(fmt::format("Cannot open {}", name));
+    }
+
+    return ds;
+}
+
+inline Group* group_open(Object* parent, std::string name)
+{
+    auto log = get_logger();
+    Object* obj = parent->search(name).exact();
+    Group* grp = dynamic_cast<Group*>(obj);
+    if (!grp)
+    {
+        log->error("{} is not a Group", name);
+        throw std::runtime_error(fmt::format("Cannot open {}", name));
+    }
+
+    return grp;
+}
+
+
 template<class module>
 void export_core(module& m, IndexServe* idx)
 {
+    // register different metadata objects
+    m.template class_<Dataset>("Dataset")
+        .function("metadata",   [](Dataset* ds)
+         {
+            IndexedDataset* ids = static_cast<IndexedDataset*>(ds->extra);
+            return std::make_tuple(ids->dim, ids->type, ids->space, ids->decomposer);
+         })
+        .function("redirects",  [](Dataset* ds, Dataspace dspace)
+         {
+            IndexedDataset* ids = static_cast<IndexedDataset*>(ds->extra);
+            return ids->redirects(dspace);
+         })
+    ;
+
+    m.template class_<Group>("Group")
+        .function("dataset_open", [](Group* g, std::string name) { return dataset_open(g, name); })
+        .function("group_open",   [](Group* g, std::string name) { return group_open(g, name); })
+    ;
+
+    m.template class_<File>("File")
+        .function("dataset_open", [](File* f, std::string name) { return dataset_open(f, name); })
+        .function("group_open",   [](File* f, std::string name) { return group_open(f, name); })
+        .function("file_close",   [idx](File* f)                { idx->file_close(f); })
+    ;
+
     m.template class_<IndexedDataset>("IndexedDataset")
-        .function("metadata",   [](IndexedDataset* ids) { return std::make_tuple(ids->dim, ids->type, ids->space); })
-        .function("domain",     &IndexedDataset::domain)
-        .function("redirects",  &IndexedDataset::redirects)
         .function("get_data",   &IndexedDataset::get_data)
     ;
 
-    m.function("file_open", [idx]() { idx->file_open(); });
-    m.function("file_close", [idx]() { idx->file_close(); });
+    m.function("open_indexed_dataset", [idx](std::pair<std::string, std::string> fullpath)
+    {
+        auto log = get_logger();
+        log->trace("Opening indexed dataset: {} {}", fullpath.first, fullpath.second);
 
-    m.function("dataset_open", [idx](std::string name) { return &(idx->index_data->at(name)); });
-    m.function("dataset_close", []() {});       // nothing for now
+        File* f = dynamic_cast<File*>(idx->files->at(fullpath.first));
+        if (!f)
+            throw std::runtime_error(fmt::format("Cannot open file {}", fullpath.first));
+        Object* o = f->search(fullpath.second).exact();
+        if (!dynamic_cast<Dataset*>(o))
+            throw std::runtime_error(fmt::format("Cannot open indexed dataset {} {}", fullpath.first, fullpath.second));
+        IndexedDataset* ids = (IndexedDataset*) o->extra;
+        return ids;
+    });
+
+    m.function("file_open",  [idx](std::string name) { return idx->file_open(name); });
 
     m.function("get_filenames", [idx]() { return idx->get_filenames(); });
 
