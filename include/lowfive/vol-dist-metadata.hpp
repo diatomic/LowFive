@@ -1,12 +1,16 @@
 #pragma     once
 
 #include    <vector>
+#include    <set>
 #include    <mpi.h>
 
 #include    "vol-metadata.hpp"
 
 namespace LowFive
 {
+
+struct Dataset;
+using Datasets = std::set<Dataset*>;
 
 // custom VOL object for distributed metadata
 struct DistMetadataVOL: public LowFive::MetadataVOL

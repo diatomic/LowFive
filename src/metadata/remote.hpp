@@ -1,6 +1,8 @@
 #pragma once
 
 #include "object.hpp"
+#include "datatype.hpp"
+#include "dataspace.hpp"
 
 namespace LowFive
 {

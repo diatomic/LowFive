@@ -5,8 +5,8 @@
 #include <diy/decomposition.hpp>
 #include <diy/types.hpp>
 
-#include <lowfive/metadata.hpp>
-#include <lowfive/metadata/serialization.hpp>
+#include "metadata.hpp"
+#include "metadata/serialization.hpp"
 
 namespace LowFive
 {

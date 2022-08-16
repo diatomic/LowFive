@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fmt/format.h>
+#include "hid.hpp"
 
 namespace LowFive
 {

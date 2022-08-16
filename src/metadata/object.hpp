@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include "objecttype.hpp"
+#include "error.hpp"
 
 namespace LowFive
 {

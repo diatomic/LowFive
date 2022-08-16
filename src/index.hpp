@@ -5,7 +5,7 @@
 #include "index-query.hpp"
 
 #include "rpc/server.h"
-#include "dist/core.hpp"
+#include "vol-dist/core.hpp"
 
 
 namespace LowFive
@@ -13,7 +13,7 @@ namespace LowFive
 
 struct Index: public IndexQuery
 {
-    using ServeData             = Datasets;            // datasets producer is serving
+    using ServeData             = LowFive::Datasets;            // datasets producer is serving
 
     IndexedDatasets             index_data; // local data for multiple datasets
 

@@ -1,10 +1,12 @@
 #include <lowfive/vol-dist-metadata.hpp>
-#include <lowfive/metadata/remote.hpp>
-#include <lowfive/metadata/dummy.hpp>
+#include "metadata/remote.hpp"
+#include "metadata/dummy.hpp"
 #include "log-private.hpp"
 #include "index.hpp"
 #include "query.hpp"
-#include <lowfive/metadata/serialization.hpp>
+#include "metadata/serialization.hpp"
+
+#include "vol-metadata-private.hpp"     // ObjectPointers
 
 LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
     DistMetadataVOL(local_, communicators { std::move(intercomm_) })

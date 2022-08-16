@@ -1,4 +1,5 @@
 #include <lowfive/vol-metadata.hpp>
+#include "../vol-metadata-private.hpp"
 #include <cassert>
 #include "../log-private.hpp"
 
