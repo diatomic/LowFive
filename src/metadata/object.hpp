@@ -49,6 +49,7 @@ struct Object
             child->parent = nullptr;    // to skip remove() in child
             delete child;
         }
+        children.clear();
     }
 
     virtual void print(int depth) const

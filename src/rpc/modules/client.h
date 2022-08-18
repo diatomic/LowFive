@@ -211,7 +211,7 @@ struct client::object
     size_t              hash() const                                { return cp_.hash(); }
     size_t              id() const                                  { return id_; }
 
-                        ~object()
+    void                destroy()
     {
         if (!self_)      // invalid state
             return;
@@ -222,7 +222,11 @@ struct client::object
         self_->ref_count(rank_, id_)--;
         if (own_ && self_->ref_count(rank_, id_) == 0)
             self_->destroy(rank_, id_);
+
+        self_ = nullptr;
     }
+
+                        ~object()                                   { destroy(); }
 
     int                 rank_;
     size_t              id_;

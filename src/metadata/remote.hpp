@@ -30,6 +30,21 @@ struct RemoteFile : public RemoteObject
         RemoteObject(ObjectType::File, filename_, std::move(obj)), query_(std::move(q))
     {}
 
+    ~RemoteFile()
+    {
+        // RemoteFile needs to delete children before query_, so their obj get destroyed
+        // So it's not enough to do this via ~Object
+
+        for (auto* child : children)
+        {
+            child->parent = nullptr;    // to skip remove() in child
+            delete child;
+        }
+        children.clear();
+
+        obj.destroy();                  // must destroy our obj before query_
+    }
+
     std::unique_ptr<Query> query_;
 };
 
