@@ -168,11 +168,6 @@ void export_core(module& m, IndexServe* idx)
             IndexedDataset* ids = static_cast<IndexedDataset*>(ds->extra);
             return std::make_tuple(ids->dim, ids->type, ids->space, ids->decomposer);
          })
-        .function("redirects",  [](Dataset* ds, Dataspace dspace)
-         {
-            IndexedDataset* ids = static_cast<IndexedDataset*>(ds->extra);
-            return ids->redirects(dspace);
-         })
     ;
 
     m.template class_<Group>("Group")
@@ -188,6 +183,7 @@ void export_core(module& m, IndexServe* idx)
 
     m.template class_<IndexedDataset>("IndexedDataset")
         .function("get_data",   &IndexedDataset::get_data)
+        .function("redirects",  &IndexedDataset::redirects)
     ;
 
     m.function("open_indexed_dataset", [idx](std::pair<std::string, std::string> fullpath)

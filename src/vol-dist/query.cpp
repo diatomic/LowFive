@@ -43,7 +43,9 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
     {
         // TODO: make this asynchronous (isend + irecv, etc)
 
-        BoxLocations redirects = obj.call<BoxLocations>("redirects", file_space);
+        // TODO: keep these open for the next loop
+        auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", fullname());
+        BoxLocations redirects = rids.call<BoxLocations>("redirects", file_space);
         for (auto& x : redirects)
             all_redirects.push_back(x);
     }
