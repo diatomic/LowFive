@@ -260,8 +260,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
     if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_->mdata_obj))
     {
         log->trace("DistMetadataVOL::file_close, remote file {}", f->name);
-        MPI_Barrier(local);
         f->obj.call<void>("file_close");
+
+        MPI_Barrier(local);
+        int rank; MPI_Comm_rank(local, &rank);
+        bool root = rank == 0;
+        if (root)
+            f->obj.self_->finish(0);
 
         files.erase(f->name);
         log->trace("DistMetadataVOL::file_close delete {}", fmt::ptr(f));

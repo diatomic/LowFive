@@ -119,6 +119,11 @@ Index::serve()
 
     diy::mpi::request all_done;
     bool all_done_active = false;
+    if (!root)
+    {
+        all_done = local.ibarrier();
+        all_done_active = true;
+    }
 
     std::vector<std::unique_ptr<rpc::server::module>>   modules;
     std::vector<rpc::server>                            servers;
@@ -141,13 +146,7 @@ Index::serve()
             int source = s.probe();
             if (source >= 0)
             {
-                if (s.process(source))   // true indicates that finish was called
-                {
-                    all_done = local.ibarrier();
-                    all_done_active = true;
-                }
-
-                if (idx_srv.done)
+                if (s.process(source) && idx_srv.done)   // true indicates that finish was called
                 {
                     all_done = local.ibarrier();
                     all_done_active = true;
