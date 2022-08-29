@@ -136,6 +136,7 @@ Index::serve()
         servers.emplace_back(*(modules.back()), intercom);
     }
 
+    size_t all_done_count = 0;
     while (true)
     {
         if (all_done_active && all_done.test())
@@ -146,14 +147,21 @@ Index::serve()
             int source = s.probe();
             if (source >= 0)
             {
-                if (s.process(source) && idx_srv.done)   // true indicates that finish was called
+                if (s.process(source))   // true indicates that finish was called
                 {
-                    all_done = local.ibarrier();
-                    all_done_active = true;
+                    all_done_count++;
+
+                    if (all_done_count == servers.size())
+                    {
+                        all_done = local.ibarrier();
+                        all_done_active = true;
+                    }
                 }
             }
         }
     }
+    if (!idx_srv.done)
+        log->critical("Not all files have been closed");
 
     log->trace("Done with Index::serve");
 }
