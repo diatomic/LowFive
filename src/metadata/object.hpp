@@ -100,6 +100,9 @@ struct Object
         if (path.empty())
             return ObjectPath { this, path };
 
+        if (path == ".")
+            return ObjectPath { this, "" };
+
         auto pos = path.find("/");
         std::string first_name, remainder;
         if (pos != std::string::npos)
