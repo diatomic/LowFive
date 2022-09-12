@@ -161,7 +161,7 @@ Index::serve()
         }
     }
     if (!idx_srv.done)
-        log->critical("Not all files have been closed");
+        log->warn("Not all files have been closed (this is Ok, if no files were opened, e.g., when producer signals that it's done)");
 
     log->trace("Done with Index::serve");
 }
