@@ -343,7 +343,8 @@ producer_signal_done()
 {
     auto log = get_logger();
     log->trace("DistMetadataVOL:producer_signal_done");
-    //Index index(local, intercomms, ServeData());
-    //index.serve();
-    // TODO: unclear how to do this now
+
+    Files files;        // empty files
+    Index index(local, intercomms, &files);
+    index.serve();
 }
