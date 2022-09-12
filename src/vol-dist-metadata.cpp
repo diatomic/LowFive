@@ -205,6 +205,19 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         // TODO: find a better solution, this might fail in many cases
         if (flags != H5F_ACC_RDONLY) {
             log->trace("DistMetadataVOL::file_open(), name = {}, local file not found, but opened not in RDONLY - create empty file", name);
+
+            auto it = files.find(name);
+            if (it == files.end())
+                log->critical("Expected to find a dummy file created by file_open()");
+
+            Object* o = it->second;
+            auto* df = static_cast<DummyFile*>(o);
+            if (!df)
+                log->critical("Expected to find a dummy file created by file_open(), but cast failed");
+
+            delete df;
+            files.erase(it);
+
             return MetadataVOL::file_create(name, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id, dxpl_id, req);
         }
 
