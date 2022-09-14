@@ -24,6 +24,8 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files):
             IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local.size());
             index(*ids);
             ds->extra = ids;
+
+            ++indexed_datasets;
         }
     }
 }

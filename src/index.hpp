@@ -37,6 +37,7 @@ struct Index: public IndexQuery
     void                find_datasets(Object* o, std::string name, Datasets& result);
 
     IndexServe          idx_srv;
+    size_t              indexed_datasets = 0;
 };
 
 }
