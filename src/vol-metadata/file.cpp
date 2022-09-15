@@ -183,6 +183,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
             log->trace("Keeping file metadata in memory");
     }
 
+    if (after_file_close)
+        after_file_close();
+
     // deliberately verbose, to emphasize checking of res
     if (res == 0)
         return 0;

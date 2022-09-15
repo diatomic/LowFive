@@ -5,6 +5,7 @@
 #include    <string>
 #include    <map>
 #include    <unordered_set>
+#include    <functional>
 
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
@@ -31,11 +32,16 @@ struct MetadataVOL: public LowFive::VOLBase
     using Files             = std::map<std::string, Object*>;       // Object*, to support both File and RemoteFile
     using LocationPatterns  = std::vector<LocationPattern>;
 
+    using AfterFileClose    = std::function<void()>;
+
     Files                       files;
     LocationPatterns            memory;
     LocationPatterns            passthru;
     LocationPatterns            zerocopy;
     bool                        keep = false;       // whether to keep files in the metadata after they are closed
+
+    // callbacks
+    AfterFileClose              after_file_close;
 
                     MetadataVOL()
                     {}
@@ -77,6 +83,13 @@ struct MetadataVOL: public LowFive::VOLBase
     {
         keep = keep_;
     }
+
+    void set_after_file_close(AfterFileClose afc)
+    {
+        after_file_close = afc;
+    }
+
+    void clear_files();
 
     // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
     // checks if two given strings; the first string may contain wildcard characters

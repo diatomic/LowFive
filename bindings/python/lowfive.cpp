@@ -2,6 +2,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
 namespace py = pybind11;
 
 
@@ -55,6 +56,8 @@ PYBIND11_MODULE(_lowfive, m)
         .def("set_zerocopy",   &LowFive::MetadataVOL::set_zerocopy, "filename"_a, "pattern"_a, "set (filename,pattern) for zerocopy")
         .def("set_keep",       &LowFive::MetadataVOL::set_keep,     "keep_a",                  "set whether to keep files in the metadata after they are closed")
         .def("print_files",    &LowFive::MetadataVOL::print_files,                             "print file metadata")
+        .def("clear_files",    &LowFive::MetadataVOL::clear_files,                             "clear all files")
+        .def("set_after_file_close", &LowFive::MetadataVOL::set_after_file_close,              "set the after_file_close callback")
     ;
 
     py::class_<LowFive::DistMetadataVOL> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);

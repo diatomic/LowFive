@@ -34,8 +34,7 @@ drop(void* p)
 LowFive::MetadataVOL::
 ~MetadataVOL()
 {
-    for (auto& x : files)
-        delete x.second;
+    clear_files();
 }
 
 void
@@ -72,3 +71,12 @@ locate(std::string filename, std::string full_path) const
     return it->second->search(full_path).exact();
 }
 
+    
+void
+LowFive::MetadataVOL::
+clear_files()
+{
+    for (auto& x : files)
+        delete x.second;
+    files.clear();
+}
