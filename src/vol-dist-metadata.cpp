@@ -257,6 +257,8 @@ herr_t
 LowFive::DistMetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
+    ++file_close_counter_;
+
     ObjectPointers* file_ = (ObjectPointers*) file;
 
     auto log = get_logger();
