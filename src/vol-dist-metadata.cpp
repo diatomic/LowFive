@@ -235,6 +235,9 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
     if (match_any(name, "", memory, true))
     {
+#if 0
+        // TODO: this is no longer necessary, thanks to broadcast_files;
+        //       remove once tested and everything is working
 
         // if rank is producer, but file was created on another rank (as AMReX does: header is written by one rank per node, and data is written by all ranks on the node)
         // it can be not present on some producer ranks. We create file if necessary.
@@ -257,6 +260,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
             return MetadataVOL::file_create(name, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id, dxpl_id, req);
         }
+#endif
 
         // get an intercomm for this file
         auto locs = find_matches(name, "", intercomm_locations, true);
