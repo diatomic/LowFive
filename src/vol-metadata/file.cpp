@@ -56,6 +56,9 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    if (before_file_open)
+        before_file_open();
+
     auto log = get_logger();
     log->trace("file_open()");
     ObjectPointers* obj_ptrs = nullptr;
