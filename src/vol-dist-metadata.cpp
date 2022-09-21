@@ -53,6 +53,39 @@ serve_all(bool delete_data)
     log->trace("serve_all done");
 }
 
+void
+LowFive::DistMetadataVOL::
+broadcast_files(int root)
+{
+    diy::mpi::communicator local_(local);
+    diy::MemoryBuffer bb;
+
+    if (local_.rank() == root)
+    {
+        diy::save(bb, files.size());
+        for (auto& x : files)
+        {
+            diy::save(bb, x.first);     // filename
+            serialize(bb, x.second);    // File*
+        }
+        diy::mpi::broadcast(local_, bb.buffer, root);
+    } else
+    {
+        diy::mpi::broadcast(local_, bb.buffer, root);
+
+        size_t n_files;
+        diy::load(bb, n_files);
+        // NB: we are not clearing files beforehand, might be a reasonable thing to do
+        for (size_t i = 0; i < n_files; ++i)
+        {
+            std::string filename;
+            diy::load(bb, filename);
+            auto* f = deserialize(bb);
+            files.emplace(filename, f);
+        }
+    }
+}
+
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)

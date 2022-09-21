@@ -28,11 +28,12 @@ add_library             (lowfive SHARED
                             vol-metadata/blob.cpp
                             vol-metadata/token.cpp
                             vol-metadata/link.cpp
+                            vol-metadata/serialization.cpp
                             log.cpp
                             ${LOWFIVE_BACKWARD_ENABLE}
                         )
 
-target_link_libraries     (lowfive fmt::fmt ${HDF5_LIBRARY})
+target_link_libraries     (lowfive fmt::fmt ${HDF5_LIBRARY} diy)
 target_include_directories(lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 
 

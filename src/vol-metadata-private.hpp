@@ -1,6 +1,7 @@
 #pragma once
 
 #include "metadata.hpp"
+#include "metadata/serialization.hpp"
 
 namespace LowFive
 {
@@ -36,5 +37,9 @@ inline H5I_type_t   get_type(Object* o)
     else
         throw MetadataError("cannot identify object type");
 }
+
+// using different names to avoid confusion
+void serialize(diy::BinaryBuffer& bb, Object* o);
+Object* deserialize(diy::BinaryBuffer& bb);
 
 }

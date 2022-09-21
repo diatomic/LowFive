@@ -86,10 +86,15 @@ PYBIND11_MODULE(_lowfive, m)
 #endif
         .def_readwrite("serve_on_close",    &LowFive::DistMetadataVOL::serve_on_close)
         .def_readonly("file_close_counter", &LowFive::DistMetadataVOL::file_close_counter_)
-        .def("set_intercomm",   &LowFive::DistMetadataVOL::set_intercomm, "filename"_a, "pattern"_a, "index"_a, "set (filename,pattern) -> intercomm index")
-        .def("serve_all",       &LowFive::DistMetadataVOL::serve_all, "serve all datasets")
-        .def("get_filenames",   &LowFive::DistMetadataVOL::get_filenames, "intercomm_index"_a, "get filenames produced by producer at intercomm")
-        .def("send_done",       &LowFive::DistMetadataVOL::send_done, "intercomm_index"_a, "tell producer that consumer is done, so producer can proceed")
-        .def("producer_done",   &LowFive::DistMetadataVOL::producer_signal_done, "tell consumers that producer is done")
+        .def("set_intercomm",   &LowFive::DistMetadataVOL::set_intercomm,           "filename"_a, "pattern"_a, "index"_a,
+                                                                                    "set (filename,pattern) -> intercomm index")
+        .def("serve_all",       &LowFive::DistMetadataVOL::serve_all,               "serve all datasets")
+        .def("get_filenames",   &LowFive::DistMetadataVOL::get_filenames,           "intercomm_index"_a,
+                                                                                    "get filenames produced by producer at intercomm")
+        .def("send_done",       &LowFive::DistMetadataVOL::send_done,               "intercomm_index"_a,
+                                                                                    "tell producer that consumer is done, so producer can proceed")
+        .def("producer_done",   &LowFive::DistMetadataVOL::producer_signal_done,    "tell consumers that producer is done")
+        .def("broadcast_files", &LowFive::DistMetadataVOL::broadcast_files,         py::arg("root") = 0,
+                                                                                    "broadcast file metadata to all ranks")
     ;
 }
