@@ -310,6 +310,8 @@ file_close(void *file, hid_t dxpl_id, void **req)
     if (unwrap(file_))
     {
         herr_t res = VOLBase::file_close(unwrap(file_), dxpl_id, req);
+        if (res < 0)
+            log->error("Error when closing file");
         file_->h5_obj = nullptr;    // this makes sure that the recursive call below won't trigger VOLBase::file_close() again
     }
 

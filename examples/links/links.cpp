@@ -48,6 +48,8 @@ int main(int argc, char**argv)
     bool                      shared            = false;          // producer and consumer run on the same ranks
     size_t                    local_num_points  = 20;            // points per block
 
+    (void) shared; // suppress warning
+
     // default global data bounds
     Bounds domain { dim };
     for (auto i = 0; i < dim; i++)
@@ -144,7 +146,7 @@ int main(int argc, char**argv)
     hid_t group1 = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     std::vector<hsize_t> domain_cnts(DIM);
-    for (auto i = 0; i < DIM; i++)
+    for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
         domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
 
     // create the file data space for the global grid

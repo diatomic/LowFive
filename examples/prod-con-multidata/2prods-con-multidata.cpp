@@ -119,8 +119,6 @@ int main(int argc, char* argv[])
         abort();
     }
 
-    size_t global_npoints = global_nblocks * local_npoints;         // all block have same number of points
-
     // consumer will read different block decomposition than the producer
     // producer also needs to know this number so it can match collective operations
     int con_nblocks = pow(2, dim) * global_nblocks;

@@ -48,10 +48,9 @@ object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *
 {
     if (!unwrap(src_obj) && !unwrap(dst_obj))   // memory
     {
-        ObjectPointers* src_obj_        = (ObjectPointers*) src_obj;
-        Object*         src_mdata_obj   = static_cast<Object*>(src_obj_->mdata_obj);
+        ObjectPointers* src_obj_        = (ObjectPointers*) src_obj; (void) src_obj_;
         ObjectPointers* dst_obj_        = (ObjectPointers*) dst_obj;
-        Object*         dst_mdata_obj   = static_cast<Object*>(dst_obj_->mdata_obj);
+        Object*         dst_mdata_obj   = static_cast<Object*>(dst_obj_->mdata_obj); (void) dst_mdata_obj;
 
         // TODO
         throw MetadataError(fmt::format("object_copy(): not implemented in metadata yet"));
@@ -103,7 +102,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
             {
                 log->trace("get_type = H5VL_OBJECT_GET_NAME");
 
-                ssize_t *ret    = va_arg(arguments, ssize_t *);
+                ssize_t *ret    = va_arg(arguments, ssize_t *); (void) ret;
                 char *name      = va_arg(arguments, char *);
                 size_t size     = va_arg(arguments, size_t);
 
@@ -143,7 +142,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                 log->trace("get_type = H5VL_OBJECT_GET_INFO");
 
                 H5O_info2_t  *oinfo = va_arg(arguments, H5O_info2_t *); // H5O_info2_t defined in H5Opublic.h
-                unsigned fields     = va_arg(arguments, unsigned);
+                unsigned fields     = va_arg(arguments, unsigned); (void) fields;
 
                 if (loc_params->type == H5VL_OBJECT_BY_SELF)            // H5Oget_info
                 {
@@ -305,7 +304,7 @@ object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list argum
     if (!unwrap(obj))               // memory
     {
         ObjectPointers* obj_        = (ObjectPointers*) obj;
-        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj); (void)mdata_obj;
 
         // see HDF5's H5VL__native_object_optional() in H5VLnative_object.c
         // TODO: not implemented yet

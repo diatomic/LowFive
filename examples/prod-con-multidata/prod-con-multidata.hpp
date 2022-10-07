@@ -42,8 +42,8 @@ struct PointBlock
     typedef SimplePoint<DIM>                            Point;
 
     PointBlock(const Bounds& core_, const Bounds& bounds_, const Bounds& domain_):
-        core(core_),
         bounds(bounds_),
+        core(core_),
         domain(domain_)                 {}
 
     // allocate a new block
@@ -82,22 +82,22 @@ struct PointBlock
         GridPoint shape, vertex;
 
         // virtual grid covering local block bounds (for indexing only, no associated data)
-        for (auto i = 0; i < DIM; i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
             shape[i] = bounds.max[i] - bounds.min[i] + 1;
         Grid bounds_grid(NULL, shape);
 
         // virtual grid covering global domain (for indexing only, no associated data)
-        for (auto i = 0; i < DIM; i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
             shape[i] = domain.max[i] - domain.min[i] + 1;
         Grid domain_grid(NULL, shape);
 
         // assign globally unique values to the grid scalars in the block
         // equal to global linear idx of the grid point
         grid.resize(bounds_grid.size());
-        for (auto i = 0; i < bounds_grid.size(); i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(bounds_grid.size()); i++)
         {
             vertex = bounds_grid.vertex(i);         // vertex in the local block
-            for (auto j = 0; j < DIM; j++)
+            for (auto j = 0; j < static_cast<decltype(i)>(DIM); j++)
                 vertex[j] += bounds.min[j];         // converted to global domain vertex
             grid[i] = domain_grid.index(vertex);
         }
@@ -148,7 +148,7 @@ struct PointBlock
         std::vector<hsize_t> core_cnts(DIM);
         std::vector<hsize_t> bounds_cnts(DIM);
         std::vector<hsize_t> domain_cnts(DIM);
-        for (auto i = 0; i < DIM; i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
         {
             core_cnts[i]    = core.max[i]   - core.min[i]   + 1;
             bounds_cnts[i]  = bounds.max[i] - bounds.min[i] + 1;
@@ -160,13 +160,16 @@ struct PointBlock
 
         // filespace = core selected out of global domain
         std::vector<hsize_t> ofst(DIM);
-        for (auto i = 0; i < DIM; i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
             ofst[i] = core.min[i];
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
+        if (status < 0)
+            fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+
         // memspace = core selected out of bounds
         hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
-        for (auto i = 0; i < DIM; i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
             ofst[i] = core.min[i] - bounds.min[i];
         status = H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
@@ -204,6 +207,9 @@ struct PointBlock
         ofst[1] = 0;
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
+        if (status < 0)
+            fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+
         fmt::print("write_block_particles(): writing gid {} bounds [min {} max {}] core_cnts {} domain_cts {} ofst {}\n",
                 cp.gid(), bounds.min, bounds.max, core_cnts[0], domain_cnts[0], ofst[0]);
 
@@ -235,7 +241,7 @@ struct PointBlock
         std::vector<hsize_t> bounds_cnts(DIM);
         std::vector<hsize_t> domain_cnts(DIM);
         std::vector<hsize_t> ofst(DIM);
-        for (auto i = 0; i < DIM; i++)
+        for (auto i = 0; i < static_cast<decltype(i)>(DIM); i++)
         {
             bounds_cnts[i]  = bounds.max[i] - bounds.min[i] + 1;
             domain_cnts[i]  = domain.max[i] - domain.min[i] + 1;
@@ -246,9 +252,15 @@ struct PointBlock
         hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &bounds_cnts[0], NULL);
 
+        if (status < 0)
+            fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+
         // memspace = simple count from bounds
         hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
         status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_grid[0]);
+
+        if (status < 0)
+            fmt::print("Error in H5Dread: status = {}", status);
 
         // check that the values match
         bool success = true;
@@ -295,15 +307,21 @@ struct PointBlock
         hid_t filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
+        if (status < 0)
+            fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+
         // memspace = simple local number of particles
         hid_t memspace = H5Screate_simple (2, &core_cnts[0], NULL);
         status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_points[0]);
+
+        if (status < 0)
+            fmt::print("Error in H5Dread: status = {}", status);
 
         // check that the values match
         bool success = true;
         for (size_t i = 0; i < read_points.size(); ++i)
         {
-            for (auto j = 0; j < DIM; j++)
+            for (auto j = 0; j < static_cast<decltype(j)>(DIM); j++)
             {
                 float min_val = cp.gid() * (global_num_pts / global_num_blks);
                 float max_val = min_val + read_points.size() - 1;
@@ -318,6 +336,9 @@ struct PointBlock
 
         status = H5Sclose(filespace);
         status = H5Sclose(memspace);
+
+        if (status < 0)
+            fmt::print("Error in H5Sclose: status = {}", status);
 
         if (success)
             fmt::print("read_block_points() gid {} success.\n", cp.gid());
@@ -375,7 +396,7 @@ struct AddPointBlock
             b->generate_grid();                     // initialize block with regular grid
 
             // adjust local number of points if global number of points does not divide global number of blocks evenly
-            if (local_num_points * global_num_blocks < global_num_points && gid == global_num_blocks - 1)
+            if (local_num_points * global_num_blocks < global_num_points && gid == static_cast<int>(global_num_blocks) - 1)
                 local_num_points = global_num_points - local_num_points * (global_num_blocks - 1);
 
             b->generate_sequenced_points(gid, local_num_points); // initialize block with set of points

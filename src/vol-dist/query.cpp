@@ -12,8 +12,8 @@ namespace LowFive {
 
 Query::Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size_, int intercomm_index_):
         IndexQuery(local_, intercomms_),
-        intercomm_index(intercomm_index_),
         remote_size(remote_size_),
+        intercomm_index(intercomm_index_),
         c(m, intercomms_[intercomm_index_], local.rank() % remote_size)
 {
     export_core(m, nullptr);        // client doesn't need IndexServe
