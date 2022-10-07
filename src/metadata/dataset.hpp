@@ -1,7 +1,5 @@
 #pragma once
 
-#include <set>
-
 namespace LowFive
 {
 
@@ -75,7 +73,5 @@ struct Dataset : public Object
         Object::print(depth);
     }
 };
-
-using Datasets = std::set<Dataset*>;
 
 }

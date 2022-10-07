@@ -1,4 +1,5 @@
 #include <lowfive/vol-metadata.hpp>
+#include "../vol-metadata-private.hpp"
 #include <cassert>
 #include "../log-private.hpp"
 
@@ -55,6 +56,9 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    if (before_file_open)
+        before_file_open();
+
     auto log = get_logger();
     log->trace("file_open()");
     ObjectPointers* obj_ptrs = nullptr;
@@ -181,6 +185,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
         } else
             log->trace("Keeping file metadata in memory");
     }
+
+    if (after_file_close)
+        after_file_close();
 
     // deliberately verbose, to emphasize checking of res
     if (res == 0)

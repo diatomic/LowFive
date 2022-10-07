@@ -112,6 +112,11 @@ namespace detail
       fill_divisions(divisions);
     }
 
+    // TODO: make private and make serialization friend
+                    RegularDecomposer():
+                        dim(0), domain(Bounds {0}), nblocks(0)          {}
+
+
     // Calls create(int gid, const Bounds& bounds, const Link& link)
     void            decompose(int rank, const StaticAssigner& assigner, const Creator& create);
 
@@ -160,6 +165,34 @@ namespace detail
     CoordinateVector  ghosts;
     DivisionsVector   divisions;
 
+  };
+
+  template<class B>
+  struct Serialization<RegularDecomposer<B>>
+  {
+      using Decomposer = RegularDecomposer<B>;
+
+      static void         save(BinaryBuffer& bb, const Decomposer& d)
+      {
+          diy::save(bb, d.dim);
+          diy::save(bb, d.domain);
+          diy::save(bb, d.nblocks);
+          diy::save(bb, d.share_face);
+          diy::save(bb, d.wrap);
+          diy::save(bb, d.ghosts);
+          diy::save(bb, d.divisions);
+      }
+
+      static void         load(BinaryBuffer& bb, Decomposer& d)
+      {
+          diy::load(bb, d.dim);
+          diy::load(bb, d.domain);
+          diy::load(bb, d.nblocks);
+          diy::load(bb, d.share_face);
+          diy::load(bb, d.wrap);
+          diy::load(bb, d.ghosts);
+          diy::load(bb, d.divisions);
+      }
   };
 
   /**

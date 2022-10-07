@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include "objecttype.hpp"
+#include "error.hpp"
 
 namespace LowFive
 {
@@ -12,6 +14,8 @@ struct Object
 
     ObjectType                      type;
     std::string                     name;
+
+    void*                           extra = nullptr;        // currently only used to store IndexedDataset for each Dataset
 
     struct ObjectPath
     {
@@ -45,6 +49,7 @@ struct Object
             child->parent = nullptr;    // to skip remove() in child
             delete child;
         }
+        children.clear();
     }
 
     virtual void print(int depth) const
@@ -126,7 +131,7 @@ struct Object
 
         while (o->type != ObjectType::File)
         {
-            full_path = "/" + o->name + full_path;
+            full_path = ((!o->name.empty() && o->name[0] != '/')? "/" : "") + o->name + full_path;
             o = o->parent;
         }
 

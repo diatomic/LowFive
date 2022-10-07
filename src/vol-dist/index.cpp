@@ -8,26 +8,42 @@
 namespace LowFive {
 
 // producer version of the constructor
-Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, const ServeData& serve_data):
-    IndexQuery(local_, intercomms_)
+Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files):
+    IndexQuery(local_, intercomms_), idx_srv(files)
 {
     auto log = get_logger();
-    log->trace("Index ctor, number of intercomms: {}, serve_data.size = {}", intercomms_.size(), serve_data.size());
+    log->trace("Index ctor, number of intercomms: {}, files.size = {}", intercomms_.size(), files->size());
 
-    // sort serve_data by name, to make sure the order is the same on all ranks
-    std::vector<Dataset*> serve_data_vec(serve_data.begin(), serve_data.end());
-    std::sort(serve_data_vec.begin(), serve_data_vec.end(), [](Dataset* ds_a, Dataset* ds_b) { return ds_a->fullname() < ds_b->fullname(); });
-
-    for (auto* ds : serve_data_vec)
+    // traverse all datasets
+    for (auto& f : *(idx_srv.files))
     {
-        std::string filename, name;
-        std::tie(filename,name) = ds->fullname();
-        auto it = index_data.emplace(name, IndexedDataset(ds, IndexQuery::local.size())).first;
+        auto datasets = find_datasets(dynamic_cast<File*>(f.second));
+        for (auto& x : datasets)
+        {
+            auto* ds = x.second;
+            IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local.size());
+            index(*ids);
+            ds->extra = ids;
 
-        index(it->second);
+            ++indexed_datasets;
+        }
     }
+}
 
-    idx_srv.index_data = &index_data;
+Index::~Index()
+{
+    // TODO: traverse and destroy all IndexedData
+    for (auto& f : *(idx_srv.files))
+    {
+        auto datasets = find_datasets(dynamic_cast<File*>(f.second));
+        for (auto& x : datasets)
+        {
+            auto* ds = x.second;
+            IndexedDataset* ids = (IndexedDataset*) ds->extra;
+            delete ids;
+            ds->extra = nullptr;
+        }
+    }
 }
 
 // TODO: index-query are written with the bulk-synchronous assumption;
@@ -122,6 +138,7 @@ Index::serve()
         servers.emplace_back(*(modules.back()), intercom);
     }
 
+    size_t all_done_count = 0;
     while (true)
     {
         if (all_done_active && all_done.test())
@@ -134,18 +151,19 @@ Index::serve()
             {
                 if (s.process(source))   // true indicates that finish was called
                 {
-                    all_done = local.ibarrier();
-                    all_done_active = true;
-                }
+                    all_done_count++;
 
-                if (root && idx_srv.done)
-                {
-                    all_done = local.ibarrier();
-                    all_done_active = true;
+                    if (all_done_count == servers.size())
+                    {
+                        all_done = local.ibarrier();
+                        all_done_active = true;
+                    }
                 }
             }
         }
     }
+    if (!idx_srv.done)
+        log->warn("Not all files have been closed (this is Ok, if no files were opened, e.g., when producer signals that it's done)");
 
     log->trace("Done with Index::serve");
 }
@@ -161,15 +179,27 @@ Index::print(int rank, const BoxLocations& boxes)
     }
 }
 
-void
-Index::print()
+Index::Datasets
+Index::
+find_datasets(File* f)
 {
-    for (auto& x : index_data)
-    {
-        auto& data = x.second;
-        fmt::print("{}: {}\n", local.rank(), data.ds->name);
-        print(local.rank(), data.boxes);
-    }
+    Datasets result;
+    std::string name;
+    find_datasets(f, name, result);
+    return result;
+}
+
+void
+Index::
+find_datasets(Object* o, std::string name, Datasets& result)
+{
+    name += "/" + o->name;
+    Dataset* ds = dynamic_cast<Dataset*>(o);
+    if (ds)
+        result.emplace(name, ds);
+
+    for (Object* child : o->children)
+        find_datasets(child, name, result);
 }
 
 } // namespace LowFive

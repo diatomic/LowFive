@@ -1,10 +1,12 @@
 #include <lowfive/vol-dist-metadata.hpp>
-#include <lowfive/metadata/remote.hpp>
-#include <lowfive/metadata/dummy.hpp>
+#include "metadata/remote.hpp"
+#include "metadata/dummy.hpp"
 #include "log-private.hpp"
 #include "index.hpp"
 #include "query.hpp"
-#include <lowfive/metadata/serialization.hpp>
+#include "metadata/serialization.hpp"
+
+#include "vol-metadata-private.hpp"     // ObjectPointers
 
 LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
     DistMetadataVOL(local_, communicators { std::move(intercomm_) })
@@ -34,44 +36,54 @@ LowFive::DistMetadataVOL::
 serve_all(bool delete_data)
 {
     auto log = get_logger();
-    log->trace("enter serve_all, serve_data.size = {}", serve_data.size());
+    log->trace("enter serve_all, files.size = {}", files.size());
 
-    // serve datasets (producer only)
-    if (serve_data.size())              // only producer pushed any datasets to serve_data
-    {
-        Index index(local, intercomms, serve_data);
+    Index index(local, intercomms, &files);
+    // we only serve if there any datasets; this matched old (pre-RPC)
+    // behavior, but is probably not the right universal solution; we should
+    // make this behavior user-configurable
+    if (index.indexed_datasets)
         index.serve();
 
-        if (delete_data)
-            for (auto* ds : serve_data)
-                delete ds;
-        serve_data.clear();
-    }
+    // TODO: what do we do about delete_data? Probably should become "clear files"
+    //if (delete_data)
+    //    for (auto* ds : serve_data)
+    //        delete ds;
 
     log->trace("serve_all done");
 }
 
-void*
-LowFive::DistMetadataVOL::dataset_create(void* obj, const H5VL_loc_params_t* loc_params, const char* name,
-        hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void** req)
+void
+LowFive::DistMetadataVOL::
+broadcast_files(int root)
 {
-    void* ds_ = MetadataVOL::dataset_create(obj, loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req);
+    diy::mpi::communicator local_(local);
+    diy::MemoryBuffer bb;
 
-    Object* ds_o = static_cast<Object*>(static_cast<ObjectPointers*>(ds_)->mdata_obj);
-    if (Dataset* dset = dynamic_cast<Dataset*>(ds_o))
-        serve_data.insert(dset);
+    if (local_.rank() == root)
+    {
+        diy::save(bb, files.size());
+        for (auto& x : files)
+        {
+            diy::save(bb, x.first);     // filename
+            serialize(bb, x.second);    // File*
+        }
+        diy::mpi::broadcast(local_, bb.buffer, root);
+    } else
+    {
+        diy::mpi::broadcast(local_, bb.buffer, root);
 
-    return ds_;
-}
-
-herr_t
-LowFive::DistMetadataVOL::dataset_write(void* dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void* buf, void** req)
-{
-    Object* ds_o = static_cast<Object*>(static_cast<ObjectPointers*>(dset)->mdata_obj);
-    if (Dataset* dataset = dynamic_cast<Dataset*>(ds_o))
-        serve_data.insert(dataset);
-
-    return MetadataVOL::dataset_write(dset, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+        size_t n_files;
+        diy::load(bb, n_files);
+        // NB: we are not clearing files beforehand, might be a reasonable thing to do
+        for (size_t i = 0; i < n_files; ++i)
+        {
+            std::string filename;
+            diy::load(bb, filename);
+            auto* f = deserialize(bb);
+            files.emplace(filename, f);
+        }
+    }
 }
 
 void*
@@ -97,31 +109,15 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         {
             delete dd;
 
+            RemoteObject* rparent = dynamic_cast<RemoteObject*>(parent);
+            if (!rparent)
+                throw MetadataError(fmt::format("Parent ({},{}) not a RemoteObject", filepath.first, parent->name));
+
+            auto ds_obj = rparent->obj.call<rpc::client::object>("dataset_open", std::string(name));
+
             // assume we are the consumer, since nothing stored in memory (open also implies that)
-            auto* ds = new RemoteDataset(name);     // build and record the index to be used in read
+            auto* ds = new RemoteDataset(name, std::move(ds_obj));     // build and record the index to be used in read
             parent->add_child(ds);
-
-            // check that the dataset name is the full path (the only mode supported for now)
-            // TODO: if only leaf name is given, could use backtrack_name to find full path
-            // but that requires the user creating all the nodes (groups, etc.) in between the root and the leaf
-            if (ds->name[0] != '/')
-                throw MetadataError(fmt::format("dataset_open(): Need full pathname for dataset {}", ds->name));
-
-            // get the filename
-            std::string filename = filepath.first;
-
-            // TODO: might want to use filepath.second instead of ds->name
-
-            // get the correct intercomm
-            int loc = find_match(filename, ds->name, intercomm_locations);
-            if (loc == -1)
-                throw MetadataError(fmt::format("dataset_open(): no intercomm found for dataset {}", ds->name));
-            int intercomm_index = intercomm_indices[loc];
-
-            // open a query
-            Query* query = new Query(local, intercomms, remote_size(intercomm_index), intercomm_index);      // NB: because no dataset is provided will only build index based on the intercomm
-            query->dataset_open(ds->name);
-            ds->query = query;
             result->mdata_obj = ds;
         }
     }
@@ -135,19 +131,7 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_close");
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
-    if (dset_->mdata_obj)
-    {
-        if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))                   // producer
-            serve_data.insert(ds);   // record dataset for serving later when file closes
-        else if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))  // consumer
-        {
-            Query* query = (Query*) ds->query;
-            query->dataset_close();
-            delete query;
-        }
-    }
-
+    // TODO: nothing to do anymore; get rid of this function
     return MetadataVOL::dataset_close(dset, dxpl_id, req);
 }
 
@@ -166,8 +150,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         // if (file_space_id == H5S_ALL)
         //     file_space_id = H5Dget_space(?);
         // consumer with the name of a remote dataset: query to producer
-        Query* query = (Query*) ds->query;
-        query->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
+        ds->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
     } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
     {
         return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -195,13 +178,10 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
     // consumer with the name of a remote dataset
     if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
     {
-        // query to producer
-        Query* query = (Query*) ds->query;
-
         if (get_type == H5VL_DATASET_GET_SPACE)
         {
             log->trace("GET_SPACE");
-            auto& dataspace = query->space;
+            auto& dataspace = ds->space;
 
             hid_t space_id = dataspace.copy();
             log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
@@ -212,7 +192,7 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         } else if (get_type == H5VL_DATASET_GET_TYPE)
         {
             log->trace("GET_TYPE");
-            auto& datatype = query->type;
+            auto& datatype = ds->type;
 
             log->trace("dataset data type id = {}, datatype = {}",
                     datatype.id, datatype);
@@ -255,6 +235,9 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
     if (match_any(name, "", memory, true))
     {
+#if 0
+        // TODO: this is no longer necessary, thanks to broadcast_files;
+        //       remove once tested and everything is working
 
         // if rank is producer, but file was created on another rank (as AMReX does: header is written by one rank per node, and data is written by all ranks on the node)
         // it can be not present on some producer ranks. We create file if necessary.
@@ -262,30 +245,46 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         // TODO: find a better solution, this might fail in many cases
         if (flags != H5F_ACC_RDONLY) {
             log->trace("DistMetadataVOL::file_open(), name = {}, local file not found, but opened not in RDONLY - create empty file", name);
+
+            auto it = files.find(name);
+            if (it == files.end())
+                log->critical("Expected to find a dummy file created by file_open()");
+
+            Object* o = it->second;
+            auto* df = static_cast<DummyFile*>(o);
+            if (!df)
+                log->critical("Expected to find a dummy file created by file_open(), but cast failed");
+
+            delete df;
+            files.erase(it);
+
             return MetadataVOL::file_create(name, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id, dxpl_id, req);
         }
-
-        // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
-        delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
-
-        log->trace("Creating remote");
-        RemoteFile* f = new RemoteFile(name);
-        files.emplace(name, f);
-        result->mdata_obj = f;
+#endif
 
         // get an intercomm for this file
         auto locs = find_matches(name, "", intercomm_locations, true);
         if (locs.empty())
             throw MetadataError(fmt::format("file_open(): no intercomm found for {}", name));
-        // signal to every intercomm that we are opening the file;
-        // technically ought to dedup the intercomms, but signalling open once
-        // per pattern works too, as long as it matches file_close()
-        for (auto loc : locs)
-        {
-            int intercomm_index = intercomm_indices[loc];
-            Query(local, intercomms, remote_size(intercomm_index), intercomm_index).file_open();
-        }
 
+        std::set<int> dedup_indices;
+        for (auto loc : locs)
+            dedup_indices.emplace(intercomm_indices[loc]);
+
+        if (dedup_indices.size() > 1)
+            throw MetadataError(fmt::format("file_open(): found more than one intercomm for {}", name));
+
+        int intercomm_index = *dedup_indices.begin();
+
+        std::unique_ptr<Query> query(new Query(local, intercomms, remote_size(intercomm_index), intercomm_index));
+        rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
+
+        // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
+        delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
+        log->trace("Creating remote");
+        RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
+        files.emplace(name, f);
+        result->mdata_obj = f;
     }
 
     return result;
@@ -295,6 +294,8 @@ herr_t
 LowFive::DistMetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
+    ++file_close_counter_;
+
     ObjectPointers* file_ = (ObjectPointers*) file;
 
     auto log = get_logger();
@@ -315,17 +316,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
     if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_->mdata_obj))
     {
         log->trace("DistMetadataVOL::file_close, remote file {}", f->name);
-        // signal that we are done
-        // get an intercomm for this file
-        auto locs = find_matches(f->name, "", intercomm_locations, true);
-        if (locs.empty())
-            throw MetadataError(fmt::format("file_close(): no intercomm found for {}", f->name));
-        // signal to every intercomm that we are opening the file
-        for (auto loc : locs)
-        {
-            int intercomm_index = intercomm_indices[loc];
-            Query(local, intercomms, remote_size(intercomm_index), intercomm_index).file_close();
-        }
+        f->obj.call<void>("file_close");
+
+        MPI_Barrier(local);
+        int rank; MPI_Comm_rank(local, &rank);
+        bool root = rank == 0;
+        if (root)
+            f->obj.self_->finish(0);
 
         files.erase(f->name);
         log->trace("DistMetadataVOL::file_close delete {}", fmt::ptr(f));
@@ -361,7 +358,16 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
         if (DummyGroup* dg = dynamic_cast<DummyGroup*>((Object*) result->mdata_obj)) // didn't find local
         {
             delete dg;
-            result->mdata_obj = parent->add_child(new RemoteGroup(name));      // just store the name for future reference
+            RemoteObject* rparent = dynamic_cast<RemoteObject*>(parent);
+
+            if (!rparent)
+                throw MetadataError(fmt::format("Parent {} not a RemoteObject", parent->name));
+
+            auto grp_obj = rparent->obj.call<rpc::client::object>("group_open", name);
+
+            auto* grp = new RemoteGroup(name, std::move(grp_obj));
+            parent->add_child(grp);
+            result->mdata_obj = grp;
         }
 
     return result;
@@ -393,6 +399,8 @@ producer_signal_done()
 {
     auto log = get_logger();
     log->trace("DistMetadataVOL:producer_signal_done");
-    Index index(local, intercomms, ServeData());
+
+    Files files;        // empty files
+    Index index(local, intercomms, &files);
     index.serve();
 }

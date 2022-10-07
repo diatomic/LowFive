@@ -6,7 +6,7 @@
 #include <vector>
 #include <memory>
 
-#include <lowfive/metadata/serialization.hpp>
+#include "../../metadata/serialization.hpp"
 
 #include "../util.h"
 

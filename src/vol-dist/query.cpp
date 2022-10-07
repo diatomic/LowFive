@@ -12,75 +12,25 @@ namespace LowFive {
 
 Query::Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size_, int intercomm_index_):
         IndexQuery(local_, intercomms_),
-        remote_size(remote_size_),
         intercomm_index(intercomm_index_),
-        c(m, intercomms_[intercomm_index_], 0)      // FIXME: default target should not be 0
+        remote_size(remote_size_),
+        c(m, intercomms_[intercomm_index_], local.rank() % remote_size)
 {
     export_core(m, nullptr);        // client doesn't need IndexServe
 }
 
 void
-Query::file_open()
+RemoteDataset::
+query(const Dataspace&  file_space,      // input: query in terms of file space
+      const Dataspace&  mem_space,       // ouput: memory space of resulting data
+      void*             buf)             // output: resulting data, allocated by caller
 {
+    using Bounds        = IndexQuery::Bounds;
+    using Point         = IndexQuery::Point;
+    using BoxLocations  = IndexQuery::BoxLocations;
+
     auto log = get_logger();
-    log->info("Query::file_open()");
-
-    bool root = local.rank() == 0;
-    if (root)
-        c.call<void>("file_open");
-}
-
-void
-Query::file_close()
-{
-    local.barrier();
-
-    bool root = local.rank() == 0;
-    if (root)
-        c.call<void>("file_close");
-}
-
-void Query::dataset_open(std::string name)
-{
-    auto log = get_logger();
-
-    name_ = name;
-
-    // TODO: the broadcasts necessitate collective open; they are not
-    //       necessary (or could be triggered by a hint from the execution framework)
-
-    // query producer
-    Bounds domain {0};
-    bool root = (local.rank() == 0);
-    if (root)
-    {
-        using object = rpc::client::object;
-        ids = decltype(ids)(new object(c.call<object>("dataset_open", name)));
-        log->trace("Opened object: {} (own = {})", ids->id_, ids->own_);
-        std::tie(dim, type, space) = ids->call<std::tuple<int, Datatype, Dataspace>>("metadata");
-        domain = ids->call<Bounds>("domain");
-    }
-    diy::mpi::broadcast(local, dim, 0);
-    broadcast(local, type, 0);
-    broadcast(local, space, 0);
-    broadcast(local, domain, 0);
-
-    decomposer = Decomposer(dim, domain, remote_size);
-}
-
-void
-Query::dataset_close()
-{
-    c.call<void>("dataset_close");
-}
-
-void
-Query::query(const Dataspace&  file_space,      // input: query in terms of file space
-             const Dataspace&  mem_space,       // ouput: memory space of resulting data
-             void*             buf)             // output: resulting data, allocated by caller
-{
-    auto log = get_logger();
-    log->trace("Query::query: file_space = {}", file_space);
+    log->trace("RemoteDataset::query: file_space = {}", file_space);
 
     // enqueue queried file dataspace to the ranks that are
     // responsible for the boxes that (might) intersect them
@@ -89,17 +39,13 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
     b.max = Point(file_space.max);
 
     BoxLocations all_redirects;
-    auto gids = bounds_to_gids(b, decomposer);
+    auto gids = IndexQuery::bounds_to_gids(b, decomposer);
     for (int gid : gids)
     {
         // TODO: make this asynchronous (isend + irecv, etc)
 
-        // TODO: this is not terribly efficient; make the proper helper function
-        // open the object on the right rank
-        using object = rpc::client::object;
-        auto rids = c.call<object>(gid, "dataset_open", name_);
-        log->trace("Opened object: {} (own = {})", rids.id_, rids.own_);
-
+        // TODO: keep these open for the next loop
+        auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", fullname());
         BoxLocations redirects = rids.call<BoxLocations>("redirects", file_space);
         for (auto& x : redirects)
             all_redirects.push_back(x);
@@ -120,8 +66,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             blocks.insert(gid);
 
             // open the object on the right rank
-            using object = rpc::client::object;
-            auto rids = c.call<object>(gid, "dataset_open", name_);
+            auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", fullname());
             log->trace("Opened object: {} (own = {})", rids.id_, rids.own_);
             log->trace("Opened dataset on {}", gid);
 
@@ -147,7 +92,7 @@ Query::query(const Dataspace&  file_space,      // input: query in terms of file
             }
         }
     }
-    log->trace("Leaving Query::query");
+    log->trace("Leaving RemoteDataset::query");
 }
 
 

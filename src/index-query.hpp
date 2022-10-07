@@ -5,8 +5,8 @@
 #include <diy/decomposition.hpp>
 #include <diy/types.hpp>
 
-#include <lowfive/metadata.hpp>
-#include <lowfive/metadata/serialization.hpp>
+#include "metadata.hpp"
+#include "metadata/serialization.hpp"
 
 namespace LowFive
 {
@@ -119,7 +119,8 @@ struct IndexQuery
     communicators       intercomms;
 
     // TODO: move this into RegularDecomposer itself (this is a slightly modified point_to_gids)
-    std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer) const
+    static
+    std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer)
     {
         int dim = decomposer.dim;
         std::vector< std::pair<Coordinate, Coordinate> > ranges(dim);

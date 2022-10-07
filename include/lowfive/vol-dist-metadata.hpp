@@ -1,6 +1,7 @@
 #pragma     once
 
 #include    <vector>
+#include    <set>
 #include    <mpi.h>
 
 #include    "vol-metadata.hpp"
@@ -8,19 +9,19 @@
 namespace LowFive
 {
 
+struct Dataset;
+using Datasets = std::set<Dataset*>;
+
 // custom VOL object for distributed metadata
 struct DistMetadataVOL: public LowFive::MetadataVOL
 {
     using communicator      = MPI_Comm;
     using communicators     = std::vector<communicator>;
-    using ServeData         = Datasets;
     using DataIntercomms    = std::vector<int>;
     using FileNames         = std::vector<std::string>;
 
     communicator    local;
     communicators   intercomms;
-
-    ServeData       serve_data;
 
     // parallel vectors to make use of the API in MetadataVOL
     LocationPatterns    intercomm_locations;
@@ -42,13 +43,13 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
         intercomm_indices.emplace_back(intercomm_index);
     }
 
+    void            broadcast_files(int root = 0);
+
     void            serve_all(bool delete_data = true);
 
-    void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id,  hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id,  hid_t dxpl_id, void **req) override;
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
     herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
     herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
-    herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req) override;
     herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
 
     void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req) override;
@@ -61,6 +62,9 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     FileNames       get_filenames(int intercomm_index);
     void            send_done(int intercomm_index);
     void            producer_signal_done();
+
+    long int        file_close_counter_ {0};  // increment after each call to file_close
+
 };
 
 }
