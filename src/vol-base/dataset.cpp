@@ -224,14 +224,14 @@ _dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
-    hid_t under_vol_id;
+    //hid_t under_vol_id;
     herr_t ret_value;
 
     log->debug("------- PASS THROUGH VOL DATASET Specific");
 
     // Save copy of underlying VOL connector ID and prov helper, in case of
     // refresh destroying the current object
-    under_vol_id = o->under_vol_id;
+    //under_vol_id = o->under_vol_id;
 
     ret_value = o->vol->dataset_specific(o->under_object, specific_type, dxpl_id, req, arguments);
 

@@ -223,7 +223,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)file;
-    hid_t under_vol_id = -1;
+    //hid_t under_vol_id = -1;
     herr_t ret_value;
 
     log->debug("------- PASS THROUGH VOL FILE Specific");
@@ -242,7 +242,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
         plist_id = va_arg(arguments, hid_t);
 
         /* Keep the correct underlying VOL ID for possible async request token */
-        under_vol_id = o->under_vol_id;
+        //under_vol_id = o->under_vol_id;
 
         /* Re-issue 'file specific' call, using the unwrapped pieces */
         ret_value = _file_specific_reissue(o->under_object, o->under_vol_id, specific_type, dxpl_id, req, (int)loc_type, name, child_file->under_object, plist_id);
@@ -268,7 +268,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
         H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
 
         /* Keep the correct underlying VOL ID for possible async request token */
-        under_vol_id = info->under_vol_id;
+        //under_vol_id = info->under_vol_id;
 
         /* Re-issue 'file specific' call */
         ret_value = _file_specific_reissue(NULL, info->under_vol_id, specific_type, dxpl_id, req, under_fapl_id, name, ret);
@@ -287,7 +287,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
             va_copy(my_arguments, arguments);
 
         /* Keep the correct underlying VOL ID for possible async request token */
-        under_vol_id = o->under_vol_id;
+        //under_vol_id = o->under_vol_id;
 
         ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
 

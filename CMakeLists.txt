@@ -14,6 +14,7 @@ set                         (CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ignore variadic args warning (no other good solution)
 set                         (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-varargs")
+#set                         (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Wno-deprecated-declarations")
 
 # Default to Release
 if                          (NOT CMAKE_BUILD_TYPE)

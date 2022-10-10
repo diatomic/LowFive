@@ -149,14 +149,14 @@ _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
-    hid_t under_vol_id;
+    //hid_t under_vol_id;
     herr_t ret_value;
 
     log->debug("------- PASS THROUGH VOL OBJECT Specific");
 
     // Save copy of underlying VOL connector ID and prov helper, in case of
     // refresh destroying the current object
-    under_vol_id = o->under_vol_id;
+    //under_vol_id = o->under_vol_id;
 
     ret_value = o->vol->object_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
 
