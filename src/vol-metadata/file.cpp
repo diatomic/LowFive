@@ -138,7 +138,11 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
         else if (get_type == H5VL_FILE_GET_FILENO)          // file number
             throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_INTENT)          // file intent
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_INTENT not implemented in memory yet"));
+        {
+            unsigned *intent_flags = va_arg(arguments, unsigned *);
+            log->warn("file_get(): H5VL_FILE_GET_INTENT forces H5F_ACC_RDWR as a response");
+            *intent_flags = H5F_ACC_RDWR;
+        }
         else if (get_type == H5VL_FILE_GET_NAME)            // file name
             throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_NAME not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
