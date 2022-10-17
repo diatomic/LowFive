@@ -184,6 +184,7 @@ attr_iter(void *obj, va_list arguments)
     Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
     // copied from HDF5 H5VLnative_attr.c, H5VL__native_attr_specific()
+    H5_index_t      idx_type = (H5_index_t)va_arg(arguments, int); (void) idx_type;
     H5_iter_order_t order    = (H5_iter_order_t)va_arg(arguments, int);
     hsize_t *       idx      = va_arg(arguments, hsize_t *);
     H5A_operator2_t op       = va_arg(arguments, H5A_operator2_t);
