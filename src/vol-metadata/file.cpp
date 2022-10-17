@@ -146,7 +146,16 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
         else if (get_type == H5VL_FILE_GET_NAME)            // file name
             throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_NAME not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_COUNT not implemented in memory yet"));
+        {
+            unsigned types     = va_arg(arguments, unsigned); (void) types;
+            ssize_t *ret       = va_arg(arguments, ssize_t *);
+            size_t   obj_count = 0; /* Number of opened objects */
+
+            log->warn("file_get(): H5VL_FILE_GET_OBJ_COUNT return 0 objects (hack around h5py cleanup; wrong in general)");
+
+            /* Set the return value */
+            *ret = (ssize_t)obj_count;
+        }
         else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
             throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_IDS not implemented in memory yet"));
         else
