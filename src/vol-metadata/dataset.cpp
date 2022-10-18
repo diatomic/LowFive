@@ -138,12 +138,10 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
         {
             log->trace("GET_DCPL");
             hid_t *ret = va_arg(args, hid_t*);
-            *ret = static_cast<Dataset*>(dset_->mdata_obj)->dcpl.id;
+            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
+            *ret = dset->dcpl.id;
+            dset->dcpl.inc_ref();
             log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-
-            // DEPRECATE
-//             // create a new empty property list;
-//             *ret = H5Pcreate(H5P_DATASET_CREATE);
         } else
         {
             throw MetadataError(fmt::format("Unknown get_type == {} in dataset_get()", get_type));

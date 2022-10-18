@@ -33,7 +33,16 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
         result->mdata_obj = o;
 
         if (*opened_type == H5I_BADID)      // not set by native
+        {
             *opened_type = get_type(o);
+
+            // XXX: this is hack; we should not be able to open a file, but
+            //      rather the "/" group. Ideally, we'd have such a group for every
+            //      file, but I'm not sure how to implement that. This is a
+            //      workaround.
+            if (*opened_type == H5I_FILE)
+                *opened_type = H5I_GROUP;
+        }
     }
 
     log->trace("MetadataVOL::object_open: opened_type = {}", *opened_type);

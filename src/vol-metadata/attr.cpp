@@ -275,8 +275,9 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
 
     // trace object back to root to build full path and file name
-    auto name = static_cast<Object*>(obj_->mdata_obj)->name;
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+    auto name = mdata_obj->name;
+    auto filepath = mdata_obj->fullname(name);
 
     herr_t result = 0;
     if (unwrap(obj_))
@@ -308,8 +309,20 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             }
             case H5VL_ATTR_RENAME:                     // H5Arename(_by_name)
             {
-                // TODO
-                throw MetadataError(fmt::format("H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                const char *old_name = va_arg(arguments, const char *);
+                const char *new_name = va_arg(arguments, const char *);
+                log->trace("RENAME: old_name = {}, new_name = {}, loc_params->type = {}, loc_params->name = {}",
+                            old_name, new_name, loc_params->type, loc_params->loc_data.loc_by_name.name);
+
+                if (loc_params->type == H5VL_OBJECT_BY_SELF) { /* H5Arename */
+                    auto* attr = static_cast<Attribute*>(mdata_obj);
+                    attr->name = new_name;
+                } else if (loc_params->type == H5VL_OBJECT_BY_NAME) { /* H5Arename_by_name */
+                    Object* o = mdata_obj->locate(*loc_params).exact();
+                    Object* attr = o->search(old_name).exact();
+                    attr->name = new_name;
+                } else
+                    throw MetadataError(fmt::format("H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()"));
                 break;
             }
             default:

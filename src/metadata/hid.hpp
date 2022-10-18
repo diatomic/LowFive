@@ -16,6 +16,8 @@ struct Hid
     Hid&    operator=(const Hid& other)             { update(other.id); return *this; }
     Hid&    operator=(Hid&& other)                  { update(other.id); return *this; }
 
+    void    inc_ref()                               { H5Iinc_ref(id); }
+
     void    update(hid_t oid)
     {
         if (oid != 0) H5Iinc_ref(oid);
