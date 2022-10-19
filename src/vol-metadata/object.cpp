@@ -17,6 +17,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
         result = wrap(nullptr);
     else                        // passthru
         result = wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
+    result->mdata_obj = nullptr;
 
     log->trace("MetadataVOL::object_open, result = {}", fmt::ptr(result));
 
@@ -25,7 +26,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
 
     // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
     //       I think locate will return the last parent that has mdata, which is not what we want
-    if (mdata_obj)
+    if (mdata_obj && match_any(mdata_obj->fullname(Object::path(*loc_params)), memory))
     {
         log->trace("In MetadataVOL::object_open(): locating");
         Object* o = mdata_obj->locate(*loc_params).exact();
