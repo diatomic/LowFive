@@ -192,9 +192,24 @@ _group_get(void *ob, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
     pass_through_t *o = (pass_through_t *)ob;
     herr_t ret_value;
 
+    va_list args;
+    va_copy(args,arguments);
+
     log->debug("------- PASS THROUGH VOL GROUP Get");
 
     ret_value = o->vol->group_get(o->under_object, get_type, dxpl_id, req, arguments);
+
+    if (get_type == H5VL_GROUP_GET_INFO)
+    {
+        const H5VL_loc_params_t *loc_params = va_arg(args, const H5VL_loc_params_t *);
+        H5G_info_t *             group_info = va_arg(args, H5G_info_t *);
+
+        log->trace("storage_type = {}, nlinks = {}, max_corder = {}, mounted = {}",
+                    group_info->storage_type,
+                    group_info->nlinks,
+                    group_info->max_corder,
+                    group_info->mounted);
+    }
 
     /* Check for async request */
     if(req && *req)

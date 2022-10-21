@@ -108,6 +108,9 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
 
     herr_t result = 0;
     if (unwrap(file_))
+        // NB: The case of H5VL_FILE_GET_OBJ_IDS requires that we augment the
+        //     output with mdata_obj pointers.  The native implementation seems to
+        //     do this automagically.
         result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
     else
     {
@@ -144,14 +147,42 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
             *intent_flags = H5F_ACC_RDWR;
         }
         else if (get_type == H5VL_FILE_GET_NAME)            // file name
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_NAME not implemented in memory yet"));
+        {
+            H5I_type_t type = (H5I_type_t)va_arg(arguments, int); /* enum work-around */
+            size_t     size = va_arg(arguments, size_t);
+            char *     name = va_arg(arguments, char *);
+            ssize_t *  ret  = va_arg(arguments, ssize_t *);
+            size_t     len;
+
+            auto* name_c = static_cast<File*>(file_->mdata_obj)->name.c_str();
+            len = std::strlen(name_c);
+
+            if (name) {
+                std::strncpy(name, name_c, std::min(len + 1, size));
+                if (len >= size)
+                    name[size - 1] = '\0';
+            } /* end if */
+
+            /* Set the return value for the API call */
+            *ret = (ssize_t)len;
+        }
         else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
         {
-            result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
+            unsigned types     = va_arg(arguments, unsigned);
+            ssize_t *ret       = va_arg(arguments, ssize_t *);
+            size_t   obj_count = 0; /* Number of opened objects */
+
+            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
+            H5Iiterate(H5I_FILE, [](hid_t, void*) -> herr_t { auto log = get_logger(); log->trace("H5Iiterate callback"); return 0; }, NULL);
+
+            *ret = obj_count;
+
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_COUNT not implemented in memory yet"));
         }
         else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
         {
-            result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
+            //result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_IDS not implemented in memory yet"));
         }
         else
             throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));

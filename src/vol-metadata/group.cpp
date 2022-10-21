@@ -104,7 +104,21 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
         va_list args;
         va_copy(args,arguments);
 
-        throw MetadataError(fmt::format("group_get() not implemented in metadata yet"));
+        if (get_type == H5VL_GROUP_GET_GCPL)
+            throw MetadataError(fmt::format("group_get() H5VL_GROUP_GET_GCPL not implemented in metadata yet"));
+        else if (get_type == H5VL_GROUP_GET_INFO)
+        {
+            const H5VL_loc_params_t *loc_params = va_arg(arguments, const H5VL_loc_params_t *);
+            H5G_info_t *             group_info = va_arg(arguments, H5G_info_t *);
+
+            auto* g = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params).exact();
+            group_info->storage_type = H5G_STORAGE_TYPE_UNKNOWN;
+            group_info->nlinks = g->children.size();
+            group_info->max_corder = 0;
+            group_info->mounted = false;
+        }
+        else
+            throw MetadataError(fmt::format("group_get() did not recognize get_type = {}", get_type));
     } else
         throw MetadataError(fmt::format("group_get(): either passthru or metadata must be specified"));
 

@@ -28,7 +28,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     //       I think locate will return the last parent that has mdata, which is not what we want
     if (mdata_obj && match_any(mdata_obj->fullname(Object::path(*loc_params)), memory))
     {
-        log->trace("In MetadataVOL::object_open(): locating");
+        log->trace("In MetadataVOL::object_open(): locating {} from {}", Object::path(*loc_params), mdata_obj->name);
         Object* o = mdata_obj->locate(*loc_params).exact();
         log->trace("MetadataVOL::object_open, result = {}, mdata_obj = {}", fmt::ptr(result), fmt::ptr(o));
         result->mdata_obj = o;
@@ -42,7 +42,10 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
             //      file, but I'm not sure how to implement that. This is a
             //      workaround.
             if (*opened_type == H5I_FILE)
+            {
+                log->warn("In MetadataVOL::object_open(): forcing file to be a group");
                 *opened_type = H5I_GROUP;
+            }
         }
     }
 
