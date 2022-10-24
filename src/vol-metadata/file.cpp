@@ -172,17 +172,65 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_lis
             ssize_t *ret       = va_arg(arguments, ssize_t *);
             size_t   obj_count = 0; /* Number of opened objects */
 
+            // TODO
+            log->warn("FILE_GET_OBJ_COUNT doesn't currently check whether objects belong to the given file");
+
             //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
-            H5Iiterate(H5I_FILE, [](hid_t, void*) -> herr_t { auto log = get_logger(); log->trace("H5Iiterate callback"); return 0; }, NULL);
+            auto count = [](hid_t, void* obj_count_) -> herr_t
+                         {
+                            ++(*static_cast<size_t*>(obj_count_));
+                            return 0;
+                         };
 
-            *ret = obj_count;
+            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     count, &obj_count);
+            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    count, &obj_count);
+            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  count, &obj_count);
+            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
+            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, count, &obj_count);
+            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     count, &obj_count);
 
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_COUNT not implemented in memory yet"));
+            *ret = (ssize_t)obj_count;
         }
         else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
         {
-            //result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_OBJ_IDS not implemented in memory yet"));
+            unsigned types     = va_arg(arguments, unsigned);
+            size_t   max_objs  = va_arg(arguments, size_t);
+            hid_t *  oid_list  = va_arg(arguments, hid_t *);
+            ssize_t *ret       = va_arg(arguments, ssize_t *);
+            size_t   obj_count = 0; /* Number of opened objects */
+
+            // TODO
+            log->warn("FILE_GET_OBJ_IDS doesn't currently check whether objects belong to the given file");
+
+            using ListInfo = std::tuple<size_t*, hid_t**, size_t*, size_t>;
+            ListInfo list_info(&max_objs, &oid_list, &obj_count, 0);
+
+            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
+            auto get_objs = [](hid_t obj_id, void* list_info_) -> herr_t
+                            {
+                                ListInfo* list_info = static_cast<ListInfo*>(list_info_);
+
+                                size_t& max_objs  = *std::get<0>(*list_info);
+                                hid_t*& oid_list  = *std::get<1>(*list_info);
+                                size_t& obj_count = *std::get<2>(*list_info);
+                                size_t& n         =  std::get<3>(*list_info);
+
+                                ++obj_count;
+
+                                if (n < max_objs)
+                                    oid_list[n++] = obj_id;
+
+                                return 0;        // TODO: could stop early
+                            };
+
+            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     get_objs, &list_info);
+            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    get_objs, &list_info);
+            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  get_objs, &list_info);
+            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
+            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, get_objs, &list_info);
+            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     get_objs, &list_info);
+
+            *ret = (ssize_t)obj_count;
         }
         else
             throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));
