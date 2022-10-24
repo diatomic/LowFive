@@ -13,7 +13,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     log->trace("group_create:");
     log->trace("loc type = {}, name = {}, obj = {}", loc_params->type, name, *obj_);
 
-    assert(obj_->mdata_obj);
+    log_assert(obj_->mdata_obj, "mdata_obj not set");
 
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
@@ -26,7 +26,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     // add group to our metadata
     auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name);
-    assert(obj_path.is_name());
+    log_assert(obj_path.is_name(), "must have a proper name as a remainder");
     result->mdata_obj = obj_path.obj->add_child(new Group(obj_path.path));
 
     return (void*)result;

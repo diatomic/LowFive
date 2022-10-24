@@ -23,11 +23,10 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         log->trace(", name = NULL");
     log->trace("");
 
-    assert(obj_->mdata_obj);
+    log_assert(obj_->mdata_obj, "mdata_obj not set");
+
     // trace object back to root to build full path and file name
-
     std::string name_str = name ? name : "";
-
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name_str);
 
     if (unwrap(obj_) && match_any(filepath, passthru))

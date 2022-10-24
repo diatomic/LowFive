@@ -7,8 +7,10 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
+    ObjectPointers* obj_        = (ObjectPointers*) obj;
+
     auto log = get_logger();
-    log->trace("MetadataVOL::object_open");
+    log->trace("MetadataVOL::object_open: parent obj = {}", *obj_);
 
     *opened_type = H5I_BADID;
 
@@ -21,31 +23,40 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
 
     log->trace("MetadataVOL::object_open, result = {}", fmt::ptr(result));
 
-    ObjectPointers* obj_        = (ObjectPointers*) obj;
     Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
     // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
     //       I think locate will return the last parent that has mdata, which is not what we want
-    if (mdata_obj && match_any(mdata_obj->fullname(Object::path(*loc_params)), memory))
+    auto fullname = mdata_obj->fullname(Object::path(*loc_params));
+    log->trace("MetadataVOL::object_open: fullname = ({},{})", fullname.first, fullname.second);
+    if (mdata_obj)
     {
         log->trace("In MetadataVOL::object_open(): locating {} from {}", Object::path(*loc_params), mdata_obj->name);
-        Object* o = mdata_obj->locate(*loc_params).exact();
-        log->trace("MetadataVOL::object_open, result = {}, mdata_obj = {}", fmt::ptr(result), fmt::ptr(o));
-        result->mdata_obj = o;
-
-        if (*opened_type == H5I_BADID)      // not set by native
+        auto op = mdata_obj->locate(*loc_params);
+        if (op.path.empty())
         {
-            *opened_type = get_type(o);
+            Object* o = op.obj;
+            log->trace("MetadataVOL::object_open, result = {}, mdata_obj = {}", fmt::ptr(result), fmt::ptr(o));
+            result->mdata_obj = o;
 
-            // XXX: this is hack; we should not be able to open a file, but
-            //      rather the "/" group. Ideally, we'd have such a group for every
-            //      file, but I'm not sure how to implement that. This is a
-            //      workaround.
-            if (*opened_type == H5I_FILE)
+            if (*opened_type == H5I_BADID)      // not set by native
             {
-                log->warn("In MetadataVOL::object_open(): forcing file to be a group");
-                *opened_type = H5I_GROUP;
+                *opened_type = get_type(o);
+
+                // XXX: this is hack; we should not be able to open a file, but
+                //      rather the "/" group. Ideally, we'd have such a group for every
+                //      file, but I'm not sure how to implement that. This is a
+                //      workaround.
+                if (*opened_type == H5I_FILE)
+                {
+                    log->warn("In MetadataVOL::object_open(): forcing file to be a group");
+                    *opened_type = H5I_GROUP;
+                }
             }
+        } else
+        {
+            // we didn't find the object; let's make sure that's Ok
+            log_assert(!match_any(fullname, memory), "didn't find an mdata_obj");
         }
     }
 

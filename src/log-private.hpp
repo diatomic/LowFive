@@ -48,4 +48,15 @@ set_logger(Args... args)
     return log;
 }
 
+template<class... Args>
+void
+log_assert(bool cond, Args... args)
+{
+    if (!cond)
+    {
+        get_logger()->critical(args...);
+        std::exit(1);
+    }
+}
+
 }
