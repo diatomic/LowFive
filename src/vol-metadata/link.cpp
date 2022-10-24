@@ -199,7 +199,18 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
     if (unwrap(obj_))
         res = VOLBase::link_specific(unwrap(obj_), loc_params, under_vol_id, specific_type, dxpl_id, req, arguments);
     else if (obj_->mdata_obj)
-        log->warn("Warning: link_specific not implemented in metadata yet");
+    {
+        if (specific_type == H5VL_LINK_EXISTS)
+        {
+            htri_t *  ret = va_arg(arguments, htri_t *);
+            *ret = -1;
+
+            auto op = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
+            *ret = op.path.empty();
+        }
+        else
+            throw MetadataError(fmt::format("link_specific not implemented in metadata yet for specific_type = {}", specific_type));
+    }
     else
         throw MetadataError(fmt::format("link_specific(): either passthru or metadata must be specified"));
 
