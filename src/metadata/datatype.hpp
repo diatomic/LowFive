@@ -3,6 +3,9 @@
 #include <fmt/format.h>
 #include "hid.hpp"
 
+//#include <hdf5.h>
+#include "../log-private.hpp"
+
 namespace LowFive
 {
 
@@ -22,6 +25,16 @@ struct Datatype: Hid
 
         dtype_class    = convert_type_class(H5Tget_class(id));
         dtype_size     = H5Tget_size(id);
+    }
+
+    bool is_var_length_string() const
+    {
+        return H5Tis_variable_str(id) > 0;
+    }
+
+    bool equal(const Datatype& other) const
+    {
+        return H5Tequal(id, other.id) > 0;
     }
 
     hid_t   copy() const

@@ -90,7 +90,24 @@ LowFive::MetadataVOL::
 attr_read(void *attr, hid_t mem_type_id, void *buf,
     hid_t dxpl_id, void **req)
 {
-    return VOLBase::attr_read(unwrap(attr), mem_type_id, buf, dxpl_id, req);
+    ObjectPointers* attr_ = (ObjectPointers*) attr;
+
+    auto log = get_logger();
+    log->trace("Attr Read");
+    auto mem_type = Datatype(mem_type_id);
+    log->trace("attr = {}, mem_type_id = {}, mem type = {}", *attr_, mem_type_id, mem_type);
+
+    if (unwrap(attr_))
+        return VOLBase::attr_read(unwrap(attr), mem_type_id, buf, dxpl_id, req);
+    else
+    {
+        log_assert(attr_->mdata_obj, "mdata_obj must be set in metadata mode");
+        Attribute* a = (Attribute*) attr_->mdata_obj;
+        log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
+        a->read(Datatype(mem_type), buf);
+    }
+
+    return 0;
 }
 
 herr_t
@@ -356,6 +373,7 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
     {
         Attribute* a = (Attribute*) attr_->mdata_obj;
         a->write(Datatype(mem_type_id), buf);
+        log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
     }
 
     if (unwrap(attr_))
