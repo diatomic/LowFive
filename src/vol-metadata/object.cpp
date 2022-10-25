@@ -27,10 +27,11 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
 
     // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
     //       I think locate will return the last parent that has mdata, which is not what we want
-    auto fullname = mdata_obj->fullname(Object::path(*loc_params));
-    log->trace("MetadataVOL::object_open: fullname = ({},{})", fullname.first, fullname.second);
     if (mdata_obj)
     {
+        auto fullname = mdata_obj->fullname(Object::path(*loc_params));
+        log->trace("MetadataVOL::object_open: fullname = ({},{})", fullname.first, fullname.second);
+
         log->trace("In MetadataVOL::object_open(): locating {} from {}", Object::path(*loc_params), mdata_obj->name);
         auto op = mdata_obj->locate(*loc_params);
         if (op.path.empty())

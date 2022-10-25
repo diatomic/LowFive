@@ -65,19 +65,23 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     log->trace("Attr Open");
     log->trace("attr_open obj = {} name {}", *obj_, name);
 
-    // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
-
-    if (match_any(filepath, passthru))
+    if (unwrap(obj_))
         result = wrap(VOLBase::attr_open(unwrap(obj_), loc_params, name, aapl_id, dxpl_id, req));
     else
         result = wrap(nullptr);
 
-    // find the attribute in our file metadata
-    std::string name_(name);
-    if (match_any(filepath, memory))
-        result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->search(name_).exact();
-    // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
+    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+    if (mdata_obj)
+    {
+        // trace object back to root to build full path and file name
+        auto filepath = mdata_obj->fullname(name);
+
+        // find the attribute in our file metadata
+        std::string name_(name);
+        if (match_any(filepath, memory))
+            result->mdata_obj = mdata_obj->locate(*loc_params).exact()->search(name_).exact();
+        // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
+    }
 
     log->trace("attr_open search result = {} = [h5_obj {} mdata_obj {}] name {}",
             fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);
@@ -168,16 +172,14 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
 // helper function for attr_specific()
 void
 LowFive::MetadataVOL::
-attr_exists(void *obj, va_list arguments)
+attr_exists(Object *mdata_obj, va_list arguments)
 {
-    ObjectPointers* obj_    = (ObjectPointers*) obj;
-
     const char *attr_name   = va_arg(arguments, const char *);
     htri_t *    ret         = va_arg(arguments, htri_t *);
 
     // check direct children of the parent object (NB, not full search all the way down the tree)
     *ret = 0;           // not found
-    for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
+    for (auto& c : mdata_obj->children)
     {
         if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name)
         {
@@ -187,9 +189,9 @@ attr_exists(void *obj, va_list arguments)
     }
     auto log = get_logger();
     if (*ret)
-        log->trace("Found attribute {} as a child of the parent {}", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
+        log->trace("Found attribute {} as a child of the parent {}", attr_name, mdata_obj->name);
     else
-        log->trace("Did not find attribute {} as a child of the parent {}", attr_name, static_cast<Object*>(obj_->mdata_obj)->name);
+        log->trace("Did not find attribute {} as a child of the parent {}", attr_name, mdata_obj->name);
 }
 
 // helper function for attr_specific()
@@ -291,16 +293,16 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
     log->trace("specific types H5VL_ATTR_DELETE = {} H5VL_ATTR_EXISTS = {} H5VL_ATTR_ITER = {} H5VL_ATTR_RENAME = {}",
             H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
 
-    // trace object back to root to build full path and file name
+    //// trace object back to root to build full path and file name
     auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-    auto name = mdata_obj->name;
-    auto filepath = mdata_obj->fullname(name);
+    //auto name = mdata_obj->name;
+    //auto filepath = mdata_obj->fullname(name);
 
     herr_t result = 0;
     if (unwrap(obj_))
         result = VOLBase::attr_specific(unwrap(obj_), loc_params, specific_type, dxpl_id, req, arguments);
 
-    else if (match_any(filepath, memory))
+    else // if (match_any(filepath, memory))
     {
         switch(specific_type)
         {
@@ -313,7 +315,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
             {
                 log->trace("case H5VL_ATTR_EXISTS");
-                attr_exists(obj, arguments);
+                attr_exists(mdata_obj->locate(*loc_params).exact(), arguments);
 
                 break;
             }

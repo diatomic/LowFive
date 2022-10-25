@@ -196,7 +196,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
-    void            attr_exists(void *obj, va_list arguments);
+    void            attr_exists(Object *mdata_obj, va_list arguments);
     void            attr_iter(void *obj, va_list arguments);
 
     void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
