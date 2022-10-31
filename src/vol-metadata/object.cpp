@@ -297,6 +297,18 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
 
         switch(specific_type)
         {
+            /* H5Oexists_by_name */
+            case H5VL_OBJECT_EXISTS: {
+                htri_t *ret = va_arg(arguments, htri_t *);
+
+                if (mdata_obj->locate(*loc_params).path.empty())
+                    *ret = 1;
+                else
+                    *ret = 0;
+
+                return 0;
+                break;
+            }
             /* Lookup object */
             case H5VL_OBJECT_LOOKUP: {
                 H5O_token_t *token = va_arg(arguments, H5O_token_t *);
