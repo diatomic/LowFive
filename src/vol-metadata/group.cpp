@@ -26,8 +26,25 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     // add group to our metadata
     auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name);
-    log_assert(obj_path.is_name(), "must have a proper name as a remainder");
-    result->mdata_obj = obj_path.obj->add_child(new Group(obj_path.path));
+
+    // create intermediate groups, if necessary
+    do
+    {
+        auto i = obj_path.path.find('/');
+        auto name = obj_path.path.substr(0, i);
+        if (name != ".")
+        {
+            log->trace("Creating {} under {}", name, obj_path.obj->name);
+            obj_path.obj = obj_path.obj->add_child(new Group(name));
+        } else
+            log->trace("Skipping . in the name");
+        if (i == std::string::npos)
+            obj_path.path = "";
+        else
+            obj_path.path = obj_path.path.substr(i+1);
+        log->trace("Remaining path {}", obj_path.path);
+    } while (!obj_path.path.empty());
+    result->mdata_obj = obj_path.obj;
 
     return (void*)result;
 }
