@@ -178,25 +178,25 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
 /*-------------------------------------------------------------------------
  * Function:    _object_optional
  *
- * Purpose:     Handles the generic 'optional' callback
+ * Purpose:     Perform a connector-specific operation for an object
  *
- * Return:      SUCCEED / FAIL
+ * Return:      Success:    0
+ *              Failure:    -1
  *
  *-------------------------------------------------------------------------
  */
 herr_t
 LowFive::VOLBase::
-_object_optional(void *obj, int op_type, hid_t dxpl_id, void **req,
-    va_list arguments)
+_object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-    log->debug("------- PASS THROUGH VOL generic Optional");
+    log->debug("------- PASS THROUGH VOL OBJECT Optional");
 
-    ret_value = o->vol->object_optional(o->under_object, op_type, dxpl_id, req, arguments);
+    ret_value = o->vol->object_optional(o->under_object, opt_type, dxpl_id, req, arguments);
 
     return ret_value;
 } /* end _object_optional() */
@@ -204,8 +204,7 @@ _object_optional(void *obj, int op_type, hid_t dxpl_id, void **req,
 
 herr_t
 LowFive::VOLBase::
-object_optional(void *obj, int op_type, hid_t dxpl_id, void **req,
-    va_list arguments)
+object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
 {
-    return H5VLoptional(obj, info->under_vol_id, op_type, dxpl_id, req, arguments);
+    return H5VLobject_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
