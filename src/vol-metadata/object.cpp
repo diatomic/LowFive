@@ -42,7 +42,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
 
             if (*opened_type == H5I_BADID)      // not set by native
             {
-                *opened_type = get_type(o);
+                *opened_type = get_identifier_type(o);
 
                 // XXX: this is hack; we should not be able to open a file, but
                 //      rather the "/" group. Ideally, we'd have such a group for every
@@ -338,6 +338,8 @@ herr_t
 LowFive::MetadataVOL::
 object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    auto log = get_logger();
+
     if (!unwrap(obj))               // memory
     {
         ObjectPointers* obj_        = (ObjectPointers*) obj;
@@ -385,8 +387,15 @@ object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list argum
             // H5Oget_native_info(_name|_by_idx)
             case H5VL_NATIVE_OBJECT_GET_NATIVE_INFO:
             {
+                H5O_native_info_t *native_info = va_arg(arguments, H5O_native_info_t *);
+                unsigned           fields      = va_arg(arguments, unsigned);
+
+                log->trace("get_native_info: fields = {}", fields);
+                log->warn("get_native_info not implemented, nothing is set");
+
                 // TODO
-                throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_GET_NATIVE_INFO not implemented in metadata yet"));
+                //throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_GET_NATIVE_INFO not implemented in metadata yet"));
+                return 0;
             }
 
             default:
