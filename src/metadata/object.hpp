@@ -70,7 +70,14 @@ struct Object
         void* _this = this;
         memcpy(token.__data, &_this, sizeof(void*));
 
-        fmt::print(stderr, "fill_token: {} ", fmt::ptr(this));
+        // debug
+//         fmt::print(stderr, "fill_token: {} ", fmt::ptr(this));
+//         print_token(token);
+    }
+
+    // for debugging
+    void print_token(H5O_token_t& token)
+    {
         for (size_t i = 0; i < H5O_MAX_TOKEN_SIZE; ++i)
             fmt::print(stderr, "{0:x}", token.__data[i]);
         fmt::print(stderr, "\n");
