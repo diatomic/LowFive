@@ -26,7 +26,7 @@ struct ObjectPointers
     }
 };
 
-inline H5I_type_t   get_type(Object* o)
+inline H5I_type_t   get_identifier_type(Object* o)
 {
     if (o->type == ObjectType::File)
         return H5I_FILE;

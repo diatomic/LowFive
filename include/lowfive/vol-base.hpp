@@ -200,8 +200,8 @@ struct VOLBase
     virtual herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
 
     //// Container/connector introspection
     static herr_t          _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls);

@@ -29,7 +29,13 @@ struct Attribute: public Object
         } else
         {
             for (size_t i = 0; i < space.size(); ++i)
-                strings.push_back(std::string(((const char**) buf)[i]));
+            {
+                auto c_str = ((const char**) buf)[i];
+                if (c_str)
+                    strings.push_back(std::string(c_str));
+                else
+                    strings.emplace_back();     // empty for null
+            }
         }
     }
 
@@ -45,12 +51,16 @@ struct Attribute: public Object
         {
             for (size_t i = 0; i < space.size(); ++i)
             {
-                // presumably HDF5 will manage this string and reclaim the
-                // memory; I'm unclear on how this works, so it's a potential
-                // memory leak
-                char *cstr = new char[strings[i].length() + 1];
-                strcpy(cstr, strings[i].c_str());
-                ((const char**) buf)[i] = cstr;
+                if (!strings[i].empty())
+                {
+                    // presumably HDF5 will manage this string and reclaim the
+                    // memory; I'm unclear on how this works, so it's a potential
+                    // memory leak
+                    char *cstr = new char[strings[i].length() + 1];
+                    strcpy(cstr, strings[i].c_str());
+                    ((const char**) buf)[i] = cstr;
+                } else
+                    ((const char**) buf)[i] = NULL;
             }
         }
     }
