@@ -25,31 +25,9 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     else
         result = wrap(nullptr);
 
-    // add attribute to our metadata; NB: attribute cannot have children, so only creating it if we have to
-    if (match_any(filepath,memory))
-    {
-        // check if the attribute exists already
-        bool found = false;
-        for (auto& c : static_cast<Object*>(obj_->mdata_obj)->children)
-        {
-            if (c->type == LowFive::ObjectType::Attribute && c->name == name)
-            {
-                found = true;
-                result->mdata_obj = c;
-                break;
-            }
-        }
-        if (found)
-        {
-            log->trace("attribute name {} exists already in metadata object {}", name, *result);
-        }
-        else
-        {
-            result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
-            log->trace("created attribute named {} in metadata, new object {} under parent object {} named {}",
-                    name, *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
-        }
-    }
+    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
+    log->trace("created attribute named {} in metadata, new object {} under parent object {} named {}",
+            name, *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
 
     return result;
 }
@@ -75,6 +53,9 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     {
         // trace object back to root to build full path and file name
         auto filepath = mdata_obj->fullname(name);
+
+        // debug
+        log->trace("attr_open filepath first {} second {} name {}", filepath.first, filepath.second, name);
 
         // find the attribute in our file metadata
         std::string name_(name);

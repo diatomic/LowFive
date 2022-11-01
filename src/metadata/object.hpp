@@ -158,9 +158,6 @@ struct Object
         children.push_back(object);
         object->parent = this;
         return object;
-
-        // debug
-        fmt::print(stderr, "Added metadata node: name {} type {}\n", object->name, object->type);
     }
 
     // remove this from parent's children
