@@ -35,7 +35,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         if (name != ".")
         {
             log->trace("Creating {} under {}", name, obj_path.obj->name);
-            obj_path.obj = obj_path.obj->add_child(new Group(name));
+            obj_path.obj = obj_path.obj->add_child(new Group(name, gcpl_id));
         } else
             log->trace("Skipping . in the name");
         if (i == std::string::npos)
@@ -111,6 +111,9 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
 
     auto log = get_logger();
     log->trace("group_get: group = {}, get_type = {}, req = {}", *obj_, get_type, fmt::ptr(req));
+    log->trace("group_get: type H5VL_GROUP_GET_GCPL {} H5VL_GROUP_GET_INFO {} hid H5I_INVALID_HID {} H5P_DEFAULT {}",
+            H5VL_GROUP_GET_GCPL, H5VL_GROUP_GET_INFO, H5I_INVALID_HID, H5P_DEFAULT);
+
     // enum H5VL_group_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
     herr_t result = 0;
@@ -121,9 +124,16 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
         va_list args;
         va_copy(args,arguments);
 
-        if (get_type == H5VL_GROUP_GET_GCPL)
-            throw MetadataError(fmt::format("group_get() H5VL_GROUP_GET_GCPL not implemented in metadata yet"));
-        else if (get_type == H5VL_GROUP_GET_INFO)
+        if (get_type == H5VL_GROUP_GET_GCPL)                // group creation property list
+        {
+            log->trace("GET_GCPL");
+            hid_t *ret = va_arg(arguments, hid_t*);
+            auto* group = static_cast<Group*>(obj_->mdata_obj);
+            *ret = group->gcpl.id;
+            group->gcpl.inc_ref();
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
+        }
+        else if (get_type == H5VL_GROUP_GET_INFO)           // group info
         {
             const H5VL_loc_params_t *loc_params = va_arg(arguments, const H5VL_loc_params_t *);
             H5G_info_t *             group_info = va_arg(arguments, H5G_info_t *);

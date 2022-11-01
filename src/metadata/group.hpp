@@ -5,8 +5,10 @@ namespace LowFive
 
 struct Group : public Object
 {
-    Group(std::string name) :
-        Object(ObjectType::Group, name)                 {}
+    Hid                             gcpl;                   // hdf5 id of group creation property list
+
+    Group(std::string name, Hid gcpl_) :
+        Object(ObjectType::Group, name), gcpl(gcpl_)        {}
 
     void print(int depth) const override
     {
