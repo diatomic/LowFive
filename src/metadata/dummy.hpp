@@ -27,7 +27,6 @@ struct DummyGroup : public DummyObject
     {}
 };
 
-
 struct DummyDataset : public DummyObject
 {
     Datatype                        type;

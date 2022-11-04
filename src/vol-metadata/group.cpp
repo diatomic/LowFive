@@ -34,7 +34,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         auto name = obj_path.path.substr(0, i);
         if (name != ".")
         {
-            log->trace("Creating {} under {}", name, obj_path.obj->name);
+            log->trace("Creating group {} under {} with gcpl_id {}", name, obj_path.obj->name, gcpl_id);
             obj_path.obj = obj_path.obj->add_child(new Group(name, gcpl_id));
         } else
             log->trace("Skipping . in the name");
@@ -111,8 +111,6 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
 
     auto log = get_logger();
     log->trace("group_get: group = {}, get_type = {}, req = {}", *obj_, get_type, fmt::ptr(req));
-    log->trace("group_get: type H5VL_GROUP_GET_GCPL {} H5VL_GROUP_GET_INFO {} hid H5I_INVALID_HID {} H5P_DEFAULT {}",
-            H5VL_GROUP_GET_GCPL, H5VL_GROUP_GET_INFO, H5I_INVALID_HID, H5P_DEFAULT);
 
     // enum H5VL_group_get_t is defined in H5VLconnector.h and lists the meaning of the values
 
@@ -128,9 +126,23 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
         {
             log->trace("GET_GCPL");
             hid_t *ret = va_arg(arguments, hid_t*);
-            auto* group = static_cast<Group*>(obj_->mdata_obj);
-            *ret = group->gcpl.id;
-            group->gcpl.inc_ref();
+
+            // check if the object is actually a group
+            auto object = static_cast<Object*>(obj_->mdata_obj);
+            if (object->type != ObjectType::Group)
+            {
+                if (object->type == ObjectType::File)
+                    *ret = H5Pcreate(H5P_GROUP_CREATE);
+                else
+                    throw MetadataError(fmt::format("group_get(): object type is not a group and not a file"));
+            }
+            else
+            {
+                Group* group = static_cast<Group*>(obj_->mdata_obj);
+                *ret = group->gcpl.id;
+                group->gcpl.inc_ref();
+            }
+
             log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
         }
         else if (get_type == H5VL_GROUP_GET_INFO)           // group info

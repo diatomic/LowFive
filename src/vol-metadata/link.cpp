@@ -185,11 +185,101 @@ link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
     return res;
 }
 
+// helper function for link_specific()
+void
+LowFive::MetadataVOL::
+link_iter(void *obj, va_list arguments)
+{
+    ObjectPointers* obj_        = (ObjectPointers*) obj;
+    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+
+    // copied from HDF5 H5VLnative_link.c, H5VL__native_link_specific()
+    hbool_t         recursive = (hbool_t)va_arg(arguments, unsigned);
+    H5_index_t      idx_type  = (H5_index_t)va_arg(arguments, int);
+    H5_iter_order_t order     = (H5_iter_order_t)va_arg(arguments, int);
+    hsize_t *       idx_p     = va_arg(arguments, hsize_t *);
+    H5L_iterate2_t  op        = va_arg(arguments, H5L_iterate2_t);
+    void *          op_data   = va_arg(arguments, void *);
+
+    auto log = get_logger();
+
+    // get object type in HDF format and use that to get an HDF hid_t to the object
+    std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
+    int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
+    ObjectPointers* obj_tmp = wrap(nullptr);
+    *obj_tmp = *obj_;
+    obj_tmp->tmp = true;
+    log->trace("link_iter: wrapping {} object type", *obj_tmp, mdata_obj->type);
+
+    hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
+
+    // info for link, defined in HDF5 H5Apublic.h  TODO: assigned with some defaults, not sure if they're corrent
+    H5L_info_t linfo;
+    linfo.corder_valid  = true;                     // whether creation order is valid
+    linfo.corder        = 0;                        // creation order (TODO: no idea what this is)
+    linfo.cset          = H5T_CSET_ASCII;           // character set of link names
+    linfo.u.val_size    = 0;                        // union of either token or val_size
+
+    // check direct children of the parent object, not full search all the way down the tree
+    bool found = false;         // some links were found
+
+    // TODO: currently ignores the iteration order and current index
+    // just blindly goes through all the links in the order they were created
+    // also ignoring recursive flag (controls whether to iterate / visit, see H5VL__native_link_specific)
+    for (auto& c : mdata_obj->children)
+    {
+        if (c->type == LowFive::ObjectType::HardLink || c->type == LowFive::ObjectType::SoftLink)
+        {
+            found = true;
+            if (c->type == ObjectType::HardLink)
+            {
+                log->trace("Found hard link {} as a child of the parent {}", c->name, mdata_obj->name);
+                linfo.type = H5L_TYPE_HARD;
+            }
+            else
+            {
+                log->trace("Found soft link {} as a child of the parent {}", c->name, mdata_obj->name);
+                linfo.type = H5L_TYPE_SOFT;
+            }
+
+            log->trace("*** ------------------- ***");
+            log->trace("Warning: operating on link not fully implemented yet.");
+            log->trace("Ignoring iteration order, current index, recursive flag.");
+            log->trace("Stepping through all links of the object in the order they were created.");
+            if (idx_p)
+                log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx_p);
+            else
+                log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
+            log->trace("*** ------------------- ***");
+
+            herr_t retval = (op)(obj_loc_id, c->name.c_str(), &linfo, op_data);
+            if (retval > 0)
+            {
+                log->trace("Terminating iteration because operator returned > 0 value, indicating user-defined early termination");
+                break;
+            }
+            else if (retval < 0)
+            {
+                log->trace("Terminating iteration because operator returned < 0 value, indicating user-defined failure");
+                break;
+            }
+        }   // child is type link
+    }   // for all children
+
+    if (!found)
+    {
+        log->trace("Did not find any links as direct children of the parent {} when trying to iterate over links\n.", mdata_obj->name);
+    }
+}
+
 herr_t
 LowFive::MetadataVOL::
 link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
         H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    // see hdf5 src/H5VLnative_link.c, H5VL__native_link_specific()
+    // enum of specific types is in H5VLconnector.h
+
     ObjectPointers* obj_ = (ObjectPointers*)obj;
 
     auto log = get_logger();
@@ -200,7 +290,12 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
         res = VOLBase::link_specific(unwrap(obj_), loc_params, under_vol_id, specific_type, dxpl_id, req, arguments);
     else if (obj_->mdata_obj)
     {
-        if (specific_type == H5VL_LINK_EXISTS)
+        if (specific_type == H5VL_LINK_DELETE)               // H5Ldelete(_by_name/idx)
+        {
+            // TODO
+            throw MetadataError(fmt::format("H5VL_LINK_DELETE not yet implemented in LowFive::MetadataVOL::link_specific()"));
+        }
+        else if (specific_type == H5VL_LINK_EXISTS)         // H5Lexists(_by_name)
         {
             htri_t *  ret = va_arg(arguments, htri_t *);
             *ret = -1;
@@ -208,8 +303,14 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
             auto op = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
             *ret = op.path.empty();
         }
+        else if (specific_type == H5VL_LINK_ITER)           // H5Liter/H5Lvisit(_by_name/_by_self)
+        {
+            // debug
+            log->trace("link_specific: H5VL_LINK_ITER");
+            link_iter(obj, arguments);
+        }
         else
-            throw MetadataError(fmt::format("link_specific not implemented in metadata yet for specific_type = {}", specific_type));
+            throw MetadataError(fmt::format("link_specific unrecognized specific_type = {}", specific_type));
     }
     else
         throw MetadataError(fmt::format("link_specific(): either passthru or metadata must be specified"));
