@@ -20,7 +20,10 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o)
         diy::save(bb, a->type);
         diy::save(bb, a->space);
         diy::save(bb, a->mem_type);
-        diy::save(bb, a->data.get(), a->mem_type.dtype_size);
+        if (!a->mem_type.is_var_length_string())
+            diy::save(bb, a->data.get(), a->mem_type.dtype_size);
+        else
+            diy::save(bb, a->strings);
     }
     else if (o->type == ObjectType::HardLink)
         throw MetadataError("cannot serialize hard links");
@@ -70,8 +73,12 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
 
         auto* a = new Attribute(name, dt.id, s.id);
         diy::load(bb, a->mem_type);
-        a->data = std::unique_ptr<char>(new char[a->mem_type.dtype_size]);
-        diy::load(bb, a->data.get(), a->mem_type.dtype_size);
+        if (!a->mem_type.is_var_length_string())
+        {
+            a->data = std::unique_ptr<char>(new char[a->mem_type.dtype_size]);
+            diy::load(bb, a->data.get(), a->mem_type.dtype_size);
+        } else
+            diy::load(bb, a->strings);
 
         o = a;
     }
