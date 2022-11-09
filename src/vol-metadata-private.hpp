@@ -34,6 +34,10 @@ inline H5I_type_t   get_identifier_type(Object* o)
         return H5I_GROUP;
     else if (o->type == ObjectType::Dataset)
         return H5I_DATASET;
+    else if (o->type == ObjectType::Attribute)
+        return H5I_ATTR;
+    else if (o->type == ObjectType::NamedDtype)
+        return H5I_DATATYPE;
     else
         throw MetadataError("cannot identify object type");
 }
