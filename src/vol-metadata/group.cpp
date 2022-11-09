@@ -71,6 +71,7 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     // find the group in our file metadata
     std::string name_(name);
     auto obj_path = parent->search(name_);
+
     if (obj_path.path.empty())
         result->mdata_obj = obj_path.obj;
 
@@ -124,7 +125,7 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
 
         if (get_type == H5VL_GROUP_GET_GCPL)                // group creation property list
         {
-            log->trace("GET_GCPL");
+            log->trace("group_get(): get_type H5VL_GROUP_GET_GCPL");
             hid_t *ret = va_arg(arguments, hid_t*);
 
             // check if the object is actually a group
@@ -147,6 +148,7 @@ group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_li
         }
         else if (get_type == H5VL_GROUP_GET_INFO)           // group info
         {
+            log->trace("group_get(): get_type H5VL_GROUP_GET_INFO");
             const H5VL_loc_params_t *loc_params = va_arg(arguments, const H5VL_loc_params_t *);
             H5G_info_t *             group_info = va_arg(arguments, H5G_info_t *);
 
