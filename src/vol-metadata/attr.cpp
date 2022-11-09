@@ -295,14 +295,20 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             }
             case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
             {
-                log->trace("case H5VL_ATTR_EXISTS");
+                log->trace("attr_specific: specific_type H5VL_ATTR_EXISTS");
                 attr_exists(mdata_obj->locate(*loc_params).exact(), arguments);
 
                 break;
             }
             case H5VL_ATTR_ITER:                        // H5Aiterate(_by_name)
             {
-                log->trace("case H5VL_ATTR_ITER");
+                log->trace("attr_specific: specific_type H5VL_ATTR_ITER");
+
+                // sanity check that the provided object matches the location parameters
+                // ie,  we're not supposed to operate on one of the children instead of the parent (which we don't support)
+                if (mdata_obj != mdata_obj->locate(*loc_params).exact())
+                    throw MetadataError(fmt::format("attr__specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
+
                 attr_iter(obj, arguments);
 
                 break;
@@ -311,7 +317,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             {
                 const char *old_name = va_arg(arguments, const char *);
                 const char *new_name = va_arg(arguments, const char *);
-                log->trace("RENAME: old_name = {}, new_name = {}, loc_params->type = {}, loc_params->name = {}",
+                log->trace("attr_specific: specific_type H5VL_ATTR_RENAME: old_name = {}, new_name = {}, loc_params->type = {}, loc_params->name = {}",
                             old_name, new_name, loc_params->type, loc_params->loc_data.loc_by_name.name);
 
                 if (loc_params->type == H5VL_OBJECT_BY_SELF) { /* H5Arename */
@@ -322,7 +328,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
                     Object* attr = o->search(old_name).exact();
                     attr->name = new_name;
                 } else
-                    throw MetadataError(fmt::format("H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                    throw MetadataError(fmt::format("attr_specific: unknown loc_params type for specific_type H5VL_ATTR_RENAME"));
                 break;
             }
             default:
