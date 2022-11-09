@@ -42,7 +42,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     // add the dataset
     auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name_str);
     assert(obj_path.is_name());
-    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id));
+    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id, dapl_id));
 
     log->trace("created dataset in metadata, new object {} under parent object {} named {}",
             *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
@@ -140,6 +140,14 @@ dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, 
             auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
             *ret = dset->dcpl.id;
             dset->dcpl.inc_ref();
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
+        } else if (get_type == H5VL_DATASET_GET_DAPL)
+        {
+            log->trace("GET_DAPL");
+            hid_t *ret = va_arg(args, hid_t*);
+            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
+            *ret = dset->dapl.id;
+            dset->dapl.inc_ref();
             log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
         } else
         {

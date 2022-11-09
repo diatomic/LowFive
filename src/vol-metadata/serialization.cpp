@@ -58,7 +58,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
         diy::load(bb, s);
         diy::load(bb, own);
 
-        o = new Dataset(name, dt.id, s.id, own, H5P_DEFAULT);
+        o = new Dataset(name, dt.id, s.id, own, H5P_DEFAULT, H5P_DEFAULT);
     }
     else if (type == ObjectType::Attribute)
     {
