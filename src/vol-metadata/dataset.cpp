@@ -165,7 +165,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
     auto log = get_logger();
-    log->trace("dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}",
+    log->trace("dataset_read: dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}",
                *dset_,
                mem_space_id, Dataspace(mem_space_id),
                file_space_id, Dataspace(file_space_id));
@@ -202,8 +202,8 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
                     std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
                     });
 
-            log->trace("dst = {}", dst);
-            log->trace("src = {}", src);
+            log->trace("dataset_read: dst = {}", dst);
+            log->trace("dataset_read: src = {}", src);
         }   // for all data triples
     }
 
@@ -311,13 +311,12 @@ dataset_close(void *dset, hid_t dxpl_id, void **req)
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
     auto log = get_logger();
-    log->trace("enter MetadataVOL::dataset_close");
+    log->trace("dataset_close: dset = {}, dxpl_id = {}", *dset_, dxpl_id);
     if (dset_->tmp)
     {
         log->trace("temporary reference, skipping close");
         return 0;
     }
-    log->trace("dataset_close: dset = {}, dxpl_id = {}", *dset_, dxpl_id);
 
     herr_t retval = 0;
 

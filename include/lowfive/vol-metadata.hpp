@@ -182,7 +182,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    void            link_iter(void *obj, va_list arguments);
+    herr_t          link_iter(void *obj, va_list arguments);
 
 
     herr_t          link_create_trampoline(H5VL_link_create_type_t create_type, void *obj,
@@ -197,8 +197,8 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
-    void            attr_exists(Object *mdata_obj, va_list arguments);
-    void            attr_iter(void *obj, va_list arguments);
+    htri_t          attr_exists(Object *mdata_obj, va_list arguments);
+    herr_t          attr_iter(void *obj, va_list arguments);
 
     void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
     herr_t          object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req) override;
