@@ -186,7 +186,7 @@ link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
 }
 
 // helper function for link_specific()
-void
+herr_t
 LowFive::MetadataVOL::
 link_iter(void *obj, va_list arguments)
 {
@@ -220,8 +220,10 @@ link_iter(void *obj, va_list arguments)
     linfo.cset          = H5T_CSET_ASCII;           // character set of link names
     linfo.u.val_size    = 0;                        // union of either token or val_size
 
-    log->trace("link_iter: iterating over direct children of object name {} ignoring recursive flag {}\n",
+    log->trace("link_iter: iterating over direct children of object name {} ignoring recursive flag {}",
             mdata_obj->name, recursive);
+
+    herr_t retval = 0;
 
     // TODO: currently ignores the iteration order and current index
     // just blindly goes through all the links in the order they were created
@@ -231,7 +233,7 @@ link_iter(void *obj, va_list arguments)
         // TODO: for now assume all the objects in our metadata are equivalent to a hard link
         linfo.type = H5L_TYPE_HARD;
 
-        log->trace("link_iter: iterating over metadata object name {}\n", c->name);
+        log->trace("link_iter: iterating over metadata object name {}", c->name);
 //         log->trace("*** ------------------- ***");
 //         log->trace("Warning: operating on link not fully implemented yet.");
 //         log->trace("Ignoring iteration order, current index, recursive flag.");
@@ -242,18 +244,20 @@ link_iter(void *obj, va_list arguments)
 //             log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
 //         log->trace("*** ------------------- ***");
 
-        herr_t retval = (op)(obj_loc_id, c->name.c_str(), &linfo, op_data);
+        retval = (op)(obj_loc_id, c->name.c_str(), &linfo, op_data);
         if (retval > 0)
         {
-            log->trace("Terminating iteration because operator returned > 0 value, indicating user-defined early termination");
+            log->trace("Terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
             break;
         }
         else if (retval < 0)
         {
-            log->trace("Terminating iteration because operator returned < 0 value, indicating user-defined failure");
+            log->trace("Terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
             break;
         }
     }   // for all children
+
+    return retval;
 }
 
 herr_t
@@ -288,6 +292,7 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
 
             auto op = static_cast<Object*>(mdata_obj)->locate(*loc_params);
             *ret = op.path.empty();
+            res = *ret;
         }
         else if (specific_type == H5VL_LINK_ITER)           // H5Liter/H5Lvisit(_by_name/_by_self)
         {
@@ -298,7 +303,7 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
             if (mdata_obj != mdata_obj->locate(*loc_params).exact())
                 throw MetadataError(fmt::format("link_specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
 
-            link_iter(obj, arguments);
+            res = link_iter(obj, arguments);
         }
         else
             throw MetadataError(fmt::format("link_specific unrecognized specific_type = {}", specific_type));
