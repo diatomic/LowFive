@@ -105,34 +105,33 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     if (match_any(filepath,memory))
     {
-        if (DummyDataset* dd = dynamic_cast<DummyDataset*>((Object*) result->mdata_obj))
+        Object* mdata_obj = (Object*) result->mdata_obj;
+
+        log->trace("Checking if Dataset: {}", fmt::ptr(mdata_obj));
+
+        // Dataset that really should be RemoteDataset
+        if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
         {
-            delete dd;
+            log->trace("Changing Dataset to RemoteDataset");
 
-            RemoteObject* rparent = dynamic_cast<RemoteObject*>(parent);
-            if (!rparent)
-                throw MetadataError(fmt::format("Parent ({},{}) not a RemoteObject", filepath.first, parent->name));
+            Object* f = mdata_obj->find_root();
+            RemoteFile* rf = dynamic_cast<RemoteFile*>(f);
+            log_assert(rf, "Root ({},{}) must be a remote file", filepath.first, f->name);
 
-            auto ds_obj = rparent->obj.call<rpc::client::object>("dataset_open", std::string(name));
+            auto ds_obj = rf->obj.call<rpc::client::object>("dataset_open", filepath.second);
 
             // assume we are the consumer, since nothing stored in memory (open also implies that)
-            auto* ds = new RemoteDataset(name, std::move(ds_obj));     // build and record the index to be used in read
-            parent->add_child(ds);
+            auto* ds = new RemoteDataset(mdata_obj->name, std::move(ds_obj));     // build and record the index to be used in read
+            mdata_obj->parent->add_child(ds);
+            ds->move_children(mdata_obj);
             result->mdata_obj = ds;
+            delete mdata_obj;
         }
+
+        log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");
     }
 
     return (void*)result;
-}
-
-herr_t
-LowFive::DistMetadataVOL::
-dataset_close(void *dset, hid_t dxpl_id, void **req)
-{
-    auto log = get_logger();
-    log->trace("enter DistMetadataVOL::dataset_close");
-    // TODO: nothing to do anymore; get rid of this function
-    return MetadataVOL::dataset_close(dset, dxpl_id, req);
 }
 
 herr_t
@@ -157,65 +156,6 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     } else if (buf)
     {
         throw MetadataError(fmt::format("dataset_read(): neither memory, nor passthru open"));
-    }
-
-    return 0;
-}
-
-herr_t
-LowFive::DistMetadataVOL::
-dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
-{
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
-
-    va_list args;
-    va_copy(args,arguments);
-
-    auto log = get_logger();
-    log->trace("DistMetadataVOL::dataset_get dset = {}, get_type = {}, req = {}, dset_ = {}, dset_->mdata_ovbj = {}", fmt::ptr(unwrap(dset_)), get_type, fmt::ptr(req), fmt::ptr(dset_), fmt::ptr((Object*)dset_->mdata_obj));
-    // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
-
-    // consumer with the name of a remote dataset
-    if (RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj))
-    {
-        if (get_type == H5VL_DATASET_GET_SPACE)
-        {
-            log->trace("GET_SPACE");
-            auto& dataspace = ds->space;
-
-            hid_t space_id = dataspace.copy();
-            log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
-
-            hid_t *ret = va_arg(args, hid_t*);
-            *ret = space_id;
-            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-        } else if (get_type == H5VL_DATASET_GET_TYPE)
-        {
-            log->trace("GET_TYPE");
-            auto& datatype = ds->type;
-
-            log->trace("dataset data type id = {}, datatype = {}",
-                    datatype.id, datatype);
-
-            hid_t dtype_id = datatype.copy();
-            log->trace("copied data type id = {}, datatype = {}",
-                    dtype_id, Datatype(dtype_id));
-
-            hid_t *ret = va_arg(args, hid_t*);
-            *ret = dtype_id;
-            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-        } else
-        {
-            throw MetadataError(fmt::format("Unknown get_type == {} in dataset_get()", get_type));
-        }
-    } else if (unwrap(dset_))
-    {
-        return VOLBase::dataset_get(unwrap(dset_), get_type, dxpl_id, req, arguments);
-    } else if (dset_->mdata_obj)
-    {
-        return MetadataVOL::dataset_get(dset_, get_type, dxpl_id, req, arguments);
-    } else {
-        throw MetadataError(fmt::format("In dataset_get(): neither memory, nor passthru open"));
     }
 
     return 0;
@@ -249,7 +189,12 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
         int intercomm_index = *dedup_indices.begin();
 
+        std::string name_ = name;
         std::unique_ptr<Query> query(new Query(local, intercomms, remote_size(intercomm_index), intercomm_index));
+        diy::MemoryBuffer hierarchy = query->c.call<diy::MemoryBuffer>("get_file_hierarchy", name_);
+        hierarchy.reset();
+        Object* hf = deserialize(hierarchy);
+
         rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
 
         // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
@@ -258,6 +203,10 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
         files.emplace(name, f);
         result->mdata_obj = f;
+
+        // move the hierarchy over and delete the plain File object hf
+        f->move_children(hf);
+        delete hf;
     }
 
     return result;
@@ -316,36 +265,6 @@ file_close(void *file, hid_t dxpl_id, void **req)
     log->trace("DistMetadataVOL: calling file_close of base class {}", fmt::ptr(file));
 
     return MetadataVOL::file_close(file, dxpl_id, req);     // this is almost redundant; removes mdata_obj, if it's a File
-}
-
-void*
-LowFive::DistMetadataVOL::
-group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
-{
-    ObjectPointers* result = (ObjectPointers*) MetadataVOL::group_open(obj, loc_params, name, gapl_id, dxpl_id, req);
-
-    // TODO: should we double-check that we are in a remote file?
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    Object* parent = static_cast<Object*>(obj_->mdata_obj);
-    auto filepath = parent->fullname(name);
-
-    if (match_any(filepath, memory, true))
-        if (DummyGroup* dg = dynamic_cast<DummyGroup*>((Object*) result->mdata_obj)) // didn't find local
-        {
-            delete dg;
-            RemoteObject* rparent = dynamic_cast<RemoteObject*>(parent);
-
-            if (!rparent)
-                throw MetadataError(fmt::format("Parent {} not a RemoteObject", parent->name));
-
-            auto grp_obj = rparent->obj.call<rpc::client::object>("group_open", name);
-
-            auto* grp = new RemoteGroup(name, std::move(grp_obj));
-            parent->add_child(grp);
-            result->mdata_obj = grp;
-        }
-
-    return result;
 }
 
 LowFive::DistMetadataVOL::FileNames

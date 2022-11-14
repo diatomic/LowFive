@@ -167,6 +167,13 @@ struct Object
         return object;
     }
 
+    void move_children(Object* from)
+    {
+        children = std::move(from->children);
+        for (auto* c : children)
+            c->parent = this;
+    }
+
     // remove this from parent's children
     void remove()
     {
