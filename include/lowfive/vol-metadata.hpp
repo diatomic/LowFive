@@ -182,6 +182,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    void            link_iter(void *obj, va_list arguments);
 
 
     herr_t          link_create_trampoline(H5VL_link_create_type_t create_type, void *obj,

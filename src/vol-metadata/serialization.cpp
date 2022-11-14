@@ -50,7 +50,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
     if (type == ObjectType::File)
         o = new File(name, H5P_DEFAULT, H5P_DEFAULT);
     else if (type == ObjectType::Group)
-        o = new Group(name);
+        o = new Group(name, H5P_DEFAULT);
     else if (type == ObjectType::Dataset)
     {
         Datatype dt;
