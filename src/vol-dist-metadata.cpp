@@ -235,33 +235,6 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
     if (match_any(name, "", memory, true))
     {
-#if 0
-        // TODO: this is no longer necessary, thanks to broadcast_files;
-        //       remove once tested and everything is working
-
-        // if rank is producer, but file was created on another rank (as AMReX does: header is written by one rank per node, and data is written by all ranks on the node)
-        // it can be not present on some producer ranks. We create file if necessary.
-        // Assume: consumers must open file in read-only mode, otherwise it is producer
-        // TODO: find a better solution, this might fail in many cases
-        if (flags != H5F_ACC_RDONLY) {
-            log->trace("DistMetadataVOL::file_open(), name = {}, local file not found, but opened not in RDONLY - create empty file", name);
-
-            auto it = files.find(name);
-            if (it == files.end())
-                log->critical("Expected to find a dummy file created by file_open()");
-
-            Object* o = it->second;
-            auto* df = static_cast<DummyFile*>(o);
-            if (!df)
-                log->critical("Expected to find a dummy file created by file_open(), but cast failed");
-
-            delete df;
-            files.erase(it);
-
-            return MetadataVOL::file_create(name, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id, dxpl_id, req);
-        }
-#endif
-
         // get an intercomm for this file
         auto locs = find_matches(name, "", intercomm_locations, true);
         if (locs.empty())
