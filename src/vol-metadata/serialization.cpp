@@ -48,9 +48,9 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
     // figure out the type
     Object* o;
     if (type == ObjectType::File)
-        o = new File(name, H5P_DEFAULT, H5P_DEFAULT);
+        o = new File(name, H5P_FILE_CREATE_DEFAULT, H5P_FILE_ACCESS_DEFAULT);
     else if (type == ObjectType::Group)
-        o = new Group(name, H5P_DEFAULT);
+        o = new Group(name, H5P_GROUP_CREATE_DEFAULT);
     else if (type == ObjectType::Dataset)
     {
         Datatype dt;
@@ -61,7 +61,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
         diy::load(bb, s);
         diy::load(bb, own);
 
-        o = new Dataset(name, dt.id, s.id, own, H5P_DEFAULT);
+        o = new Dataset(name, dt.id, s.id, own, H5P_DATASET_CREATE_DEFAULT);
     }
     else if (type == ObjectType::Attribute)
     {
