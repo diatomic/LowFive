@@ -86,6 +86,53 @@ broadcast_files(int root)
     }
 }
 
+void
+LowFive::DistMetadataVOL::
+make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath)
+{
+    Object* mdata_obj = (Object*) result->mdata_obj;
+
+    auto log = get_logger();
+    log->trace("Changing Dataset to RemoteDataset");
+
+    Object* f = mdata_obj->find_root();
+    RemoteFile* rf = dynamic_cast<RemoteFile*>(f);
+    log_assert(rf, "Root ({},{}) must be a remote file", filepath.first, f->name);
+
+    auto ds_obj = rf->obj.call<rpc::client::object>("dataset_open", filepath.second);
+
+    // assume we are the consumer, since nothing stored in memory (open also implies that)
+    auto* ds = new RemoteDataset(mdata_obj->name, std::move(ds_obj));     // build and record the index to be used in read
+    mdata_obj->parent->add_child(ds);
+    ds->move_children(mdata_obj);
+    result->mdata_obj = ds;
+    delete mdata_obj;
+}
+
+void*
+LowFive::DistMetadataVOL::
+object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+    log->trace("enter DistMetadataVOL::object_open");
+
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    ObjectPointers* result = (ObjectPointers*) MetadataVOL::object_open(obj, loc_params, opened_type, dxpl_id, req);
+
+    Object* mdata_obj = (Object*) result->mdata_obj;
+    if (mdata_obj)
+    {
+        auto filepath = mdata_obj->fullname();
+        if (match_any(filepath,memory))
+        {
+            if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
+                make_remote_dataset(result, filepath);
+        }
+    }
+
+    return (void*) result;
+}
+
 void*
 LowFive::DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
@@ -111,22 +158,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
         // Dataset that really should be RemoteDataset
         if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
-        {
-            log->trace("Changing Dataset to RemoteDataset");
-
-            Object* f = mdata_obj->find_root();
-            RemoteFile* rf = dynamic_cast<RemoteFile*>(f);
-            log_assert(rf, "Root ({},{}) must be a remote file", filepath.first, f->name);
-
-            auto ds_obj = rf->obj.call<rpc::client::object>("dataset_open", filepath.second);
-
-            // assume we are the consumer, since nothing stored in memory (open also implies that)
-            auto* ds = new RemoteDataset(mdata_obj->name, std::move(ds_obj));     // build and record the index to be used in read
-            mdata_obj->parent->add_child(ds);
-            ds->move_children(mdata_obj);
-            result->mdata_obj = ds;
-            delete mdata_obj;
-        }
+            make_remote_dataset(result, filepath);
 
         log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");
     }
