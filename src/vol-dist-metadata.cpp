@@ -91,6 +91,7 @@ LowFive::DistMetadataVOL::
 make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath)
 {
     Object* mdata_obj = (Object*) result->mdata_obj;
+    Dataset* dset = dynamic_cast<Dataset*>(mdata_obj);
 
     auto log = get_logger();
     log->trace("Changing Dataset to RemoteDataset");
@@ -103,6 +104,7 @@ make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string>
 
     // assume we are the consumer, since nothing stored in memory (open also implies that)
     auto* ds = new RemoteDataset(mdata_obj->name, std::move(ds_obj));     // build and record the index to be used in read
+    ds->dcpl = dset->dcpl;
     mdata_obj->parent->add_child(ds);
     ds->move_children(mdata_obj);
     result->mdata_obj = ds;
