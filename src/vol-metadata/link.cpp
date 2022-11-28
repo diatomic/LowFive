@@ -220,8 +220,11 @@ link_iter(void *obj, va_list arguments)
     linfo.cset          = H5T_CSET_ASCII;           // character set of link names
     linfo.u.val_size    = 0;                        // union of either token or val_size
 
-    log->trace("link_iter: iterating over direct children of object name {} ignoring recursive flag {}",
-            mdata_obj->name, recursive);
+    log->trace("link_iter: iterating over direct children of object name {} in order children were created (ignoring itration order and index)",
+            mdata_obj->name);
+
+    if (recursive)
+        throw MetadataError(fmt::format("link_iter: recursive iteration not implemented yet"));
 
     herr_t retval = 0;
 
@@ -234,25 +237,20 @@ link_iter(void *obj, va_list arguments)
         linfo.type = H5L_TYPE_HARD;
 
         log->trace("link_iter: iterating over metadata object name {}", c->name);
-//         log->trace("*** ------------------- ***");
-//         log->trace("Warning: operating on link not fully implemented yet.");
-//         log->trace("Ignoring iteration order, current index, recursive flag.");
-//         log->trace("Stepping through all links of the object in the order they were created.");
-//         if (idx_p)
-//             log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx_p);
-//         else
-//             log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
-//         log->trace("*** ------------------- ***");
+        if (idx_p)
+            log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx_p);
+        else
+            log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
 
         retval = (op)(obj_loc_id, c->name.c_str(), &linfo, op_data);
         if (retval > 0)
         {
-            log->trace("Terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
+            log->trace("link_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
             break;
         }
         else if (retval < 0)
         {
-            log->trace("Terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
+            log->trace("link_iter: terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
             break;
         }
     }   // for all children

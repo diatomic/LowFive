@@ -89,7 +89,7 @@ LowFive::MetadataVOL::
 object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     auto log = get_logger();
-    log->trace("Enter MetadataVOL::object_get");
+    log->trace("object_get: get_type {}", get_type);
     if (!unwrap(obj))           // look up in memory
     {
         // The following is adapted from HDF5's H5VL__native_object_get() in H5VLnative_object.c

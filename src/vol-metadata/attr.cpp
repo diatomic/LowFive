@@ -199,7 +199,7 @@ attr_iter(void *obj, va_list arguments)
     *obj_tmp = *obj_;
     obj_tmp->tmp = true;
     auto log = get_logger();
-    log->trace("wrapping {}", *obj_tmp);
+    log->trace("attr_iter: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
 
     hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
     //log->trace("wrap_object = {}", fmt::ptr(H5VLobject(obj_loc_id)));
@@ -224,35 +224,35 @@ attr_iter(void *obj, va_list arguments)
             ainfo.data_size =                               // size of raw data (bytes)
                 static_cast<Attribute*>(mdata_obj)->space.size() * static_cast<Attribute*>(mdata_obj)->type.dtype_size;
             found = true;
-            log->trace("Found attribute {} with data_size {} as a child of the parent {}", c->name, ainfo.data_size, mdata_obj->name);
+            log->trace("attr_iter: found attribute {} with data_size {} as a child of the parent {}", c->name, ainfo.data_size, mdata_obj->name);
             if (idx)
-                log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx);
+                log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx);
             else
-                log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
+                log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
 
             // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
             retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
             if (retval > 0)
             {
-                log->trace("Terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
+                log->trace("attr_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
                 break;
             }
             else if (retval < 0)
             {
-                log->trace("Terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
+                log->trace("attr_iter: terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
                 break;
             }
         }   // child is type attribute
     }   // for all children
 
-    log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
+//     log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
     // NB: don't need to delete obj_tmp; it gets deleted (via
     //     MetadataVOL::drop()) automagically, when refcount reaches 0,
     //     i.e., this part works as expected
 
     if (!found)
     {
-        log->trace("Did not find any attributes as direct children of the parent {} when trying to iterate over attributes", mdata_obj->name);
+        log->trace("attr_iter: did not find any attributes as direct children of the parent {} when trying to iterate over attributes", mdata_obj->name);
     }
 
     return retval;
