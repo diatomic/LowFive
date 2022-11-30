@@ -205,11 +205,13 @@ link_iter(void *obj, va_list arguments)
 
     // get object type in HDF format and use that to get an HDF hid_t to the object
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
+    if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
+        throw MetadataError(fmt::format("link_iter(): mdata_obj->type {} > H5I_DATATYPE, the last element of h5_types", mdata_obj->type));
     int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
     ObjectPointers* obj_tmp = wrap(nullptr);
     *obj_tmp = *obj_;
     obj_tmp->tmp = true;
-    log->trace("link_iter: wrapping {} object type", *obj_tmp, mdata_obj->type);
+    log->trace("link_iter: wrapping object type mdata_obj->type {} h5 obj_type {}", *obj_tmp, mdata_obj->type, obj_type);
 
     hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
 
@@ -222,6 +224,10 @@ link_iter(void *obj, va_list arguments)
 
     log->trace("link_iter: iterating over direct children of object name {} in order children were created (ignoring itration order and index)",
             mdata_obj->name);
+    if (idx_p)
+        log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx_p);
+    else
+        log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
 
     if (recursive)
         throw MetadataError(fmt::format("link_iter: recursive iteration not implemented yet"));
@@ -233,14 +239,18 @@ link_iter(void *obj, va_list arguments)
     // also ignoring recursive flag (controls whether to iterate / visit, see H5VL__native_link_specific)
     for (auto& c : mdata_obj->children)
     {
+        // top-level attributes cannot be objects, skip over them
+        if (c->type == ObjectType::Attribute &&
+                (mdata_obj->type != ObjectType::Group && mdata_obj->type != ObjectType::Dataset && mdata_obj->type != ObjectType::NamedDtype))
+        {
+            log->trace("link_iter: skipping mdata object named {} type {}", mdata_obj->name, mdata_obj->type);
+            continue;
+        }
+
         // TODO: for now assume all the objects in our metadata are equivalent to a hard link
         linfo.type = H5L_TYPE_HARD;
 
-        log->trace("link_iter: iterating over metadata object name {}", c->name);
-        if (idx_p)
-            log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx_p);
-        else
-            log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
+        log->trace("link_iter: visiting object name {}", c->name);
 
         retval = (op)(obj_loc_id, c->name.c_str(), &linfo, op_data);
         if (retval > 0)
