@@ -4,6 +4,7 @@ cmake_minimum_required      (VERSION 3.9)
 option                      (wrapped_mpi      "MPI compiler wrapper requires no further MPI libs"     OFF)
 option                      (lowfive_python   "Build python bindings"                                 ON)
 option                      (lowfive_backward "Use backward-cpp for debugging"                        ON)
+option                      (lowfive_install_examples   "Install examples"                            OFF)
 
 # C++17
 if                          (NOT DEFINED CMAKE_CXX_STANDARD)

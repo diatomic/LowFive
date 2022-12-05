@@ -14,13 +14,15 @@ class Lowfive(CMakePackage):
     git      = "https://github.com/diatomic/LowFive.git"
 
     version('master', branch='master')
+    version('tom-group-get', branch='tom-group-get')    # TODO: remove when no longer needed
 
-    depends_on('mpich@4.0.2 device=ch3')
-    depends_on('hdf5+mpi+hl@1.12.1^mpich', type='link')
+    depends_on('mpi')
+    depends_on('hdf5+mpi+hl@1.12.1', type='link')
     depends_on('zlib', type='link')
 
     def cmake_args(self):
         args = ['-DCMAKE_C_COMPILER=%s' % self.spec['mpi'].mpicc,
                 '-DCMAKE_CXX_COMPILER=%s' % self.spec['mpi'].mpicxx,
-                '-DBUILD_SHARED_LIBS=false']
+                '-DBUILD_SHARED_LIBS=false',
+                self.define_from_variant('lowfive_install_examples', 'examples')]
         return args
