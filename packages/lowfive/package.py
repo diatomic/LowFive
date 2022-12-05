@@ -16,9 +16,12 @@ class Lowfive(CMakePackage):
     version('master', branch='master')
     version('tom-group-get', branch='tom-group-get')    # TODO: remove when no longer needed
 
-    depends_on('mpi')
-    depends_on('hdf5+mpi+hl@1.12.1', type='link')
-    depends_on('zlib', type='link')
+    variant("examples", default=False, description="Install the examples")
+
+    # TODO: uncomment following if installing prior to scorpio-example and want to match
+#     depends_on('mpich@4.0.2 device=ch3')
+    depends_on('mpich')
+    depends_on('hdf5+mpi+hl@1.12.1 ^mpich', type='link')
 
     def cmake_args(self):
         args = ['-DCMAKE_C_COMPILER=%s' % self.spec['mpi'].mpicc,
