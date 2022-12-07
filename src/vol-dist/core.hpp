@@ -54,6 +54,7 @@ struct IndexedDataset
 
         diy::MemoryBuffer queue;
 
+        size_t count_calls = 0;
         for (auto& y : ds->data)
         {
             if (y.file.intersects(fs))
@@ -64,10 +65,12 @@ struct IndexedDataset
                 Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                 {
                   diy::save(queue, (char*) y.data + loc, len);
+                  ++count_calls;
                 });
             }
         }
 
+        log->trace("In IndexedDatasets::get_data(): serialized using {} calls", count_calls);
         log->trace("In IndexedDatasets::get_data(): returning queue.size() = {}", queue.size());
 
         return queue;

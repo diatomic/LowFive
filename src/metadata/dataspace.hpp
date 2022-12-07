@@ -212,7 +212,7 @@ struct Dataspace: Hid
 
         do
         {
-            H5Ssel_iter_get_seq_list (iter, off.size(), 1024*1024, &nseq, &nbytes, off.data(), len.data());
+            H5Ssel_iter_get_seq_list (iter, off.size(), 1024*1024*1024, &nseq, &nbytes, off.data(), len.data());
 
             for (size_t i = 0; i < nseq; ++i)
                 f(off[i], len[i]);              // call f(size_t loc, size_t len)
@@ -250,14 +250,14 @@ struct Dataspace: Hid
         {
             if (!done1 && i == nseq1)
             {
-                H5Ssel_iter_get_seq_list (iter1, off1.size(), 1024*1024, &nseq1, &nbytes1, off1.data(), len1.data());
+                H5Ssel_iter_get_seq_list (iter1, off1.size(), 1024*1024*1024, &nseq1, &nbytes1, off1.data(), len1.data());
                 done1 = (nseq1 == 0);
                 i = 0;
                 loc1 = 0;
             }
             if (!done2 && j == nseq2)
             {
-                H5Ssel_iter_get_seq_list (iter2, off2.size(), 1024*1024, &nseq2, &nbytes2, off2.data(), len2.data());
+                H5Ssel_iter_get_seq_list (iter2, off2.size(), 1024*1024*1024, &nseq2, &nbytes2, off2.data(), len2.data());
                 done2 = (nseq2 == 0);
                 j = 0;
                 loc2 = 0;
