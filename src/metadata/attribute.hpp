@@ -18,24 +18,36 @@ struct Attribute: public Object
     Datatype                        mem_type { 0 };
 
     std::vector<std::string>        strings;
-    hvl_t                           vlen     { 0, nullptr };
 
     void write(Datatype mem_type_, const void* buf)
     {
         auto log = get_logger();
         mem_type = mem_type_;
 
-        if (type.dtype_class == DatatypeClass::VarLen)
+        if (mem_type.dtype_class == DatatypeClass::VarLen)
         {
-            hvl_t* val = (hvl_t*) buf;
-            vlen.len = val->len;
-            auto base_type = Datatype(H5Tget_super(mem_type.id));
-            log->warn("Writing an attribute with variable length = {}, base type = {}", val->len, base_type);
+            log->warn("Working with variable-length array, but destructor not implemented. This will leak memory.");
+            log_assert(sizeof(hvl_t) == mem_type.dtype_size, "dtype_size must match sizeof(hvl_t); otherwise read will be incorrect");
 
-            size_t nbytes = vlen.len * base_type.dtype_size;
+            hvl_t* buf_hvl = (hvl_t*) buf;
+            size_t nbytes = space.size() * sizeof(hvl_t);
             data = std::unique_ptr<char>(new char[nbytes]);
-            vlen.p = data.get();
-            std::memcpy(static_cast<void*>(data.get()), val->p, nbytes);
+
+            hvl_t* data_hvl = (hvl_t*) data.get();
+            auto base_type = Datatype(H5Tget_super(mem_type.id));
+
+            for (size_t i = 0; i < space.size(); ++i)
+            {
+                auto len = buf_hvl[i].len;
+                data_hvl[i].len = len;
+                size_t count = len * base_type.dtype_size;
+
+                data_hvl[i].p = new char[count];
+                std::memcpy(data_hvl[i].p, buf_hvl[i].p, count);
+
+                if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
+                    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
+            }
         } else if (!mem_type.is_var_length_string())
         {
             size_t nbytes = space.size() * mem_type.dtype_size;
@@ -58,10 +70,7 @@ struct Attribute: public Object
     {
         log_assert(mem_type.equal(mem_type_), "Currently only know how to read the same datatype as written");
 
-        if (type.dtype_class == DatatypeClass::VarLen)
-        {
-            std::memcpy(buf, static_cast<void*>(&vlen), sizeof(vlen));
-        } else if (!mem_type.is_var_length_string())
+        if (!mem_type.is_var_length_string())
         {
             size_t nbytes = space.size() * mem_type.dtype_size;
             std::memcpy(buf, static_cast<void*>(data.get()), nbytes);

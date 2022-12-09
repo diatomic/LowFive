@@ -10,7 +10,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     ObjectPointers* obj_        = (ObjectPointers*) obj;
 
     auto log = get_logger();
-    log->trace("MetadataVOL::object_open: parent obj = {}", *obj_);
+    log->trace("MetadataVOL::object_open: parent obj = {}, loca_params.type = {}", *obj_, loc_params->type);
 
     *opened_type = H5I_BADID;
 
