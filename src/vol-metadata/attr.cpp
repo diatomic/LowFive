@@ -151,7 +151,7 @@ attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list
 }
 
 // helper function for attr_specific()
-void
+htri_t
 LowFive::MetadataVOL::
 attr_exists(Object *mdata_obj, va_list arguments)
 {
@@ -173,10 +173,12 @@ attr_exists(Object *mdata_obj, va_list arguments)
         log->trace("Found attribute {} as a child of the parent {}", attr_name, mdata_obj->name);
     else
         log->trace("Did not find attribute {} as a child of the parent {}", attr_name, mdata_obj->name);
+
+    return *ret;
 }
 
 // helper function for attr_specific()
-void
+herr_t
 LowFive::MetadataVOL::
 attr_iter(void *obj, va_list arguments)
 {
@@ -197,7 +199,7 @@ attr_iter(void *obj, va_list arguments)
     *obj_tmp = *obj_;
     obj_tmp->tmp = true;
     auto log = get_logger();
-    log->trace("wrapping {}", *obj_tmp);
+    log->trace("attr_iter: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
 
     hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
     //log->trace("wrap_object = {}", fmt::ptr(H5VLobject(obj_loc_id)));
@@ -208,11 +210,10 @@ attr_iter(void *obj, va_list arguments)
     ainfo.corder_valid  = true;                     // whether creation order is valid
     ainfo.corder        = 0;                        // creation order (TODO: no idea what this is)
     ainfo.cset          = H5T_CSET_ASCII;           // character set of attribute names
-    ainfo.data_size =                               // size of raw data (bytes)
-        static_cast<Attribute*>(mdata_obj)->space.size() * static_cast<Attribute*>(mdata_obj)->type.dtype_size;
 
     // check direct children of the parent object, not full search all the way down the tree
-    bool found = false;         // some attributes were found
+    bool found      = false;                        // some attributes were found
+    herr_t retval   = 0;                            // return value
 
     // TODO: currently ignores the iteration order, increment direction, and current index
     // just blindly goes through all the attributes in the order they were created
@@ -220,44 +221,41 @@ attr_iter(void *obj, va_list arguments)
     {
         if (c->type == LowFive::ObjectType::Attribute)
         {
+            ainfo.data_size =                               // size of raw data (bytes)
+                static_cast<Attribute*>(mdata_obj)->space.size() * static_cast<Attribute*>(mdata_obj)->type.dtype_size;
             found = true;
-
-            log->trace("Found attribute {} as a child of the parent {}", c->name, mdata_obj->name);
-
-            log->trace("*** ------------------- ***");
-            log->trace("Warning: operating on attribute not fully implemented yet.");
-            log->trace("Ignoring attribute info, attribute order, increment direction, current index.");
-            log->trace("Stepping through all attributes of the object in the order they were created.");
+            log->trace("attr_iter: found attribute {} with data_size {} as a child of the parent {}", c->name, ainfo.data_size, mdata_obj->name);
             if (idx)
-                log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx);
+                log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx);
             else
-                log->trace("The provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
-            log->trace("*** ------------------- ***");
+                log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
 
             // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
-            herr_t retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
+            retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
             if (retval > 0)
             {
-                log->trace("Terminating iteration because operator returned > 0 value, indicating user-defined early termination");
+                log->trace("attr_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
                 break;
             }
             else if (retval < 0)
             {
-                log->trace("Terminating iteration because operator returned < 0 value, indicating user-defined failure");
+                log->trace("attr_iter: terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
                 break;
             }
         }   // child is type attribute
     }   // for all children
 
-    log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
+//     log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
     // NB: don't need to delete obj_tmp; it gets deleted (via
     //     MetadataVOL::drop()) automagically, when refcount reaches 0,
     //     i.e., this part works as expected
 
     if (!found)
     {
-        log->trace("Did not find any attributes as direct children of the parent {} when trying to iterate over attributes\n.", mdata_obj->name);
+        log->trace("attr_iter: did not find any attributes as direct children of the parent {} when trying to iterate over attributes", mdata_obj->name);
     }
+
+    return retval;
 }
 
 herr_t
@@ -269,15 +267,12 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
     va_list args;
     va_copy(args,arguments);
 
+    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+
     auto log = get_logger();
     log->trace("attr_specific obj = {} specific_type = {}", *obj_, specific_type);
     log->trace("specific types H5VL_ATTR_DELETE = {} H5VL_ATTR_EXISTS = {} H5VL_ATTR_ITER = {} H5VL_ATTR_RENAME = {}",
             H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
-
-    //// trace object back to root to build full path and file name
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-    //auto name = mdata_obj->name;
-    //auto filepath = mdata_obj->fullname(name);
 
     herr_t result = 0;
     if (unwrap(obj_))
@@ -295,15 +290,21 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             }
             case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
             {
-                log->trace("case H5VL_ATTR_EXISTS");
-                attr_exists(mdata_obj->locate(*loc_params).exact(), arguments);
+                log->trace("attr_specific: specific_type H5VL_ATTR_EXISTS");
+                result = attr_exists(mdata_obj->locate(*loc_params).exact(), arguments);
 
                 break;
             }
             case H5VL_ATTR_ITER:                        // H5Aiterate(_by_name)
             {
-                log->trace("case H5VL_ATTR_ITER");
-                attr_iter(obj, arguments);
+                log->trace("attr_specific: specific_type H5VL_ATTR_ITER");
+
+                // sanity check that the provided object matches the location parameters
+                // ie,  we're not supposed to operate on one of the children instead of the parent (which we don't support)
+                if (mdata_obj != mdata_obj->locate(*loc_params).exact())
+                    throw MetadataError(fmt::format("attr__specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
+
+                result = attr_iter(obj, arguments);
 
                 break;
             }
@@ -311,7 +312,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             {
                 const char *old_name = va_arg(arguments, const char *);
                 const char *new_name = va_arg(arguments, const char *);
-                log->trace("RENAME: old_name = {}, new_name = {}, loc_params->type = {}, loc_params->name = {}",
+                log->trace("attr_specific: specific_type H5VL_ATTR_RENAME: old_name = {}, new_name = {}, loc_params->type = {}, loc_params->name = {}",
                             old_name, new_name, loc_params->type, loc_params->loc_data.loc_by_name.name);
 
                 if (loc_params->type == H5VL_OBJECT_BY_SELF) { /* H5Arename */
@@ -322,7 +323,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
                     Object* attr = o->search(old_name).exact();
                     attr->name = new_name;
                 } else
-                    throw MetadataError(fmt::format("H5VL_ATTR_RENAME not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                    throw MetadataError(fmt::format("attr_specific: unknown loc_params type for specific_type H5VL_ATTR_RENAME"));
                 break;
             }
             default:

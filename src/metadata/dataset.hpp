@@ -27,9 +27,10 @@ struct Dataset : public Object
     DataTriples                     data;
     Ownership                       ownership;
     Hid                             dcpl;                   // hdf5 id of dataset creation property list
+    Hid                             dapl;                   // hdf5 id of dataset access property list
 
-    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own, Hid dcpl_):
-        Object(ObjectType::Dataset, name), type(dtype_id), space(space_id), ownership(own), dcpl(dcpl_)
+    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own, Hid dcpl_, Hid dapl_):
+        Object(ObjectType::Dataset, name), type(dtype_id), space(space_id), ownership(own), dcpl(dcpl_), dapl(dapl_)
     {}
 
     void write(Datatype type, Dataspace memory, Dataspace file, const void* buf)

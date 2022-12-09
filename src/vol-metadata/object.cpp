@@ -32,7 +32,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
         auto fullname = mdata_obj->fullname(Object::path(*loc_params));
         log->trace("MetadataVOL::object_open: fullname = ({},{})", fullname.first, fullname.second);
 
-        log->trace("In MetadataVOL::object_open(): locating {} from {}", Object::path(*loc_params), mdata_obj->name);
+        log->trace("MetadataVOL::object_open(): locating {} from {}", Object::path(*loc_params), mdata_obj->name);
         auto op = mdata_obj->locate(*loc_params);
         if (op.path.empty())
         {
@@ -44,6 +44,8 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
             {
                 *opened_type = get_identifier_type(o);
 
+                log->trace("MetadataVOL::object_open(): opened_type was H5I_BAD_ID, reset to type {}", *opened_type);
+
                 // XXX: this is hack; we should not be able to open a file, but
                 //      rather the "/" group. Ideally, we'd have such a group for every
                 //      file, but I'm not sure how to implement that. This is a
@@ -53,6 +55,15 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
                     log->warn("In MetadataVOL::object_open(): forcing file to be a group");
                     *opened_type = H5I_GROUP;
                 }
+            }
+
+            // HDF5 allows only a group, dataset, or datatype to be opened as an abject
+            if (*opened_type != H5I_GROUP && *opened_type != H5I_DATATYPE && *opened_type != H5I_DATASET)
+            {
+                // TODO: consider throwing an error if this should never happen?
+                log->trace("MetadataVOL: object_open(): attempting to open object mdata type {}, which is not a group, dataset, or datatype; setting opened_type to H5I_BADID and returning null");
+                *opened_type = H5I_BADID;
+                result = wrap(nullptr);
             }
         } else
         {
@@ -89,7 +100,7 @@ LowFive::MetadataVOL::
 object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     auto log = get_logger();
-    log->trace("Enter MetadataVOL::object_get");
+    log->trace("object_get: get_type {}", get_type);
     if (!unwrap(obj))           // look up in memory
     {
         // The following is adapted from HDF5's H5VL__native_object_get() in H5VLnative_object.c
@@ -104,11 +115,13 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
         {
             case H5VL_OBJECT_GET_FILE:
             {
-                log->trace("get_type = H5VL_OBJECT_GET_FILE");
+                log->trace("object_get: get_type = H5VL_OBJECT_GET_FILE");
 
                 void **ret = va_arg(arguments, void **);
                 if (loc_params->type == H5VL_OBJECT_BY_SELF)
                 {
+                    log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_SELF");
+
                     Object* res = mdata_obj->find_root();
                     assert(res->type == ObjectType::File);
                     ObjectPointers* res_pair = wrap(nullptr);
@@ -125,7 +138,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
 
             case H5VL_OBJECT_GET_NAME:
             {
-                log->trace("get_type = H5VL_OBJECT_GET_NAME");
+                log->trace("object_get: get_type = H5VL_OBJECT_GET_NAME");
 
                 ssize_t *ret    = va_arg(arguments, ssize_t *); (void) ret;
                 char *name      = va_arg(arguments, char *);
@@ -135,6 +148,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                     strncpy(name, mdata_obj->name.c_str(), size);
                 else if (loc_params->type == H5VL_OBJECT_BY_TOKEN)
                 {
+                    log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_TOKEN");
+
                     // TODO: ignoring the token and just getting the name of the current object
                     strncpy(name, mdata_obj->name.c_str(), size);
                 }
@@ -146,15 +161,24 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
 
             case H5VL_OBJECT_GET_TYPE:
             {
-                log->trace("get_type = H5VL_OBJECT_GET_TYPE");
+                log->trace("object_get: get_type = H5VL_OBJECT_GET_TYPE");
 
                 H5O_type_t *obj_type = va_arg(arguments, H5O_type_t *);
 
                 if (loc_params->type == H5VL_OBJECT_BY_TOKEN)
                 {
+                    log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_TOKEN");
+
+                    if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
+                        throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
+
                     // TODO: ignoring the token and just getting the type of the current object
                     int otype   = h5_types[static_cast<int>(mdata_obj->type)];
                     *obj_type   = static_cast<H5O_type_t>(otype);
+                    log->trace("object_get: mdata_obj->type {} hdf5 otype {}", mdata_obj->type, otype);
+
+                    if (otype == H5O_TYPE_UNKNOWN)
+                        throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
                 }
                 else
                     throw MetadataError("object_get() unrecognized loc_params->type");
@@ -164,18 +188,29 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
 
             case H5VL_OBJECT_GET_INFO:
             {
-                log->trace("get_type = H5VL_OBJECT_GET_INFO");
+                log->trace("object_get: get_type = H5VL_OBJECT_GET_INFO");
 
                 H5O_info2_t  *oinfo = va_arg(arguments, H5O_info2_t *); // H5O_info2_t defined in H5Opublic.h
                 unsigned fields     = va_arg(arguments, unsigned); (void) fields;
 
                 if (loc_params->type == H5VL_OBJECT_BY_SELF)            // H5Oget_info
                 {
-                    log->trace("loc_params->type = H5VL_OBJECT_BY_SELF");
+                    log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_SELF");
+
+                    if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
+                        throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
 
                     // get object type in HDF format
                     int otype   = h5_types[static_cast<int>(mdata_obj->type)];
                     oinfo->type = static_cast<H5O_type_t>(otype);
+                    log->trace("object_get: mdata_obj->type {} hdf5 otype {}", mdata_obj->type, otype);
+
+                    if (otype == H5O_TYPE_UNKNOWN)
+                    {
+//                         throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
+                        fmt::print(stderr, "object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; returning -1\n");
+                        return -1;
+                    }
 
                     mdata_obj->fill_token(oinfo->token);
 
@@ -201,9 +236,16 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                         {
                             found = true;
 
+                            if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
+                                throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
+
                             // get object type in HDF format
                             int otype   = h5_types[static_cast<int>(o->type)];
                             oinfo->type = static_cast<H5O_type_t>(otype);
+                            log->trace("object_get: child mdata o->type {} hdf5 otype {}", o->type, otype);
+
+                            if (otype == H5O_TYPE_UNKNOWN)
+                                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
 
                             o->fill_token(oinfo->token);
 
@@ -235,9 +277,16 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
                         {
                             found = true;
 
+                            if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
+                                throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
+
                             // get object type in HDF format
                             int otype   = h5_types[static_cast<int>(o->type)];
                             oinfo->type = static_cast<H5O_type_t>(otype);
+                            log->trace("object_get: child mdata o->type {} hdf5 otype {}", o->type, otype);
+
+                            if (otype == H5O_TYPE_UNKNOWN)
+                                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
 
                             o->fill_token(oinfo->token);
 
