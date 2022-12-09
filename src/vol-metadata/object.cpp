@@ -364,15 +364,10 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
                 log->trace("loc_params->type = {}", loc_params->type);
                 log->trace("name = {}", loc_params->loc_data.loc_by_name.name);
 
-                // TODO: this really should call mdata_obj->search(...), but that needs to handle '.'
-                if (std::string(loc_params->loc_data.loc_by_name.name) == ".")
-                {
-                    log->trace("filling token, {} -> {}", fmt::ptr(mdata_obj), fmt::ptr(token));
-                    mdata_obj->fill_token(*token);
-                    return 0;
-                }
-
-                throw MetadataError("object_specific(): object lookup not implemented");
+                Object* o = mdata_obj->locate(*loc_params).exact();
+                log->trace("filling token, {} -> {}", fmt::ptr(o), fmt::ptr(token));
+                mdata_obj->fill_token(*token);
+                return 0;
 
                 break;
             }
