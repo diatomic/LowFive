@@ -11,23 +11,22 @@
 namespace LowFive
 {
 
-struct RemoteObject: public Object
+struct RemoteObject
 {
-    RemoteObject(ObjectType   type_,
-                 std::string  name_,
-                 rpc::client::object&& obj_):
-        Object(type_, name_), obj(obj_)
+    RemoteObject(rpc::client::object&& obj_):
+        obj(obj_)
     {}
 
-    inline Query*  query();
+    static inline Query*  query(Object* o);
 
     rpc::client::object obj;
 };
 
-struct RemoteFile : public RemoteObject
+struct RemoteFile: public Object, public RemoteObject
 {
     RemoteFile(std::string filename_, rpc::client::object&& obj, std::unique_ptr<Query>&& q):
-        RemoteObject(ObjectType::File, filename_, std::move(obj)), query_(std::move(q))
+        Object(ObjectType::File, filename_),
+        RemoteObject(std::move(obj)), query_(std::move(q))
     {}
 
     ~RemoteFile()
@@ -48,26 +47,17 @@ struct RemoteFile : public RemoteObject
     std::unique_ptr<Query> query_;
 };
 
-struct RemoteGroup : public RemoteObject
-{
-    RemoteGroup(std::string name, rpc::client::object&& obj):
-        RemoteObject(ObjectType::Group, name, std::move(obj))
-    {}
-};
-
-
-struct RemoteDataset : public RemoteObject
+struct RemoteDataset : public Dataset, public RemoteObject
 {
     using Decomposer = IndexQuery::Decomposer;
     using Bounds     = IndexQuery::Bounds;
 
     int                             dim;
-    Datatype                        type;
-    Dataspace                       space;
     Decomposer                      decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy to be overwritten
 
             RemoteDataset(std::string name, rpc::client::object&& obj):
-                RemoteObject(ObjectType::Dataset, name, std::move(obj))
+                Dataset(name, 0, 0, Ownership::lowfive, 0, 0),
+                RemoteObject(std::move(obj))
     {
         auto log = get_logger();
 
@@ -80,16 +70,16 @@ struct RemoteDataset : public RemoteObject
                               void*                                buf);            // output: resulting data, allocated by caller
 };
 
-// TODO: RemoteAttribute
-
 }
 
 LowFive::Query*
 LowFive::RemoteObject::
-query()
+query(Object* o)
 {
-    Object* cur = this;
-    while (!dynamic_cast<RemoteFile*>(cur))
+    Object* cur = o;
+    while (cur && !dynamic_cast<RemoteFile*>(cur))
         cur = cur->parent;
+    if (!cur)
+        return nullptr;
     return dynamic_cast<RemoteFile*>(cur)->query_.get();
 }

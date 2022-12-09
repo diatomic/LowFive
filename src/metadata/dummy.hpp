@@ -5,6 +5,9 @@
 namespace LowFive
 {
 
+// TODO: this is no longer necessary, now that we replicate metadata;
+//       make sure everything works and get rid of this
+
 struct DummyObject: public Object
 {
     DummyObject(ObjectType   type_,

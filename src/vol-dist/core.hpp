@@ -7,6 +7,8 @@
 #include <diy/decomposition.hpp>
 #include <diy/types.hpp>
 
+#include "../vol-metadata-private.hpp"
+
 #include "../metadata.hpp"
 #include "../metadata/serialization.hpp"
 #include "../metadata/remote.hpp"
@@ -52,6 +54,7 @@ struct IndexedDataset
 
         diy::MemoryBuffer queue;
 
+        size_t count_calls = 0;
         for (auto& y : ds->data)
         {
             if (y.file.intersects(fs))
@@ -62,10 +65,12 @@ struct IndexedDataset
                 Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                 {
                   diy::save(queue, (char*) y.data + loc, len);
+                  ++count_calls;
                 });
             }
         }
 
+        log->trace("In IndexedDatasets::get_data(): serialized using {} calls", count_calls);
         log->trace("In IndexedDatasets::get_data(): returning queue.size() = {}", queue.size());
 
         return queue;
@@ -103,6 +108,13 @@ struct IndexServe
         ++open_files;
 
         return f;
+    }
+
+    diy::MemoryBuffer           get_file_hierarchy(std::string name)
+    {
+        diy::MemoryBuffer result;
+        serialize(result, files->at(name));
+        return result;
     }
 
     void                        file_close(File* f)
@@ -143,21 +155,6 @@ inline Dataset* dataset_open(Object* parent, std::string name)
     return ds;
 }
 
-inline Group* group_open(Object* parent, std::string name)
-{
-    auto log = get_logger();
-    Object* obj = parent->search(name).exact();
-    Group* grp = dynamic_cast<Group*>(obj);
-    if (!grp)
-    {
-        log->error("{} is not a Group", name);
-        throw std::runtime_error(fmt::format("Cannot open {}", name));
-    }
-
-    return grp;
-}
-
-
 template<class module>
 void export_core(module& m, IndexServe* idx)
 {
@@ -170,14 +167,8 @@ void export_core(module& m, IndexServe* idx)
          })
     ;
 
-    m.template class_<Group>("Group")
-        .function("dataset_open", [](Group* g, std::string name) { return dataset_open(g, name); })
-        .function("group_open",   [](Group* g, std::string name) { return group_open(g, name); })
-    ;
-
     m.template class_<File>("File")
         .function("dataset_open", [](File* f, std::string name) { return dataset_open(f, name); })
-        .function("group_open",   [](File* f, std::string name) { return group_open(f, name); })
         .function("file_close",   [idx](File* f)                { idx->file_close(f); })
     ;
 
@@ -201,7 +192,8 @@ void export_core(module& m, IndexServe* idx)
         return ids;
     });
 
-    m.function("file_open",  [idx](std::string name) { return idx->file_open(name); });
+    m.function("file_open",             [idx](std::string name) { return idx->file_open(name); });
+    m.function("get_file_hierarchy",    [idx](std::string name) { return idx->get_file_hierarchy(name); });
 
     m.function("get_filenames", [idx]() { return idx->get_filenames(); });
 
