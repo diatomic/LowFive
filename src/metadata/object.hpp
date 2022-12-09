@@ -89,22 +89,19 @@ struct Object
         return search(cur_path);
     }
 
-    static std::string path(const H5VL_loc_params_t& loc_params)
-    {
-        if (loc_params.type == H5VL_OBJECT_BY_SELF)
-            return "";
-        else if (loc_params.type == H5VL_OBJECT_BY_NAME)
-            return loc_params.loc_data.loc_by_name.name;
-        else
-            throw MetadataError(fmt::format("don't know how to convert to path from loc_params.type = {}", loc_params.type));
-    }
-
     virtual ObjectPath locate(const H5VL_loc_params_t& loc_params)
     {
         if (loc_params.type == H5VL_OBJECT_BY_SELF)
             return ObjectPath { this, "" };
         else if (loc_params.type == H5VL_OBJECT_BY_NAME)
             return search(loc_params.loc_data.loc_by_name.name);
+        else if (loc_params.type == H5VL_OBJECT_BY_TOKEN)
+        {
+            H5O_token_t* token = loc_params.loc_data.loc_by_token.token;
+            Object* ptr;
+            memcpy((void*) &ptr, token->__data, sizeof(void*));
+            return ObjectPath { ptr, "" };
+        }
         else
             throw MetadataError(fmt::format("don't know how to locate by loc_params.type = {}", loc_params.type));
     }
