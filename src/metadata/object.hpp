@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "objecttype.hpp"
 #include "error.hpp"
+#include "../log-private.hpp"
 
 namespace LowFive
 {
@@ -100,6 +101,8 @@ struct Object
             H5O_token_t* token = loc_params.loc_data.loc_by_token.token;
             Object* ptr;
             memcpy((void*) &ptr, token->__data, sizeof(void*));
+            auto log = get_logger();
+            log->trace("located by token: {} name = {}", fmt::ptr(ptr), ptr->name);
             return ObjectPath { ptr, "" };
         }
         else
