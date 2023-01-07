@@ -45,8 +45,9 @@ struct Attribute: public Object
                 data_hvl[i].p = new char[count];
                 std::memcpy(data_hvl[i].p, buf_hvl[i].p, count);
 
-                if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
-                    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
+                // This assumes new references H5R_ref_t, but HL library uses old deprecated references, namely hobj_ref_t (= haddr_t)
+                //if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
+                //    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
             }
         } else if (!mem_type.is_var_length_string())
         {
@@ -68,14 +69,38 @@ struct Attribute: public Object
 
     void read(Datatype mem_type_, void* buf)
     {
+        auto log = get_logger();
         log_assert(mem_type.equal(mem_type_), "Currently only know how to read the same datatype as written");
 
+        if (mem_type.dtype_class == DatatypeClass::VarLen)
+        {
+            log->warn("Attribute::read VarLen");
+            log_assert(sizeof(hvl_t) == mem_type.dtype_size, "dtype_size must match sizeof(hvl_t); otherwise read will be incorrect");
+
+            hvl_t* buf_hvl = (hvl_t*) buf;
+            size_t nbytes = space.size() * sizeof(hvl_t);
+
+            hvl_t* data_hvl = (hvl_t*) data.get();
+            auto base_type = Datatype(H5Tget_super(mem_type.id));
+
+            for (size_t i = 0; i < space.size(); ++i)
+            {
+                auto len = data_hvl[i].len;
+                buf_hvl[i].len = len;
+                size_t count = len * base_type.dtype_size;
+
+                buf_hvl[i].p = new char[count];
+                std::memcpy(buf_hvl[i].p, data_hvl[i].p, count);
+            }
+        } else
         if (!mem_type.is_var_length_string())
         {
+            log->warn("Attribute::read regular");
             size_t nbytes = space.size() * mem_type.dtype_size;
             std::memcpy(buf, static_cast<void*>(data.get()), nbytes);
-        } else
+        } else  // var length string
         {
+            log->warn("Attribute::read var length string");
             for (size_t i = 0; i < space.size(); ++i)
             {
                 if (!strings[i].empty())
