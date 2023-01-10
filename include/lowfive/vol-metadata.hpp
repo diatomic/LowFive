@@ -34,6 +34,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     using AfterFileClose    = std::function<void()>;
     using BeforeFileOpen    = std::function<void()>;
+    using AfterDatasetWrite = std::function<void()>;
 
     Files                       files;
     LocationPatterns            memory;
@@ -44,6 +45,7 @@ struct MetadataVOL: public LowFive::VOLBase
     // callbacks
     AfterFileClose              after_file_close;
     BeforeFileOpen              before_file_open;
+    AfterDatasetWrite           after_dataset_write;
 
                     MetadataVOL()
                     {}
@@ -94,6 +96,11 @@ struct MetadataVOL: public LowFive::VOLBase
     void set_before_file_open(BeforeFileOpen bfo)
     {
         before_file_open = bfo;
+    }
+
+    void set_after_dataset_write(AfterDatasetWrite adw)
+    {
+        after_dataset_write = adw;
     }
 
     void clear_files();

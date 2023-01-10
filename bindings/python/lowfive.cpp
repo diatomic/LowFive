@@ -59,6 +59,7 @@ PYBIND11_MODULE(_lowfive, m)
         .def("clear_files",    &LowFive::MetadataVOL::clear_files,                             "clear all files")
         .def("set_after_file_close", &LowFive::MetadataVOL::set_after_file_close,              "set the after_file_close callback")
         .def("set_before_file_open", &LowFive::MetadataVOL::set_before_file_open,              "set the before_file_open callback")
+        .def("set_after_dataset_write", &LowFive::MetadataVOL::set_after_dataset_write,        "set the after_dataset_write callback")
     ;
 
     py::class_<LowFive::DistMetadataVOL> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
