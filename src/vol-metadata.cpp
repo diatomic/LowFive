@@ -34,7 +34,10 @@ drop(void* p)
 LowFive::MetadataVOL::
 ~MetadataVOL()
 {
+    auto log = get_logger();
+    log->trace("MetadataVOL dtor, calling clear_files");
     clear_files();
+    log->trace("MetadataVOL dtor, clear files done");
 }
 
 void
@@ -76,7 +79,8 @@ void
 LowFive::MetadataVOL::
 clear_files()
 {
-    for (auto& x : files)
+    for (auto& x : files) {
         delete x.second;
+    }
     files.clear();
 }

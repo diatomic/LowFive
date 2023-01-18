@@ -80,7 +80,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         mdata = f;
     }
 
-    if (match_any(name, "", passthru, true))
+    if (match_any(name, "", passthru, true) && !match_any(name, "", memory, true))
         obj_ptrs = wrap(VOLBase::file_open(name, flags, fapl_id, dxpl_id, req));
     else
         obj_ptrs = wrap(nullptr);
@@ -261,20 +261,25 @@ file_close(void *file, hid_t dxpl_id, void **req)
     // TODO: add DummyFile condition
     if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
+        log->trace("mdata_obj is File*");
         // we created this file
         if (LowFive::get_log_level() <= spdlog::level::info)
             f->print();
 
         if (!keep)
         {
+            log->trace("keep not set, deleting file");
             files.erase(f->name);
             delete f;       // erases all the children too
         } else
             log->trace("Keeping file metadata in memory");
     }
 
+
     if (after_file_close)
         after_file_close();
+
+    log->trace("after_file_close callback done");
 
     // deliberately verbose, to emphasize checking of res
     if (res == 0)

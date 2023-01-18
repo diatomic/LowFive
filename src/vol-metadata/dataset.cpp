@@ -64,7 +64,8 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     Object* parent = static_cast<Object*>(obj_->mdata_obj);
     auto filepath = parent->fullname(name);
 
-    if (match_any(filepath, passthru))
+    // if dataset is on disk and in memory, use memory
+    if (match_any(filepath, passthru) && !match_any(filepath, memory))
         result = wrap(VOLBase::dataset_open(unwrap(obj_), loc_params, name, dapl_id, dxpl_id, req));
     else
         result = wrap(nullptr);

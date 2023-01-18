@@ -397,5 +397,8 @@ herr_t
 LowFive::VOLBase::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+    log->trace("VOLBase::file_close {}");
+
     return H5VLfile_close(file, info->under_vol_id, dxpl_id, req);
 }
