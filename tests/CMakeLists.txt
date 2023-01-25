@@ -28,6 +28,17 @@ target_link_libraries       (consumer2-multidata-test ${libraries})
 set_target_properties       (consumer2-multidata-test PROPERTIES PREFIX "")
 set_target_properties       (consumer2-multidata-test PROPERTIES SUFFIX ".hx")
 
+add_library                 (producer-multidata-file-memory-test SHARED ../examples/prod-con-multidata/producer-multidata-file-memory.cpp)
+target_link_libraries       (producer-multidata-file-memory-test ${libraries})
+set_target_properties       (producer-multidata-file-memory-test PROPERTIES PREFIX "")
+set_target_properties       (producer-multidata-file-memory-test PROPERTIES SUFFIX ".hx")
+
+add_library                 (consumer-multidata-file-memory-test SHARED ../examples/prod-con-multidata/consumer-multidata-file-memory.cpp)
+target_link_libraries       (consumer-multidata-file-memory-test ${libraries})
+set_target_properties       (consumer-multidata-file-memory-test PROPERTIES PREFIX "")
+set_target_properties       (consumer-multidata-file-memory-test PROPERTIES SUFFIX ".hx")
+
+
 # ------------ test 1 producer 1 consumer ------------------
 
 add_executable              (prod-con-multidata-test    ../examples/prod-con-multidata/prod-con-multidata.cpp)
@@ -158,6 +169,14 @@ foreach                     (p 6 7 8)
     add_test                (NAME 2prods-con-multidata-no-shared-metadata-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
                             producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
+endforeach()
+
+# ------------ test 1 producer 1 consumer, metadata and passthru -----------------
+
+foreach                     (p 6 7 8)
+    add_test                (NAME prod-con-metadata-and-file-p${p}
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
+            producer-multidata-file-memory-test.hx consumer-multidata-file-memory-test.hx 1 1 0) # 1 1 0: memory file shared
 endforeach()
 
 # Space sharing currently broken everywhere
