@@ -32,14 +32,17 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     //            shared, local:.size(), intercomms.size(), intercomms[0].size());
 
     // set up lowfive
-    l5::DistMetadataVOL vol_plugin(local, intercomms);
+    l5::DistMetadataVOL* vol_plugin = new l5::DistMetadataVOL(local, intercomms);
+
+    vol_plugin->set_keep(true);
+    vol_plugin->serve_on_close = false;
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
     if (passthru)
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
 
-    l5::H5VOLProperty vol_prop(vol_plugin);
+    l5::H5VOLProperty vol_prop(*vol_plugin);
     if (!getenv("HDF5_VOL_CONNECTOR"))
     {
         fmt::print(stderr, "HDF5_VOL_CONNECTOR is not set; enabling VOL explicitly\n");
@@ -53,10 +56,10 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
     // filename and full path to dataset can contain '*' and '?' wild cards (ie, globs, not regexes)
     // NB: we say nothing about /group1/grid because lowfive ownership is implicit
     if (passthru)
-        vol_plugin.set_passthru("outfile.h5", "*");
+        vol_plugin->set_passthru("outfile.h5", "*");
     if (metadata)
-        vol_plugin.set_memory("outfile.h5", "*");
-    vol_plugin.set_zerocopy("outfile.h5", "/group1/particles");
+        vol_plugin->set_memory("outfile.h5", "*");
+    vol_plugin->set_zerocopy("outfile.h5", "/group1/particles");
 
     // diy setup for the producer
     diy::FileStorage                prod_storage(prefix);
@@ -109,15 +112,15 @@ void producer_f (communicator& local, const std::vector<communicator>& intercomm
             { b->write_block_points(cp, dset, global_nblocks); });
 
     // clean up
-    H5Dclose(dset);
-    H5Sclose(filespace);
-    H5Gclose(group);
+//    H5Dclose(dset);
+//    H5Sclose(filespace);
+//    H5Gclose(group);
 
-    //vol_plugin.serve_all();
-    //H5close();
+    vol_plugin->serve_all();
+//    H5close();
 
-    H5Fclose(file);
-    H5Pclose(plist);
+//    H5Fclose(file);
+//    H5Pclose(plist);
 
     // signal the consumer that data are ready
     if (passthru && !metadata && !shared)
