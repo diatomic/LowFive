@@ -97,5 +97,6 @@ PYBIND11_MODULE(_lowfive, m)
         .def("producer_done",   &LowFive::DistMetadataVOL::producer_signal_done,    "tell consumers that producer is done")
         .def("broadcast_files", &LowFive::DistMetadataVOL::broadcast_files,         py::arg("root") = 0,
                                                                                     "broadcast file metadata to all ranks")
+        .def("set_serve_indices", &LowFive::DistMetadataVOL::set_serve_indices,     "set the serve_indices callback")
     ;
 }
