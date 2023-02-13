@@ -38,7 +38,18 @@ serve_all(bool delete_data)
     auto log = get_logger();
     log->trace("enter serve_all, files.size = {}", files.size());
 
-    Index index(local, intercomms, &files);
+    DataIntercomms indices(intercomms.size());
+
+    if (serve_indices)
+        indices = serve_indices();
+    else
+        std::iota(indices.begin(), indices.end(), 0);
+
+    std::vector<MPI_Comm> selected_intercomms;
+    for (auto idx : indices)
+        selected_intercomms.push_back(intercomms[idx]);
+
+    Index index(local, selected_intercomms, &files);
     // we only serve if there any datasets; this matched old (pre-RPC)
     // behavior, but is probably not the right universal solution; we should
     // make this behavior user-configurable

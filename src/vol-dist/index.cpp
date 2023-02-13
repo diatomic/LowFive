@@ -99,11 +99,6 @@ Index::index(IndexedDataset& data)
     log->trace("Exit Index::index");
 }
 
-// DM: I don't quite understand why this works in the multi-consumer case. In
-//     particular, what's stopping one consumer from opening and closing
-//     everything, which would trigger all_done, before another consumer gets a
-//     chance to do something.
-//     TODO: Revisit this when the rest of the logic is fully updated.
 void
 Index::serve()
 {
