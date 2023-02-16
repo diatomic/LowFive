@@ -49,12 +49,16 @@ serve_all(bool delete_data)
     for (auto idx : indices)
         selected_intercomms.push_back(intercomms[idx]);
 
-    Index index(local, selected_intercomms, &files);
-    // we only serve if there any datasets; this matched old (pre-RPC)
-    // behavior, but is probably not the right universal solution; we should
-    // make this behavior user-configurable
-    if (index.indexed_datasets)
-        index.serve();
+    if (!selected_intercomms.empty())
+    {
+        Index index(local, selected_intercomms, &files);
+        // we only serve if there any datasets; this matched old (pre-RPC)
+        // behavior, but is probably not the right universal solution; we should
+        // make this behavior user-configurable
+        if (index.indexed_datasets)
+            index.serve();
+
+    }
 
     // TODO: what do we do about delete_data? Probably should become "clear files"
     //if (delete_data)
