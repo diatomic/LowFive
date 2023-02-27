@@ -94,6 +94,8 @@ object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
 {
     return H5VLobject_copy(src_obj, src_loc_params, src_name, dst_obj, dst_loc_params, dst_name, info->under_vol_id, ocpypl_id, lcpl_id, dxpl_id, req);
 }
+
+#if (H5_VERS_MINOR == 12)
 /*-------------------------------------------------------------------------
  * Function:    _object_get
  *
@@ -208,3 +210,120 @@ object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void 
 {
     return H5VLobject_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
+#elif (H5_VERS_MINOR == 14)
+
+/*-------------------------------------------------------------------------
+ * Function:    _object_get
+ *
+ * Purpose:     Get info about an object
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL OBJECT Get");
+
+    ret_value = o->vol->object_get(o->under_object, loc_params, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end _object_get() */
+
+herr_t
+LowFive::VOLBase::
+object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLobject_get(obj, loc_params, info->under_vol_id, args, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    _object_specific
+ *
+ * Purpose:     Specific operation on an object
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_object_specific(void *obj, const H5VL_loc_params_t *loc_params,
+        H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    //hid_t under_vol_id;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL OBJECT Specific");
+
+    // Save copy of underlying VOL connector ID and prov helper, in case of
+    // refresh destroying the current object
+    //under_vol_id = o->under_vol_id;
+
+    ret_value = o->vol->object_specific(o->under_object, loc_params, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end _object_specific() */
+
+herr_t
+LowFive::VOLBase::
+object_specific(void *obj, const H5VL_loc_params_t *loc_params,
+        H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLobject_specific(obj, loc_params, info->under_vol_id, args, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    _object_optional
+ *
+ * Purpose:     Perform a connector-specific operation for an object
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL OBJECT Optional");
+
+    ret_value = o->vol->object_optional(o->under_object, loc_params, args, dxpl_id, req);
+
+    return ret_value;
+} /* end _object_optional() */
+
+
+herr_t
+LowFive::VOLBase::
+object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLobject_optional(obj, loc_params, info->under_vol_id, args, dxpl_id, req);
+}
+#endif

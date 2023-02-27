@@ -15,6 +15,8 @@
  *
  *-------------------------------------------------------------------------
  */
+
+#if (H5_VERS_MINOR == 12)
 herr_t
 LowFive::VOLBase::
 _link_create_reissue(H5VL_link_create_type_t create_type,
@@ -353,5 +355,5 @@ link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type,
 {
     return H5VLlink_optional(obj, under_vol_id, opt_type, dxpl_id, req, arguments);
 }
-
+#endif
 

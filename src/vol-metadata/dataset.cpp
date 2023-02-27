@@ -87,78 +87,37 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     return (void*)result;
 }
 
+
+
 herr_t
 LowFive::MetadataVOL::
-dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
-    va_list args;
-    va_copy(args,arguments);
-
     auto log = get_logger();
-    log->trace("dset = {}, get_type = {}, req = {}", *dset_, get_type, fmt::ptr(req));
-    // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
-
-    // TODO: Why do we prefer passthru to memory here? Only reason is that it's
-    //       more complete. But perhaps it's best to trigger the error in the else
-    //       than survive on passthru?
-    herr_t result = 0;
-    if (unwrap(dset_))
-        result = VOLBase::dataset_get(unwrap(dset_), get_type, dxpl_id, req, arguments);
-    else if (dset_->mdata_obj)
-    {                                                       // see hdf5 H5VLnative_dataset.c, H5VL__native_dataset_get()
-        if (get_type == H5VL_DATASET_GET_SPACE)
-        {
-            log->trace("GET_SPACE");
-            auto& dataspace = static_cast<Dataset*>(dset_->mdata_obj)->space;
-
-            hid_t space_id = dataspace.copy();
-            log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
-
-            hid_t *ret = va_arg(args, hid_t*);
-            *ret = space_id;
-            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-        } else if (get_type == H5VL_DATASET_GET_TYPE)
-        {
-            log->trace("GET_TYPE");
-            auto& datatype = static_cast<Dataset*>(dset_->mdata_obj)->type;
-
-            log->trace("dataset data type id = {}, datatype = {}",
-                    datatype.id, datatype);
-
-            hid_t dtype_id = datatype.copy();
-            log->trace("copied data type id = {}, datatype = {}",
-                    dtype_id, Datatype(dtype_id));
-
-            hid_t *ret = va_arg(args, hid_t*);
-            *ret = dtype_id;
-            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-        } else if (get_type == H5VL_DATASET_GET_DCPL)
-        {
-            log->trace("GET_DCPL");
-            hid_t *ret = va_arg(args, hid_t*);
-            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
-            *ret = dset->dcpl.id;
-            dset->dcpl.inc_ref();
-            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-        } else if (get_type == H5VL_DATASET_GET_DAPL)
-        {
-            log->trace("GET_DAPL");
-            hid_t *ret = va_arg(args, hid_t*);
-            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
-            *ret = dset->dapl.id;
-            dset->dapl.inc_ref();
-            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
-        } else
-        {
-            throw MetadataError(fmt::format("Unknown get_type == {} in dataset_get()", get_type));
-        }
+    log->trace("dataset_close: dset = {}, dxpl_id = {}", *dset_, dxpl_id);
+    if (dset_->tmp)
+    {
+        log->trace("temporary reference, skipping close");
+        return 0;
     }
 
-    return result;
-}
+    herr_t retval = 0;
 
+    // close the file, keep in-memory structures in the hierarchy (they may be needed up to file_close())
+    if (unwrap(dset_))
+        retval = VOLBase::dataset_close(unwrap(dset_), dxpl_id, req);
+
+    // TODO: not sure what the point of this was; the comment above offers a clue, but I still don't understand the logic
+    //else if (vol_properties.passthru && vol_properties.memory)
+    //{
+    //    if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
+    //        retval = VOLBase::dataset_close(dset_, dxpl_id, req);
+    //}
+
+    return retval;
+}
 herr_t
 LowFive::MetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
@@ -167,9 +126,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 
     auto log = get_logger();
     log->trace("dataset_read: dset = {}\nmem_space_id = {} mem_space = {}\nfile_space_id = {} file_space = {}",
-               *dset_,
-               mem_space_id, Dataspace(mem_space_id),
-               file_space_id, Dataspace(file_space_id));
+            *dset_,
+            mem_space_id, Dataspace(mem_space_id),
+            file_space_id, Dataspace(file_space_id));
 
     if (unwrap(dset_))
         return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -199,9 +158,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
             Dataspace src(mem_src, true);
 
             Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, ds->type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
-                    {
-                    std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
-                    });
+            {
+              std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
+            });
 
             log->trace("dataset_read: dst = {}", dst);
             log->trace("dataset_read: src = {}", src);
@@ -219,9 +178,9 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 
     auto log = get_logger();
     log->trace("MetadataVOL::dataset_write, dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})",
-               *dset_,
-               mem_space_id, Dataspace(mem_space_id),
-               file_space_id, Dataspace(file_space_id));
+            *dset_,
+            mem_space_id, Dataspace(mem_space_id),
+            file_space_id, Dataspace(file_space_id));
 
     if (dset_->mdata_obj)
     {
@@ -238,6 +197,9 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 
     return 0;
 }
+
+#if (H5_VERS_MINOR == 12)
+
 
 herr_t
 LowFive::MetadataVOL::
@@ -310,30 +272,214 @@ dataset_optional(void *obj, H5VL_dataset_optional_t opt_type, hid_t dxpl_id, voi
 
 herr_t
 LowFive::MetadataVOL::
-dataset_close(void *dset, hid_t dxpl_id, void **req)
+dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     ObjectPointers* dset_ = (ObjectPointers*) dset;
 
+    va_list args;
+    va_copy(args,arguments);
+
     auto log = get_logger();
-    log->trace("dataset_close: dset = {}, dxpl_id = {}", *dset_, dxpl_id);
-    if (dset_->tmp)
-    {
-        log->trace("temporary reference, skipping close");
-        return 0;
+    log->trace("dset = {}, get_type = {}, req = {}", *dset_, get_type, fmt::ptr(req));
+    // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
+
+    // TODO: Why do we prefer passthru to memory here? Only reason is that it's
+    //       more complete. But perhaps it's best to trigger the error in the else
+    //       than survive on passthru?
+    herr_t result = 0;
+    if (unwrap(dset_))
+        result = VOLBase::dataset_get(unwrap(dset_), get_type, dxpl_id, req, arguments);
+    else if (dset_->mdata_obj)
+    {                                                       // see hdf5 H5VLnative_dataset.c, H5VL__native_dataset_get()
+        if (get_type == H5VL_DATASET_GET_SPACE)
+        {
+            log->trace("GET_SPACE");
+            auto& dataspace = static_cast<Dataset*>(dset_->mdata_obj)->space;
+
+            hid_t space_id = dataspace.copy();
+            log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
+
+            hid_t *ret = va_arg(args, hid_t*);
+            *ret = space_id;
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
+        } else if (get_type == H5VL_DATASET_GET_TYPE)
+        {
+            log->trace("GET_TYPE");
+            auto& datatype = static_cast<Dataset*>(dset_->mdata_obj)->type;
+
+            log->trace("dataset data type id = {}, datatype = {}",
+                    datatype.id, datatype);
+
+            hid_t dtype_id = datatype.copy();
+            log->trace("copied data type id = {}, datatype = {}",
+                    dtype_id, Datatype(dtype_id));
+
+            hid_t *ret = va_arg(args, hid_t*);
+            *ret = dtype_id;
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
+        } else if (get_type == H5VL_DATASET_GET_DCPL)
+        {
+            log->trace("GET_DCPL");
+            hid_t *ret = va_arg(args, hid_t*);
+            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
+            *ret = dset->dcpl.id;
+            dset->dcpl.inc_ref();
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
+        } else if (get_type == H5VL_DATASET_GET_DAPL)
+        {
+            log->trace("GET_DAPL");
+            hid_t *ret = va_arg(args, hid_t*);
+            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
+            *ret = dset->dapl.id;
+            dset->dapl.inc_ref();
+            log->trace("arguments = {} -> {}", fmt::ptr(ret), *ret);
+        } else
+        {
+            throw MetadataError(fmt::format("Unknown get_type == {} in dataset_get()", get_type));
+        }
     }
 
-    herr_t retval = 0;
+    return result;
+} // end dataset_get
 
-    // close the file, keep in-memory structures in the hierarchy (they may be needed up to file_close())
-    if (unwrap(dset_))
-        retval = VOLBase::dataset_close(unwrap(dset_), dxpl_id, req);
+#elif (H5_VERS_MINOR == 14)
 
-    // TODO: not sure what the point of this was; the comment above offers a clue, but I still don't understand the logic
-    //else if (vol_properties.passthru && vol_properties.memory)
-    //{
-    //    if (Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
-    //        retval = VOLBase::dataset_close(dset_, dxpl_id, req);
-    //}
 
-    return retval;
+herr_t
+LowFive::MetadataVOL::
+dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+
+    auto specific_type = args->op_type;
+
+    auto log = get_logger();
+    log->trace("dataset_specific: dset = {} specific_type = {}", *obj_, specific_type);
+
+    herr_t res = 0;
+    if (unwrap(obj_))
+        res = VOLBase::dataset_specific(unwrap(obj_), args, dxpl_id, req);
+    else if (obj_->mdata_obj)
+    {
+        // specific types are enumerated in H5VLconnector.h
+        switch (specific_type)
+        {
+        case H5VL_DATASET_SET_EXTENT:
+        {
+            // adapted from H5VLnative_dataset.c, H5VL__native_dataset_specific()
+            const hsize_t *size = args->args.set_extent.size;
+            Dataspace& space = static_cast<Dataset*>(obj_->mdata_obj)->space;
+            space.set_extent(size); // NB: updating overall dataspace, not individual data triples
+            break;
+        }
+        case H5VL_DATASET_FLUSH:
+        {
+            log->trace("dataset_specific specific_type H5VL_DATASET_FLUSH is a no-op in metadata");
+            break;
+        }
+        case H5VL_DATASET_REFRESH:
+        {
+            log->trace("dataset_specific specific_type H5VL_DATASET_REFRESH is a no-op in metadata");
+            break;
+        }
+        }
+    }
+    else
+        throw MetadataError(fmt::format("dataset_specific(): either passthru or metadata must be specified"));
+
+    return res;
 }
+
+herr_t
+LowFive::MetadataVOL::
+dataset_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+
+    auto opt_type = args->op_type;
+
+    auto log = get_logger();
+    log->trace("dataset_optional: dset = {} optional_type = {}", *obj_, opt_type);
+
+    herr_t res = 0;
+    if (unwrap(obj_))
+        res = VOLBase::dataset_optional(unwrap(obj_), args, dxpl_id, req);
+    else if (obj_->mdata_obj)
+    {
+        // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_DATASET_* constants)
+        log->warn("Warning: dataset_optional not implemented in metadata yet");
+    }
+    else
+        throw MetadataError(fmt::format("dataset_optional(): either passthru or metadata must be specified"));
+
+    return res;
+}
+
+herr_t
+LowFive::MetadataVOL::
+dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* dset_ = (ObjectPointers*) dset;
+
+    auto get_type = args->op_type;
+
+    auto log = get_logger();
+    log->trace("dset = {}, get_type = {}, req = {}", *dset_, get_type, fmt::ptr(req));
+    // enum H5VL_dataset_get_t is defined in H5VLconnector.h and lists the meaning of the values
+
+    // TODO: Why do we prefer passthru to memory here? Only reason is that it's
+    //       more complete. But perhaps it's best to trigger the error in the else
+    //       than survive on passthru?
+    herr_t result = 0;
+    if (unwrap(dset_))
+        result = VOLBase::dataset_get(unwrap(dset_), args, dxpl_id, req);
+    else if (dset_->mdata_obj)
+    {                                                       // see hdf5 H5VLnative_dataset.c, H5VL__native_dataset_get()
+        if (get_type == H5VL_DATASET_GET_SPACE)
+        {
+            log->trace("GET_SPACE");
+            auto& dataspace = static_cast<Dataset*>(dset_->mdata_obj)->space;
+
+            hid_t space_id = dataspace.copy();
+            log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
+
+            args->args.get_space.space_id = space_id;
+            log->trace("arguments = {} -> {}", "args->args.get_space.space_id", args->args.get_space.space_id);
+        } else if (get_type == H5VL_DATASET_GET_TYPE)
+        {
+            log->trace("GET_TYPE");
+            auto& datatype = static_cast<Dataset*>(dset_->mdata_obj)->type;
+
+            log->trace("dataset data type id = {}, datatype = {}",
+                    datatype.id, datatype);
+
+            hid_t dtype_id = datatype.copy();
+            log->trace("copied data type id = {}, datatype = {}",
+                    dtype_id, Datatype(dtype_id));
+
+            args->args.get_type.type_id = dtype_id;
+            log->trace("arguments = {} -> {}", "args->args.get_type.type_id", args->args.get_type.type_id);
+        } else if (get_type == H5VL_DATASET_GET_DCPL)
+        {
+            log->trace("GET_DCPL");
+            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
+            args->args.get_dcpl.dcpl_id = dset->dcpl.id;
+            dset->dcpl.inc_ref();
+            log->trace("arguments = {} -> {}", "args->args.get_dcpl.dcpl_id", args->args.get_dcpl.dcpl_id);
+        } else if (get_type == H5VL_DATASET_GET_DAPL)
+        {
+            log->trace("GET_DAPL");
+            auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
+            args->args.get_dapl.dapl_id = dset->dapl.id;
+            dset->dapl.inc_ref();
+            log->trace("arguments = {} -> {}", "args->args.get_dapl.dapl_id", args->args.get_dapl.dapl_id);
+        } else
+        {
+            throw MetadataError(fmt::format("Unknown get_type == {} in dataset_get()", get_type));
+        }
+    }
+
+    return result;
+} // end dataset_get
+
+#endif

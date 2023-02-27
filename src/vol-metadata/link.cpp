@@ -3,6 +3,7 @@
 #include "../log-private.hpp"
 #include <assert.h>
 
+#if (H5_VERS_MINOR == 12)
 herr_t
 LowFive::MetadataVOL::
 link_create(H5VL_link_create_type_t create_type, void *obj,
@@ -342,5 +343,5 @@ link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type,
 
     return res;
 }
-
+#endif
 

@@ -33,6 +33,7 @@ blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx)
     return H5VLblob_put(obj, info->under_vol_id, buf, size, blob_id, ctx);
 }
 
+#if (H5_VERS_MINOR == 12)
 herr_t
 LowFive::VOLBase::
 _blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments)
@@ -55,6 +56,33 @@ blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_l
 {
     return H5VLblob_specific(obj, info->under_vol_id, blob_id, specific_type, arguments);
 }
+
+#elif (H5_VERS_MINOR == 14)
+
+herr_t
+LowFive::VOLBase::
+_blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- EXT PASS THROUGH VOL BLOB Specific");
+
+    ret_value = o->vol->blob_specific(o->under_object, blob_id, args);
+
+    return ret_value;
+}
+
+herr_t
+LowFive::VOLBase::
+blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args)
+{
+    return H5VLblob_specific(obj, info->under_vol_id, blob_id, args);
+}
+
+#endif
 
 
 herr_t

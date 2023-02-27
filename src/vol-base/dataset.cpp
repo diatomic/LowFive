@@ -95,6 +95,73 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params,
     return H5VLdataset_open(obj, loc_params, info->under_vol_id, name, dapl_id, dxpl_id, req);
 }
 
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_close
+ *
+ * Purpose:     Closes a dataset.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1, dataset not closed.
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_dataset_close(void *dset, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)dset;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL DATASET Close");
+
+    ret_value = o->vol->dataset_close(o->under_object, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    /* Release our wrapper, if underlying dataset was closed */
+    if(ret_value >= 0)
+        pass_through_t::destroy(o);
+
+    return ret_value;
+} /* end dataset_close() */
+
+herr_t
+LowFive::VOLBase::
+dataset_close(void *dset, hid_t dxpl_id, void **req)
+{
+    return H5VLdataset_close(dset, info->under_vol_id, dxpl_id, req);
+}
+
+herr_t
+LowFive::VOLBase::
+dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
+{
+#if (H5_VERS_MINOR == 12)
+    return H5VLdataset_read(dset, info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+#elif (H5_VERS_MINOR == 14)
+    return H5VLdataset_read(1, &dset, info->under_vol_id, &mem_type_id, &mem_space_id, &file_space_id, plist_id, &buf, req);
+#endif
+}
+
+herr_t
+LowFive::VOLBase::
+dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
+{
+#if (H5_VERS_MINOR == 12)
+    return H5VLdataset_write(dset, info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+#elif (H5_VERS_MINOR == 14)
+    return H5VLdataset_write(1, &dset, info->under_vol_id, &mem_type_id, &mem_space_id, &file_space_id, plist_id, &buf, req);
+#endif
+}
+
+
+#if (H5_VERS_MINOR == 12)
+
 /*-------------------------------------------------------------------------
  * Function:    dataset_read
  *
@@ -125,12 +192,6 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     return ret_value;
 } /* end dataset_read() */
 
-herr_t
-LowFive::VOLBase::
-dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
-{
-    return H5VLdataset_read(dset, info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
-}
 
 /*-------------------------------------------------------------------------
  * Function:    dataset_write
@@ -161,13 +222,6 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
 
     return ret_value;
 } /* end dataset_write() */
-
-herr_t
-LowFive::VOLBase::
-dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
-{
-    return H5VLdataset_write(dset, info->under_vol_id, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
-}
 
 /*-------------------------------------------------------------------------
  * Function:    dataset_get
@@ -289,43 +343,211 @@ dataset_optional(void *obj, H5VL_dataset_optional_t opt_type,
     return H5VLdataset_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
 
+#elif (H5_VERS_MINOR == 14)
+
+
 /*-------------------------------------------------------------------------
- * Function:    dataset_close
+ * Function:    dataset_read
  *
- * Purpose:     Closes a dataset.
+ * Purpose:     Reads data elements from a dataset into a buffer.
  *
  * Return:      Success:    0
- *              Failure:    -1, dataset not closed.
+ *              Failure:    -1
  *
  *-------------------------------------------------------------------------
  */
 herr_t
 LowFive::VOLBase::
-_dataset_close(void *dset, hid_t dxpl_id, void **req)
+_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[], hid_t file_space_id[], hid_t plist_id, void *buf[], void **req)
+{
+    auto log = get_logger();
+
+    log->debug("------- PASS THROUGH VOL DATASET Read count = {}", count);
+
+    herr_t ret_value = 0;
+
+    // iterate over all datasets
+    for(size_t dset_idx = 0; dset_idx < count; ++ dset_idx) {
+
+        pass_through_t* o = (pass_through_t*)dset[dset_idx];
+
+        // call dataset_read
+        auto ret_value_per_dset = o->vol->dataset_read(o->under_object, mem_type_id[dset_idx], mem_space_id[dset_idx], file_space_id[dset_idx], plist_id, buf[dset_idx], req);
+
+        if (ret_value == 0) {
+            ret_value = ret_value_per_dset;
+            // TODO: signal error and break loop?
+            // Is anything really going to call it with count > 1?
+        }
+
+        /* Check for async request */
+        if (req && *req)
+            *req = o->create(*req);
+    }
+
+    return ret_value;
+} /* end dataset_read() */
+
+
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_write
+ *
+ * Purpose:     Writes data elements from a buffer into a dataset.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[], hid_t file_space_id[], hid_t plist_id, const void *buf[], void **req)
+{
+    auto log = get_logger();
+
+    herr_t ret_value = 0;
+
+    log->debug("------- PASS THROUGH VOL DATASET Write count = {}", count);
+    for(size_t dset_idx = 0; dset_idx < count; ++dset_idx) {
+
+        pass_through_t* o = (pass_through_t*)dset[dset_idx];
+
+        auto ret_value_loc = o->vol->dataset_write(o->under_object, mem_type_id[dset_idx], mem_space_id[dset_idx], file_space_id[dset_idx], plist_id, buf[dset_idx], req);
+
+        if (ret_value == 0) {
+            // do not overwrite FAIL
+            // TODO: break here if ret_value_loc == FAIL?
+            ret_value = ret_value_loc;
+        }
+
+        /* Check for async request */
+        if (req && *req)
+            *req = o->create(*req);
+    }
+
+    return ret_value;
+} /* end dataset_write() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_get
+ *
+ * Purpose:     Gets information about a dataset
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req)
 {
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)dset;
     herr_t ret_value;
 
-    log->debug("------- PASS THROUGH VOL DATASET Close");
+    log->debug("------- PASS THROUGH VOL DATASET Get");
 
-    ret_value = o->vol->dataset_close(o->under_object, dxpl_id, req);
+    ret_value = o->vol->dataset_get(o->under_object, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
         *req = o->create(*req);
 
-    /* Release our wrapper, if underlying dataset was closed */
-    if(ret_value >= 0)
-        pass_through_t::destroy(o);
-
     return ret_value;
-} /* end dataset_close() */
+} /* end pass_through_dataset_get() */
 
 herr_t
 LowFive::VOLBase::
-dataset_close(void *dset, hid_t dxpl_id, void **req)
+dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req)
 {
-    return H5VLdataset_close(dset, info->under_vol_id, dxpl_id, req);
+    return H5VLdataset_get(dset, info->under_vol_id, args, dxpl_id, req);
 }
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_specific
+ *
+ * Purpose:     Specific operation on a dataset
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_dataset_specific(void *obj, H5VL_dataset_specific_args_t* args,
+        hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    //hid_t under_vol_id;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL DATASET Specific");
+
+    // Save copy of underlying VOL connector ID and prov helper, in case of
+    // refresh destroying the current object
+    //under_vol_id = o->under_vol_id;
+
+    ret_value = o->vol->dataset_specific(o->under_object, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* dataset_specific() */
+
+herr_t
+LowFive::VOLBase::
+dataset_specific(void *obj, H5VL_dataset_specific_args_t* args,
+        hid_t dxpl_id, void **req)
+{
+    return H5VLdataset_specific(obj, info->under_vol_id, args, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    dataset_optional
+ *
+ * Purpose:     Perform a connector-specific operation on a dataset
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_dataset_optional(void *obj, H5VL_optional_args_t* args,
+        hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL DATASET Optional");
+
+    ret_value = o->vol->dataset_optional(o->under_object, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* dataset_optional() */
+
+herr_t
+LowFive::VOLBase::
+dataset_optional(void *obj, H5VL_optional_args_t* args,
+        hid_t dxpl_id, void **req)
+{
+    return H5VLdataset_optional(obj, info->under_vol_id, args, dxpl_id, req);
+}
+
+#endif

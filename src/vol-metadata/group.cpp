@@ -83,6 +83,25 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
 
 herr_t
 LowFive::MetadataVOL::
+group_close(void *grp, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* grp_ = (ObjectPointers*) grp;
+
+    auto log = get_logger();
+    log->trace("MetadataVOL::group_close: {}", *grp_);
+
+    herr_t retval = 0;
+
+    if (unwrap(grp_))
+        retval = VOLBase::group_close(unwrap(grp_), dxpl_id, req);
+
+    return retval;
+}
+
+#if (H5_VERS_MINOR == 12)
+
+herr_t
+LowFive::MetadataVOL::
 group_optional(void *obj, H5VL_group_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
@@ -192,19 +211,114 @@ group_specific(void *obj, H5VL_group_specific_t specific_type, hid_t dxpl_id, vo
 
     return res;
 }
+#elif (H5_VERS_MINOR == 14)
+
 herr_t
 LowFive::MetadataVOL::
-group_close(void *grp, hid_t dxpl_id, void **req)
+group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* grp_ = (ObjectPointers*) grp;
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+    auto opt_type = args->op_type;
 
     auto log = get_logger();
-    log->trace("MetadataVOL::group_close: {}", *grp_);
+    log->trace("group_optional: group = {} optional_type = {}", *obj_, opt_type);
 
-    herr_t retval = 0;
+    herr_t res = 0;
+    if (unwrap(obj_))
+        res = VOLBase::group_optional(unwrap(obj_), args, dxpl_id, req);
+    else if (obj_->mdata_obj)
+    {
+        // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_GROUP_* constants)
+        throw MetadataError(fmt::format("group_optional() not implemented in metadata yet"));
+    }
+    else
+        throw MetadataError(fmt::format("group_optional(): either passthru or metadata must be specified"));
 
-    if (unwrap(grp_))
-        retval = VOLBase::group_close(unwrap(grp_), dxpl_id, req);
-
-    return retval;
+    return res;
 }
+
+herr_t
+LowFive::MetadataVOL::
+group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+
+    auto get_type = args->op_type;
+
+    auto log = get_logger();
+    log->trace("group_get: group = {}, get_type = {}, req = {}", *obj_, get_type, fmt::ptr(req));
+
+    // enum H5VL_group_get_t is defined in H5VLconnector.h and lists the meaning of the values
+
+    herr_t result = 0;
+    if (unwrap(obj_))
+        result = VOLBase::group_get(unwrap(obj_), args, dxpl_id, req);
+    else if (obj_->mdata_obj)
+    {                                                       // see hdf5 H5VLnative_group.c, H5VL__native_group_get()
+        if (get_type == H5VL_GROUP_GET_GCPL)                // group creation property list
+        {
+            log->trace("group_get(): get_type H5VL_GROUP_GET_GCPL");
+
+            // check if the object is actually a group
+            auto object = static_cast<Object*>(obj_->mdata_obj);
+            if (object->type != ObjectType::Group)
+            {
+                if (object->type == ObjectType::File)
+                    args->args.get_gcpl.gcpl_id = H5Pcreate(H5P_GROUP_CREATE);
+                else
+                    throw MetadataError(fmt::format("group_get(): object type is not a group and not a file"));
+            }
+            else
+            {
+                Group* group = static_cast<Group*>(obj_->mdata_obj);
+                args->args.get_gcpl.gcpl_id = group->gcpl.id;
+                group->gcpl.inc_ref();
+            }
+
+            log->trace("arguments = {} -> {}", "args->args.get_gcpl.gcpl_id", args->args.get_gcpl.gcpl_id);
+        }
+        else if (get_type == H5VL_GROUP_GET_INFO)           // group info
+        {
+            log->trace("group_get(): get_type H5VL_GROUP_GET_INFO");
+            const H5VL_loc_params_t loc_params = args->args.get_info.loc_params;
+            H5G_info_t*             group_info = args->args.get_info.ginfo;
+
+            auto* g = static_cast<Object*>(obj_->mdata_obj)->locate(loc_params).exact();
+            group_info->storage_type = H5G_STORAGE_TYPE_UNKNOWN;
+            group_info->nlinks = g->children.size();
+            group_info->max_corder = 0;
+            group_info->mounted = false;
+        }
+        else
+            throw MetadataError(fmt::format("group_get() did not recognize get_type = {}", get_type));
+    } else
+        throw MetadataError(fmt::format("group_get(): either passthru or metadata must be specified"));
+
+    return result;
+}
+
+herr_t
+LowFive::MetadataVOL::
+group_specific(void *obj, H5VL_group_specific_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* obj_ = (ObjectPointers*)obj;
+
+    auto specific_type = args->op_type;
+
+    auto log = get_logger();
+    log->trace("group_specific: dset = {} specific_type = {}", *obj_, specific_type);
+
+    herr_t res = 0;
+    if (unwrap(obj_))
+        res = VOLBase::group_specific(unwrap(obj_), args, dxpl_id, req);
+    else if (obj_->mdata_obj)
+    {
+        // specific types are enumerated in H5VLconnector.h
+        throw MetadataError(fmt::format("group_specific() not implemented in metadata yet"));
+    }
+    else
+        throw MetadataError(fmt::format("group_specific(): either passthru or metadata must be specified"));
+
+    return res;
+}
+#endif

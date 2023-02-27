@@ -2,7 +2,7 @@
 
 namespace LowFive
 {
-
+#if H5_VERS_MINOR == 12
 struct HardLink : public Object
 {
     Object* target;
@@ -46,5 +46,6 @@ struct SoftLink: public Object
         Object::print(depth);
     }
 };
+#endif
 
 }

@@ -27,8 +27,10 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o)
     }
     else if (o->type == ObjectType::HardLink)
         throw MetadataError("cannot serialize hard links");
+#if (H5_VERS_MINOR == 12)
     else if (o->type == ObjectType::SoftLink)
         diy::save(bb, static_cast<SoftLink*>(o)->target);
+#endif
 
     for (Object* child : o->children)
         serialize(bb, child);
@@ -88,9 +90,13 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
         throw MetadataError("cannot deserialize hard links");
     else if (type == ObjectType::HardLink)
     {
+#if (H5_VERS_MINOR == 12)
         std::string target;
         diy::load(bb, target);
         o = new SoftLink(name, target);
+#else
+        MetadataError("unhandled case in deserialization");
+#endif
     } else
         MetadataError("unhandled case in deserialization");
 

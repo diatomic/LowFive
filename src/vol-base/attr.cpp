@@ -1,6 +1,242 @@
 #include <lowfive/vol-base.hpp>
 #include "../log-private.hpp"
 
+#if (H5_VERS_MINOR == 12)
+
+/*-------------------------------------------------------------------------
+ * Function:    attr_get
+ *
+ * Purpose:     Gets information about an attribute
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_attr_get(void *obj, H5VL_attr_get_args_t* get_type, hid_t dxpl_id,
+    void **req, va_list arguments)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Get");
+
+    ret_value = o->vol->attr_get(o->under_object, get_type, dxpl_id, req, arguments);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end attr_get() */
+
+herr_t
+LowFive::VOLBase::
+attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
+    void **req, va_list arguments)
+{
+    return H5VLattr_get(obj, info->under_vol_id, get_type, dxpl_id, req, arguments);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    attr_specific
+ *
+ * Purpose:     Specific operation on attribute
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
+    H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Specific");
+
+    ret_value = o->vol->attr_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end attr_specific() */
+
+herr_t
+LowFive::VOLBase::
+attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
+    H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+{
+    return H5VLattr_specific(obj, loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    attr_optional
+ *
+ * Purpose:     Perform a connector-specific operation on an attribute
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
+    va_list arguments)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Optional");
+
+    ret_value = o->vol->attr_optional(o->under_object, opt_type, dxpl_id, req, arguments);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end attr_optional() */
+
+herr_t
+LowFive::VOLBase::
+attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
+    va_list arguments)
+{
+    return H5VLattr_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
+}
+
+
+#elif (H5_VERS_MINOR == 14)
+
+/*-------------------------------------------------------------------------
+ * Function:    attr_get
+ *
+ * Purpose:     Gets information about an attribute
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Get");
+
+    ret_value = o->vol->attr_get(o->under_object, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end attr_get() */
+
+herr_t
+LowFive::VOLBase::
+attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLattr_get(obj, info->under_vol_id, args, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    attr_specific
+ *
+ * Purpose:     Specific operation on attribute
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
+    H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Specific");
+
+    ret_value = o->vol->attr_specific(o->under_object, loc_params, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end attr_specific() */
+
+herr_t
+LowFive::VOLBase::
+attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
+H5VL_attr_specific_args_t* arguments, hid_t dxpl_id, void **req)
+{
+    return H5VLattr_specific(obj, loc_params, info->under_vol_id, arguments, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    attr_optional
+ *
+ * Purpose:     Perform a connector-specific operation on an attribute
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)obj;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Optional");
+
+    ret_value = o->vol->attr_optional(o->under_object, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end attr_optional() */
+
+herr_t
+LowFive::VOLBase::
+attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLattr_optional(obj, info->under_vol_id, args, dxpl_id, req);
+}
+
+#endif
 /*-------------------------------------------------------------------------
  * Function:    attr_create
  *
@@ -171,123 +407,6 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf,
     hid_t dxpl_id, void **req)
 {
     return H5VLattr_write(attr, info->under_vol_id, mem_type_id, buf, dxpl_id, req);
-}
-
-/*-------------------------------------------------------------------------
- * Function:    attr_get
- *
- * Purpose:     Gets information about an attribute
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
-    void **req, va_list arguments)
-{
-    auto log = get_logger();
-
-    pass_through_t *o = (pass_through_t *)obj;
-    herr_t ret_value;
-
-    log->debug("------- PASS THROUGH VOL ATTRIBUTE Get");
-
-    ret_value = o->vol->attr_get(o->under_object, get_type, dxpl_id, req, arguments);
-
-    /* Check for async request */
-    if(req && *req)
-        *req = o->create(*req);
-
-    return ret_value;
-} /* end attr_get() */
-
-herr_t
-LowFive::VOLBase::
-attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
-    void **req, va_list arguments)
-{
-    return H5VLattr_get(obj, info->under_vol_id, get_type, dxpl_id, req, arguments);
-}
-
-/*-------------------------------------------------------------------------
- * Function:    attr_specific
- *
- * Purpose:     Specific operation on attribute
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
-    H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
-{
-    auto log = get_logger();
-
-    pass_through_t *o = (pass_through_t *)obj;
-    herr_t ret_value;
-
-    log->debug("------- PASS THROUGH VOL ATTRIBUTE Specific");
-
-    ret_value = o->vol->attr_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
-
-    /* Check for async request */
-    if(req && *req)
-        *req = o->create(*req);
-
-    return ret_value;
-} /* end attr_specific() */
-
-herr_t
-LowFive::VOLBase::
-attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
-    H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
-{
-    return H5VLattr_specific(obj, loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
-}
-
-/*-------------------------------------------------------------------------
- * Function:    attr_optional
- *
- * Purpose:     Perform a connector-specific operation on an attribute
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
-    va_list arguments)
-{
-    auto log = get_logger();
-
-    pass_through_t *o = (pass_through_t *)obj;
-    herr_t ret_value;
-
-    log->debug("------- PASS THROUGH VOL ATTRIBUTE Optional");
-
-    ret_value = o->vol->attr_optional(o->under_object, opt_type, dxpl_id, req, arguments);
-
-    /* Check for async request */
-    if(req && *req)
-        *req = o->create(*req);
-
-    return ret_value;
-} /* end attr_optional() */
-
-herr_t
-LowFive::VOLBase::
-attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
-    va_list arguments)
-{
-    return H5VLattr_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
 }
 
 /*-------------------------------------------------------------------------
