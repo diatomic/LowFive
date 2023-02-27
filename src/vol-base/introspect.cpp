@@ -72,17 +72,13 @@ _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *sup
 
     log->debug("------- PASS THROUGH VOL INTROSPECT OptQuery");
 
-    ret_value = o->vol->introspect_opt_query(o->under_object, cls, opt_type, supported);
+    uint64_t dummy_flags;
+
+    ret_value = o->vol->introspect_opt_query(o->under_object, cls, opt_type, supported, &dummy_flags);
 
     return ret_value;
 } /* end introspect_opt_query() */
 
-herr_t
-LowFive::VOLBase::
-introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
-{
-    return H5VLintrospect_opt_query(obj, info->under_vol_id, cls, opt_type, supported);
-}
 
 #elif (H5_VERS_MINOR == 14)
 

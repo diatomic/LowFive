@@ -353,7 +353,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
             {
                 log->trace("attr_specific: specific_type H5VL_ATTR_EXISTS");
-                result = attr_exists(mdata_obj->locate(*loc_params).exact(), arguments);
+                result = attr_exists12(mdata_obj->locate(*loc_params).exact(), arguments);
 
                 break;
             }

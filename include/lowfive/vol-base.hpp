@@ -11,11 +11,6 @@
 namespace LowFive
 {
 
-// define placeholders for types that appeared in HDF5 1.14
-// so that we can have syntactically correct signatures
-#if (H5_VERS_MINOR == 12)
-using H5VL_attr_get_t = void;
-#endif
 
 // base class for VOL object
 struct VOLBase
@@ -122,6 +117,7 @@ struct VOLBase
     virtual herr_t          attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req);
 #if (H5_VERS_MINOR==12)
     static herr_t          _attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t         attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);

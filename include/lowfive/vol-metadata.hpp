@@ -207,7 +207,8 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
     htri_t          attr_exists12(Object *mdata_obj, va_list arguments);
-    herr_t          attr_iter(void *obj, va_list arguments);
+    herr_t          attr_iter(void *obj, va_list arguments);  // to use in HDF5 1.12
+    herr_t          attr_iter(void *obj, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data);
 
     void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
     herr_t          object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req) override;
@@ -216,12 +217,10 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments) override;
 
     herr_t          introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls) override;
-    herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported) override;
-
+    herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported, uint64_t* flags) override;
     herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx) override;
     herr_t          blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx) override;
-    herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args) override;
-
+    herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments) override;
 #elif H5_VERS_MINOR == 14
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
     herr_t          file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req) override;

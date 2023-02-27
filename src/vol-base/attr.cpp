@@ -15,7 +15,7 @@
  */
 herr_t
 LowFive::VOLBase::
-_attr_get(void *obj, H5VL_attr_get_args_t* get_type, hid_t dxpl_id,
+_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
     auto log = get_logger();
