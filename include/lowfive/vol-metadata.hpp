@@ -52,6 +52,8 @@ struct MetadataVOL: public LowFive::VOLBase
 
                     ~MetadataVOL();
 
+    static MetadataVOL&         get_metadata_vol();
+
     //bool dont_wrap = false;
     std::unordered_set<void*>   our_objects;
     bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }

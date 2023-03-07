@@ -41,6 +41,9 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
                         local(local_), intercomms(std::move(intercomms_))
                     {}
 
+    static DistMetadataVOL&         get_dist_metadata_vol(communicator local_, communicator intercomm_);
+    static DistMetadataVOL&         get_dist_metadata_vol(communicator local_, communicators intercomms_);
+
     // record intercomm to use for a dataset
     void set_intercomm(std::string filename, std::string full_path, int intercomm_index)
     {

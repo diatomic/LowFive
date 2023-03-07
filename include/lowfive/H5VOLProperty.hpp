@@ -15,7 +15,7 @@ struct H5VOLProperty
     }
             ~H5VOLProperty()
     {
-        H5VLterminate(vol_id);
+//        H5VLterminate(vol_id);
         H5VLunregister_connector(vol_id);
         assert(H5VLis_connector_registered_by_name(vol_plugin.name.c_str()) == 0);
     }

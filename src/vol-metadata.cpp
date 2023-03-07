@@ -84,3 +84,18 @@ clear_files()
     }
     files.clear();
 }
+
+LowFive::MetadataVOL& LowFive::MetadataVOL::
+get_metadata_vol()
+{
+    auto log = get_logger();
+    log->trace("Enter get_metadata_vol");
+
+    if (!info->vol)
+    {
+        log->trace("In get_metadata_vol: info->vol is NULL, creating new MetadataVOL");
+        info->vol = new MetadataVOL();
+    }
+
+    return *dynamic_cast<MetadataVOL*>(info->vol);
+}

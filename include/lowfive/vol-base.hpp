@@ -75,6 +75,8 @@ struct VOLBase
                             VOLBase();
                             ~VOLBase();
 
+//    static VOLBase&         get_vol_base();
+
     virtual void            drop(void* p)       {}
 
     hid_t                   register_plugin();
