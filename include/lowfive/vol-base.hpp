@@ -75,6 +75,13 @@ struct VOLBase
                             VOLBase();
                             ~VOLBase();
 
+                            // prohibit copy ctor and assignment
+                            VOLBase(const VOLBase&) = delete;
+                            VOLBase& operator=(const VOLBase&) = delete;
+
+                            VOLBase(VOLBase&&) = default;
+                            VOLBase& operator=(VOLBase&&) = default;
+
 //    static VOLBase&         get_vol_base();
 
     virtual void            drop(void* p)       {}

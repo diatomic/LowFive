@@ -52,6 +52,13 @@ struct MetadataVOL: public LowFive::VOLBase
 
                     ~MetadataVOL();
 
+                    // prohibit copying
+                    MetadataVOL(const MetadataVOL&)=delete;
+                    MetadataVOL& operator=(const MetadataVOL&)=delete;
+
+                    MetadataVOL(MetadataVOL&&)=default;
+                    MetadataVOL& operator=(MetadataVOL&&)=default;
+
     static MetadataVOL&         get_metadata_vol();
 
     //bool dont_wrap = false;

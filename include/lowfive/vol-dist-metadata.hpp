@@ -41,6 +41,13 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
                         local(local_), intercomms(std::move(intercomms_))
                     {}
 
+                    // prohibit copy
+                    DistMetadataVOL(const DistMetadataVOL&)=delete;
+                    DistMetadataVOL& operator=(const DistMetadataVOL&)=delete;
+
+                    DistMetadataVOL(DistMetadataVOL&&)=default;
+                    DistMetadataVOL& operator=(DistMetadataVOL&&)=default;
+
     static DistMetadataVOL&         get_dist_metadata_vol(communicator local_, communicator intercomm_);
     static DistMetadataVOL&         get_dist_metadata_vol(communicator local_, communicators intercomms_);
 
