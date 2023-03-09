@@ -74,7 +74,7 @@ locate(std::string filename, std::string full_path) const
     return it->second->search(full_path).exact();
 }
 
-    
+
 void
 LowFive::MetadataVOL::
 clear_files()
@@ -86,7 +86,7 @@ clear_files()
 }
 
 LowFive::MetadataVOL& LowFive::MetadataVOL::
-get_metadata_vol()
+create_metadata_VOL()
 {
     auto log = get_logger();
     log->trace("Enter get_metadata_vol");
@@ -95,6 +95,9 @@ get_metadata_vol()
     {
         log->trace("In get_metadata_vol: info->vol is NULL, creating new MetadataVOL");
         info->vol = new MetadataVOL();
+    } else
+    {
+        log->warn("In get_metadata_vol: info->vol is not NULL, return existing object");
     }
 
     return *dynamic_cast<MetadataVOL*>(info->vol);

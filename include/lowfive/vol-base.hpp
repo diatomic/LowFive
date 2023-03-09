@@ -72,17 +72,23 @@ struct VOLBase
     static H5VL_class_t     connector;      // need this static for H5PL_* functions (for automatic plugin loading via environment variables)
     static hid_t            connector_id;   // static only because of term()
 
+                            // prohibit copy/move ctor and assignment, make
+                            // default ctor private
+    protected:
                             VOLBase();
-                            ~VOLBase();
+    public:
+                            // we delete VOL objects by delete info->vol, so we
+                            // must have virtual destructor
+                            virtual ~VOLBase();
 
-                            // prohibit copy ctor and assignment
                             VOLBase(const VOLBase&) = delete;
+                            VOLBase(VOLBase&&) = delete;
+
                             VOLBase& operator=(const VOLBase&) = delete;
+                            VOLBase& operator=(VOLBase&&) = delete;
 
-                            VOLBase(VOLBase&&) = default;
-                            VOLBase& operator=(VOLBase&&) = default;
-
-//    static VOLBase&         get_vol_base();
+//    we do not instantiate VOLBase, so no create function
+//    static VOLBase&         create_vol_base();
 
     virtual void            drop(void* p)       {}
 

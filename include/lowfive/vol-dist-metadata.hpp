@@ -34,22 +34,24 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     // callbacks
     ServeIndices        serve_indices;
 
+    protected:
                     DistMetadataVOL(communicator  local_, communicator  intercomm_);
 
                     DistMetadataVOL(communicator            local_,
                                     communicators           intercomms_):
                         local(local_), intercomms(std::move(intercomms_))
                     {}
+    public:
 
-                    // prohibit copy
+                    // prohibit copy and move
                     DistMetadataVOL(const DistMetadataVOL&)=delete;
+                    DistMetadataVOL(DistMetadataVOL&&)=delete;
+
                     DistMetadataVOL& operator=(const DistMetadataVOL&)=delete;
+                    DistMetadataVOL& operator=(DistMetadataVOL&&)=delete;
 
-                    DistMetadataVOL(DistMetadataVOL&&)=default;
-                    DistMetadataVOL& operator=(DistMetadataVOL&&)=default;
-
-    static DistMetadataVOL&         get_dist_metadata_vol(communicator local_, communicator intercomm_);
-    static DistMetadataVOL&         get_dist_metadata_vol(communicator local_, communicators intercomms_);
+    static DistMetadataVOL&         create_dist_metadata_VOL(communicator local_, communicator intercomm_);
+    static DistMetadataVOL&         create_dist_metadata_VOL(communicator local_, communicators intercomms_);
 
     // record intercomm to use for a dataset
     void set_intercomm(std::string filename, std::string full_path, int intercomm_index)

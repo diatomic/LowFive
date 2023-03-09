@@ -351,21 +351,24 @@ producer_signal_done()
 }
 
 DistMetadataVOL&
-DistMetadataVOL::get_dist_metadata_vol(communicator local_, communicator intercomm_)
+DistMetadataVOL::create_dist_metadata_VOL(communicator local_, communicator intercomm_)
 {
-    return get_dist_metadata_vol(local_, communicators{intercomm_});
+    return create_dist_metadata_VOL(local_, communicators{intercomm_});
 }
 
 DistMetadataVOL&
-DistMetadataVOL::get_dist_metadata_vol(communicator local_, communicators intercomms_)
+DistMetadataVOL::create_dist_metadata_VOL(communicator local_, communicators intercomms_)
 {
     auto log = get_logger();
-    log->trace("Enter get_dist_metadata_vol");
+    log->trace("Enter create_dist_metadata_VOL");
 
     if (!info->vol)
     {
-        log->trace("In ge_dist_metadata_vol: info->vol is NULL, creating new MetadataVOL");
+        log->trace("In create_dist_metadata_VOL: info->vol is NULL, creating new DistMetadataVOL");
         info->vol = new DistMetadataVOL(local_, intercomms_);
+    } else
+    {
+        log->warn("In create_dist_metadata_VOL: info->vol is not NULL, return existing DistMetadataVOL, arguments ignored");
     }
 
     return *dynamic_cast<DistMetadataVOL*>(info->vol);

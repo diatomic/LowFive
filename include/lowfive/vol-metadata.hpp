@@ -47,19 +47,21 @@ struct MetadataVOL: public LowFive::VOLBase
     BeforeFileOpen              before_file_open;
     AfterDatasetWrite           after_dataset_write;
 
+    protected:
                     MetadataVOL()
                     {}
+    public:
 
-                    ~MetadataVOL();
+                    ~MetadataVOL() override;
 
-                    // prohibit copying
+                    // prohibit copy and move
                     MetadataVOL(const MetadataVOL&)=delete;
+                    MetadataVOL(MetadataVOL&&)=delete;
+
                     MetadataVOL& operator=(const MetadataVOL&)=delete;
+                    MetadataVOL& operator=(MetadataVOL&&)=delete;
 
-                    MetadataVOL(MetadataVOL&&)=default;
-                    MetadataVOL& operator=(MetadataVOL&&)=default;
-
-    static MetadataVOL&         get_metadata_vol();
+    static MetadataVOL&         create_metadata_VOL();
 
     //bool dont_wrap = false;
     std::unordered_set<void*>   our_objects;

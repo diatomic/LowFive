@@ -32,7 +32,7 @@ void producer1_f (communicator& local, const std::vector<communicator>& intercom
     //            shared, local.size(), intercomms.size(), intercomms[0].size());
 
     // set up lowfive
-    l5::DistMetadataVOL& vol_plugin = l5::DistMetadataVOL::get_dist_metadata_vol(local, intercomms);
+    l5::DistMetadataVOL& vol_plugin = l5::DistMetadataVOL::create_dist_metadata_VOL(local, intercomms);
 
     // set up file access property list
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
