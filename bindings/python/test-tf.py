@@ -13,7 +13,7 @@ if not file and not memory:
     file = True
 
 import lowfive
-vol = lowfive.MetadataVOL()
+vol = lowfive.create_metadata_VOL()
 if file:
     vol.set_passthru("*","*")
 if memory:

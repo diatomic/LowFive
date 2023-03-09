@@ -45,3 +45,7 @@ if                          (lowfive_install_examples)
                             GROUP_READ GROUP_WRITE GROUP_EXECUTE
                             WORLD_READ WORLD_WRITE WORLD_EXECUTE)
 endif                       ()
+
+add_executable              (prod-metadata-only prod-metadata-only.cpp)
+target_link_libraries       (prod-metadata-only ${libraries})
+set_target_properties       (prod-metadata-only PROPERTIES PREFIX "")

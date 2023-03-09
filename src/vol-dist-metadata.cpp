@@ -8,7 +8,9 @@
 
 #include "vol-metadata-private.hpp"     // ObjectPointers
 
-LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
+namespace LowFive {
+
+DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
     DistMetadataVOL(local_, communicators { std::move(intercomm_) })
 {
     auto log = get_logger();
@@ -17,7 +19,7 @@ LowFive::DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  in
 
 
 int
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 remote_size(int intercomm_index)
 {
     // get the remote size of the intercomm: different logic for inter- and intra-comms
@@ -32,7 +34,7 @@ remote_size(int intercomm_index)
 }
 
 void
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 serve_all(bool delete_data)
 {
     auto log = get_logger();
@@ -69,7 +71,7 @@ serve_all(bool delete_data)
 }
 
 void
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 broadcast_files(int root)
 {
     diy::mpi::communicator local_(local);
@@ -102,7 +104,7 @@ broadcast_files(int root)
 }
 
 void
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath)
 {
     Object* mdata_obj = (Object*) result->mdata_obj;
@@ -127,7 +129,7 @@ make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string>
 }
 
 void*
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
     auto log = get_logger();
@@ -151,7 +153,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
 }
 
 void*
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     auto log = get_logger();
@@ -184,7 +186,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 }
 
 herr_t
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
     auto log = get_logger();
@@ -211,7 +213,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
 }
 
 void*
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     auto log = get_logger();
@@ -262,7 +264,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 }
 
 herr_t
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
     ++file_close_counter_;
@@ -316,8 +318,8 @@ file_close(void *file, hid_t dxpl_id, void **req)
     return MetadataVOL::file_close(file, dxpl_id, req);     // this is almost redundant; removes mdata_obj, if it's a File
 }
 
-LowFive::DistMetadataVOL::FileNames
-LowFive::DistMetadataVOL::
+DistMetadataVOL::FileNames
+DistMetadataVOL::
 get_filenames(int intercomm_index)
 {
     auto log = get_logger();
@@ -327,7 +329,7 @@ get_filenames(int intercomm_index)
 }
 
 void
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 send_done(int intercomm_index)
 {
     auto log = get_logger();
@@ -337,7 +339,7 @@ send_done(int intercomm_index)
 }
 
 void
-LowFive::DistMetadataVOL::
+DistMetadataVOL::
 producer_signal_done()
 {
     auto log = get_logger();
@@ -347,3 +349,29 @@ producer_signal_done()
     Index index(local, intercomms, &files);
     index.serve();
 }
+
+DistMetadataVOL&
+DistMetadataVOL::create_dist_metadata_VOL(communicator local_, communicator intercomm_)
+{
+    return create_dist_metadata_VOL(local_, communicators{intercomm_});
+}
+
+DistMetadataVOL&
+DistMetadataVOL::create_dist_metadata_VOL(communicator local_, communicators intercomms_)
+{
+    auto log = get_logger();
+    log->trace("Enter create_dist_metadata_VOL");
+
+    if (!info->vol)
+    {
+        log->trace("In create_dist_metadata_VOL: info->vol is NULL, creating new DistMetadataVOL");
+        info->vol = new DistMetadataVOL(local_, intercomms_);
+    } else
+    {
+        log->warn("In create_dist_metadata_VOL: info->vol is not NULL, return existing DistMetadataVOL, arguments ignored");
+    }
+
+    return *dynamic_cast<DistMetadataVOL*>(info->vol);
+}
+
+} // namespace LowFive

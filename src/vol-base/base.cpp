@@ -214,6 +214,9 @@ _term(void)
     // Reset VOL ID
     connector_id = H5I_INVALID_HID;     // NB: this is the only reason connector_id is static
 
+    delete info->vol;
+    info->vol = nullptr;
+
     return result;
 }
 

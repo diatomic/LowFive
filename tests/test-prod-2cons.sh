@@ -10,8 +10,10 @@ file=$7
 shared=$8
 
 if [ $shared == 0 ]; then
+    echo "mpiexec -n $num_procs $bin_dir/prod-2cons-multidata-test -m $memory -f $file --prod_exec $bin_dir/$producer --con1_exec $bin_dir/$consumer1 --con2_exec $bin_dir/$consumer2"
     mpiexec -n $num_procs $bin_dir/prod-2cons-multidata-test -m $memory -f $file --prod_exec $bin_dir/$producer --con1_exec $bin_dir/$consumer1 --con2_exec $bin_dir/$consumer2
 else
+    echo "mpiexec -n $num_procs $bin_dir/prod-2cons-multidata-test -m $memory -f $file -s --prod_exec $bin_dir/$producer --con1_exec $bin_dir/$consumer1 --con2_exec $bin_dir/$consumer2"
     mpiexec -n $num_procs $bin_dir/prod-2cons-multidata-test -m $memory -f $file -s --prod_exec $bin_dir/$producer --con1_exec $bin_dir/$consumer1 --con2_exec $bin_dir/$consumer2
 fi
 
