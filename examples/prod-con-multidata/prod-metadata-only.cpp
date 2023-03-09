@@ -90,7 +90,7 @@ int main(int argc, char** argv)
         domain.max[i] = 10;
     }
 
-    l5::MetadataVOL& vol = l5::MetadataVOL::create_metadata_VOL();
+    l5::MetadataVOL& vol = l5::MetadataVOL::create_MetadataVOL();
 
     //vol.set_keep(keep);
 

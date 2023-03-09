@@ -42,31 +42,31 @@ PYBIND11_MODULE(_lowfive, m)
 #endif
 
     m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
-    m.def("create_metadata_VOL", &LowFive::MetadataVOL::create_metadata_VOL, "Get MetadataVOL object", py::return_value_policy::reference);
-    m.def("create_dist_metadata_VOL", [](py::capsule local, py::capsule intercomm) -> LowFive::DistMetadataVOL&
+    m.def("create_MetadataVOL", &LowFive::MetadataVOL::create_MetadataVOL, "Get MetadataVOL object", py::return_value_policy::reference);
+    m.def("create_DistMetadataVOL", [](py::capsule local, py::capsule intercomm) -> LowFive::DistMetadataVOL&
                       {
-                        return LowFive::DistMetadataVOL::create_dist_metadata_VOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm));
+                        return LowFive::DistMetadataVOL::create_DistMetadataVOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm));
                       },  "local"_a, "intercomm"_a,  "construct the object", py::return_value_policy::reference);
 
-    m.def("create_dist_metadata_VOL", [](py::capsule local, std::vector<py::capsule> intercomms) -> LowFive::DistMetadataVOL&
+    m.def("create_DistMetadataVOL", [](py::capsule local, std::vector<py::capsule> intercomms) -> LowFive::DistMetadataVOL&
                       {
                           MPI_Comm local_ = from_capsule<MPI_Comm>(local);
                           std::vector<MPI_Comm> intercomms_;
                           for (auto& c : intercomms)
                             intercomms_.push_back(from_capsule<MPI_Comm>(c));
-                          return LowFive::DistMetadataVOL::create_dist_metadata_VOL(local_, intercomms_);
+                          return LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_);
                       }, "local"_a, "intercomms"_a, "construct the object", py::return_value_policy::reference);
 
 #if defined(LOWFIVE_MPI4PY)
-    m.def("create_dist_metadata_VOL", [](mpi4py_comm local, mpi4py_comm intercomm) ->LowFive::DistMetadataVOL&
+    m.def("create_DistMetadataVOL", [](mpi4py_comm local, mpi4py_comm intercomm) ->LowFive::DistMetadataVOL&
         {
-            return LowFive::DistMetadataVOL::create_dist_metadata_VOL(local, intercomm);
+            return LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm);
         },  "local"_a, "intercomm"_a,  "construct the object", py::return_value_policy::reference);
-    m.def("create_dist_metadata_VOL", [](mpi4py_comm local, std::vector<mpi4py_comm> intercomms) -> LowFive::DistMetadataVOL&
+    m.def("create_DistMetadataVOL", [](mpi4py_comm local, std::vector<mpi4py_comm> intercomms) -> LowFive::DistMetadataVOL&
                       {
                           MPI_Comm local_ = local;
                           std::vector<MPI_Comm> intercomms_(intercomms.begin(), intercomms.end());
-                          return LowFive::DistMetadataVOL::create_dist_metadata_VOL(local_, intercomms_);
+                          return LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_);
                       }, "local"_a, "intercomms"_a, "construct the object", py::return_value_policy::reference);
 #endif
 

@@ -27,7 +27,7 @@ producer = rank < producer_ranks
 local = world.Split(producer)
 intercomm = local.Create_intercomm(0, world, 0 if not producer else producer_ranks, 0)
 
-vol = lowfive.create_dist_metadata_VOL(local, intercomm)
+vol = lowfive.create_DistMetadataVOL(local, intercomm)
 if file:
     vol.set_passthru("*","*")
 if memory:

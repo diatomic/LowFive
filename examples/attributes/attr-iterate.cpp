@@ -107,7 +107,7 @@ int main(int argc, char**argv)
     LowFive::LocationPattern particles { "outfile.h5", "/group1/particles"};
 
     // create the vol plugin
-    l5::MetadataVOL& vol_plugin = l5::MetadataVOL::create_metadata_VOL();
+    l5::MetadataVOL& vol_plugin = l5::MetadataVOL::create_MetadataVOL();
     if (metadata)
     {
         //vol_plugin.memory.push_back(all);

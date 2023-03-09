@@ -2,7 +2,7 @@ import lowfive      # lowfive needs to be imported before h5py
 import h5py
 import numpy as np
 
-vol = lowfive.create_metadata_VOL()
+vol = lowfive.create_MetadataVOL()
 vol.set_memory("*","*")
 
 with h5py.File('foo.h5', 'w') as f:

@@ -50,8 +50,8 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
                     DistMetadataVOL& operator=(const DistMetadataVOL&)=delete;
                     DistMetadataVOL& operator=(DistMetadataVOL&&)=delete;
 
-    static DistMetadataVOL&         create_dist_metadata_VOL(communicator local_, communicator intercomm_);
-    static DistMetadataVOL&         create_dist_metadata_VOL(communicator local_, communicators intercomms_);
+    static DistMetadataVOL&         create_DistMetadataVOL(communicator local_, communicator intercomm_);
+    static DistMetadataVOL&         create_DistMetadataVOL(communicator local_, communicators intercomms_);
 
     // record intercomm to use for a dataset
     void set_intercomm(std::string filename, std::string full_path, int intercomm_index)

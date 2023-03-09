@@ -61,7 +61,7 @@ struct MetadataVOL: public LowFive::VOLBase
                     MetadataVOL& operator=(const MetadataVOL&)=delete;
                     MetadataVOL& operator=(MetadataVOL&&)=delete;
 
-    static MetadataVOL&         create_metadata_VOL();
+    static MetadataVOL&         create_MetadataVOL();
 
     //bool dont_wrap = false;
     std::unordered_set<void*>   our_objects;

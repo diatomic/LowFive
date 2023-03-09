@@ -86,7 +86,7 @@ clear_files()
 }
 
 LowFive::MetadataVOL& LowFive::MetadataVOL::
-create_metadata_VOL()
+create_MetadataVOL()
 {
     auto log = get_logger();
     log->trace("Enter get_metadata_vol");
