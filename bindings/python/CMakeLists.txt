@@ -24,3 +24,11 @@ if                          (MPI4Py_FOUND)
     target_include_directories  (_lowfive PUBLIC ${MPI4Py_INCLUDE_DIR})
 endif()
 
+# install _lowfive, __init__.py, and set PYTHONPATH for spack
+list                        (APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/ext/pybind11/tools")
+find_package                (PythonLibsNew)
+string                      (REPLACE ${PYTHON_PREFIX}/ "" PYTHON_SITE_PACKAGES_RELATIVE ${PYTHON_SITE_PACKAGES})
+install                     (TARGETS _lowfive LIBRARY DESTINATION ${PYTHON_SITE_PACKAGES_RELATIVE})
+install                     (FILES lowfive/__init__.py DESTINATION ${PYTHON_SITE_PACKAGES_RELATIVE})
+
+
