@@ -17,6 +17,7 @@ class Lowfive(CMakePackage):
 
     variant("examples", default=False, description="Install the examples")
     variant("auto_load", default=True, description="Set LowFive environment variables")
+    variant("python", default=True, description="Install Python bindings")
 
     depends_on('mpich')
     depends_on('hdf5+mpi+hl@1.12.1 ^mpich', type='link')
