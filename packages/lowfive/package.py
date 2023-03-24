@@ -21,14 +21,21 @@ class Lowfive(CMakePackage):
     depends_on('mpich')
     depends_on('hdf5+mpi+hl@1.12.1 ^mpich', type='link')
 
-    extends("python")       # brings pylowfive into PYTHONPATH
+    extends("python", when="+python")       # brings pylowfive into PYTHONPATH
 
     def cmake_args(self):
         args = ['-DCMAKE_C_COMPILER=%s' % self.spec['mpi'].mpicc,
                 '-DCMAKE_CXX_COMPILER=%s' % self.spec['mpi'].mpicxx,
                 '-DBUILD_SHARED_LIBS=false',
-                self.define_from_variant('lowfive_install_examples', 'examples')]
+                self.define_from_variant('lowfive_install_examples', 'examples'),
+                self.define_from_variant('lowfive_python', 'python'),
+        ]
+
+        if self.spec.satisfies("+python"):
+            args += [self.define("PYTHON_EXECUTABLE", self.spec["python"].command.path)]
+
         return args
+
 
     def setup_run_environment(self, env):
         if "+auto_load" in self.spec:
