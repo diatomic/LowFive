@@ -23,6 +23,7 @@ class Lowfive(CMakePackage):
     depends_on('hdf5+mpi+hl@1.12.1 ^mpich', type='link')
 
     extends("python", when="+python")       # brings pylowfive into PYTHONPATH
+    depends_on("py-mpi4py", when="+python", type=("build", "run"))
 
     def cmake_args(self):
         args = ['-DCMAKE_C_COMPILER=%s' % self.spec['mpi'].mpicc,
