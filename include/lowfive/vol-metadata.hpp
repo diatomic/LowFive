@@ -114,6 +114,13 @@ struct MetadataVOL: public LowFive::VOLBase
         after_dataset_write = adw;
     }
 
+    void unset_callbacks()
+    {
+        after_file_close = nullptr;
+        before_file_open = nullptr;
+        after_dataset_write = nullptr;
+    }
+
     void clear_files();
 
     // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
