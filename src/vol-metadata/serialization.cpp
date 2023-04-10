@@ -26,7 +26,7 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o)
             diy::save(bb, a->strings);
     }
     else if (o->type == ObjectType::HardLink)
-        throw MetadataError("cannot serialize hard links");
+        diy::save(bb, static_cast<HardLink*>(o)->target->fullname().second);
     else if (o->type == ObjectType::SoftLink)
         diy::save(bb, static_cast<SoftLink*>(o)->target);
 
@@ -34,8 +34,28 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o)
         serialize(bb, child);
 }
 
+namespace LowFive
+{
+using HardLinks = std::unordered_map<HardLink*, std::string>;
+Object* deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links);
+}
+
+// top-level call
 LowFive::Object*
 LowFive::deserialize(diy::BinaryBuffer& bb)
+{
+    HardLinks hard_links;
+    auto* o = deserialize(bb, hard_links);
+
+    // link the hard links
+    for (auto& x : hard_links)
+        x.first->target = o->search(x.second).exact();
+
+    return o;
+}
+
+LowFive::Object*
+LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links)
 {
     ObjectType type;
     std::string name;
@@ -84,9 +104,15 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
     }
     else if (type == ObjectType::NamedDtype)
         o = new NamedDtype(name);
-    else if (type == ObjectType::SoftLink)
-        throw MetadataError("cannot deserialize hard links");
     else if (type == ObjectType::HardLink)
+    {
+        std::string target;
+        diy::load(bb, target);
+        auto* hl = new HardLink(name, nullptr);
+        hard_links.emplace(hl, target);
+        o = hl;
+    }
+    else if (type == ObjectType::SoftLink)
     {
         std::string target;
         diy::load(bb, target);
@@ -95,7 +121,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
         MetadataError("unhandled case in deserialization");
 
     for (size_t i = 0; i < n_children; ++i)
-        o->add_child(deserialize(bb));
+        o->add_child(deserialize(bb, hard_links));
 
     return o;
 }
