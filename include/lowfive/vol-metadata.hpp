@@ -32,9 +32,9 @@ struct MetadataVOL: public LowFive::VOLBase
     using Files             = std::map<std::string, Object*>;       // Object*, to support both File and RemoteFile
     using LocationPatterns  = std::vector<LocationPattern>;
 
-    using AfterFileClose    = std::function<void()>;
-    using BeforeFileOpen    = std::function<void()>;
-    using AfterDatasetWrite = std::function<void()>;
+    using AfterFileClose     = std::function<void()>;
+    using BeforeFileOpen     = std::function<void()>;
+    using AfterDatasetWrite  = std::function<void()>;
 
     Files                       files;
     LocationPatterns            memory;

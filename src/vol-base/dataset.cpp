@@ -116,7 +116,19 @@ _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 
     log->debug("------- PASS THROUGH VOL DATASET Read");
 
+    if (o->vol->release_gil)
+    {
+        o->vol->release_gil;
+        log->debug("------- released GIL");
+    }
+
     ret_value = o->vol->dataset_read(o->under_object, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+
+    if (o->vol->acquire_gil)
+    {
+        o->vol->acquire_gil;
+        log->debug("------- acquired GIL");
+    }
 
     /* Check for async request */
     if(req && *req)
@@ -153,7 +165,19 @@ _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spa
 
     log->debug("------- PASS THROUGH VOL DATASET Write");
 
+    if (o->vol->release_gil)
+    {
+        o->vol->release_gil;
+        log->debug("------- released GIL");
+    }
+
     ret_value = o->vol->dataset_write(o->under_object, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+
+    if (o->vol->acquire_gil)
+    {
+        o->vol->acquire_gil;
+        log->debug("------- acquired GIL");
+    }
 
     /* Check for async request */
     if(req && *req)

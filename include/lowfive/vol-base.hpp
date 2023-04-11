@@ -3,6 +3,7 @@
 
 #include <string>
 #include <memory>
+#include <functional>
 
 #include <hdf5.h>
 
@@ -249,6 +250,22 @@ struct VOLBase
 
     static herr_t          _optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
     virtual herr_t          optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
+
+    using ReleaseGil = std::function<void()>;
+    using AcquireGil = std::function<void()>;
+
+    ReleaseGil release_gil;
+    AcquireGil acquire_gil;
+
+    void set_release_gil(ReleaseGil rg)
+    {
+        release_gil = rg;
+    }
+
+    void set_acquire_gil(AcquireGil ag)
+    {
+        acquire_gil = ag;
+    }
 };
 
 }

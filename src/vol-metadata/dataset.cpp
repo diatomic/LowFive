@@ -230,8 +230,19 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
         ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
     }
 
-    if (after_dataset_write)
+    // after_dataset_write callback may come from python,
+    // we must re-acquire GIL to call it
+    // after this, we can fall through to VOLBase, and we release the GIL again
+    if (after_dataset_write) {
+
+        if (acquire_gil)
+            acquire_gil();
+
         after_dataset_write();
+
+        if (release_gil)
+            release_gil();
+    }
 
     if (unwrap(dset_))
         return VOLBase::dataset_write(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
