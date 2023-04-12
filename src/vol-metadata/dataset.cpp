@@ -233,15 +233,9 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     // after_dataset_write callback may come from python,
     // we must re-acquire GIL to call it
     // after this, we can fall through to VOLBase, and we release the GIL again
-    if (after_dataset_write) {
-
-        if (acquire_gil)
-            acquire_gil();
-
+    if (after_dataset_write)
+    {
         after_dataset_write();
-
-        if (release_gil)
-            release_gil();
     }
 
     if (unwrap(dset_))

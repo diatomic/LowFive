@@ -170,35 +170,33 @@ PYBIND11_MODULE(_lowfive, m)
 #endif
 
     m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
-    m.def("_create_MetadataVOL", []() -> PyMetadataVOL&
+    m.def("_create_MetadataVOL", []() -> PyMetadataVOL*
                        {
                          auto* result = new PyMetadataVOL();
                          result->vol_ = &LowFive::MetadataVOL::create_MetadataVOL();
 
-                         result->state_ = PyThreadState_Get();
-                         auto release_gil_cb = [&]() { result->state_ = PyEval_SaveThread(); };
-                         auto restore_gil_cb = [&]() { PyEval_RestoreThread(result->state_); };
+                         auto release_gil_cb = [result]() { result->state_ = PyEval_SaveThread(); };
+                         auto restore_gil_cb = [result]() { PyEval_RestoreThread(result->state_); };
                          result->vol_->set_release_gil(release_gil_cb);
                          result->vol_->set_acquire_gil(restore_gil_cb);
 
-                         return *result;
+                         return result;
                        }, "Get MetadataVOL object", py::return_value_policy::reference);
-    m.def("_create_DistMetadataVOL", [](py::capsule local, py::capsule intercomm) -> PyDistMetadataVOL&
+    m.def("_create_DistMetadataVOL", [](py::capsule local, py::capsule intercomm) -> PyDistMetadataVOL*
                       {
                             auto* result = new PyDistMetadataVOL();
                             result->vol_ = &LowFive::DistMetadataVOL::create_DistMetadataVOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm));
 
-                            result->state_ = PyThreadState_Get();
-                            auto release_gil_cb = [&]() { result->state_ = PyEval_SaveThread(); };
-                            auto restore_gil_cb = [&]() { PyEval_RestoreThread(result->state_); };
+                            auto release_gil_cb = [result]() { result->state_ = PyEval_SaveThread(); };
+                            auto restore_gil_cb = [result]() { PyEval_RestoreThread(result->state_); };
                             result->vol_->set_release_gil(release_gil_cb);
                             result->vol_->set_acquire_gil(restore_gil_cb);
 
-                            return *result;
+                            return result;
 //                      },  "local"_a, "intercomm"_a,  "construct the object", py::return_value_policy::reference);
                       },  "local"_a, "intercomm"_a,  "construct the object");
 
-    m.def("_create_DistMetadataVOL", [](py::capsule local, std::vector<py::capsule> intercomms) -> PyDistMetadataVOL&
+    m.def("_create_DistMetadataVOL", [](py::capsule local, std::vector<py::capsule> intercomms) -> PyDistMetadataVOL*
                       {
                           auto* result = new PyDistMetadataVOL();
                           MPI_Comm local_ = from_capsule<MPI_Comm>(local);
@@ -207,45 +205,42 @@ PYBIND11_MODULE(_lowfive, m)
                             intercomms_.push_back(from_capsule<MPI_Comm>(c));
                           result->vol_ =  &LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_);
 
-                          result->state_ = PyThreadState_Get();
-                          auto release_gil_cb = [&]() { result->state_ = PyEval_SaveThread(); };
-                          auto restore_gil_cb = [&]() { PyEval_RestoreThread(result->state_); };
+                          auto release_gil_cb = [result]() { result->state_ = PyEval_SaveThread(); };
+                          auto restore_gil_cb = [result]() { PyEval_RestoreThread(result->state_); };
                           result->vol_->set_release_gil(release_gil_cb);
                           result->vol_->set_acquire_gil(restore_gil_cb);
 
-                          return *result;
+                          return result;
 //                      }, "local"_a, "intercomms"_a, "construct the object", py::return_value_policy::reference);
                       }, "local"_a, "intercomms"_a, "construct the object");
 
 #if defined(LOWFIVE_MPI4PY)
-    m.def("_create_DistMetadataVOL", [](mpi4py_comm local, mpi4py_comm intercomm) -> PyDistMetadataVOL&
+    m.def("_create_DistMetadataVOL", [](mpi4py_comm local, mpi4py_comm intercomm) -> PyDistMetadataVOL*
         {
             auto* result = new PyDistMetadataVOL();
             result->vol_ = &LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm);
 
-            result->state_ = PyThreadState_Get();
-            auto release_gil_cb = [&]() { result->state_ = PyEval_SaveThread(); };
-            auto restore_gil_cb = [&]() { PyEval_RestoreThread(result->state_); };
+            auto release_gil_cb = [result]() { result->state_ = PyEval_SaveThread(); };
+            auto restore_gil_cb = [result]() { PyEval_RestoreThread(result->state_); };
             result->vol_->set_release_gil(release_gil_cb);
             result->vol_->set_acquire_gil(restore_gil_cb);
 
-            return *result;
+            return result;
 //        },  "local"_a, "intercomm"_a,  "construct the object", py::return_value_policy::reference);
         },  "local"_a, "intercomm"_a,  "construct the object");
-    m.def("_create_DistMetadataVOL", [](mpi4py_comm local, std::vector<mpi4py_comm> intercomms) -> PyDistMetadataVOL&
+    m.def("_create_DistMetadataVOL", [](mpi4py_comm local, std::vector<mpi4py_comm> intercomms) -> PyDistMetadataVOL*
                       {
                           auto* result = new PyDistMetadataVOL();
                           MPI_Comm local_ = local;
                           std::vector<MPI_Comm> intercomms_(intercomms.begin(), intercomms.end());
                           result->vol_ = &LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_);
 
-                          result->state_ = PyThreadState_Get();
-                          auto release_gil_cb = [&]() { result->state_ = PyEval_SaveThread(); };
-                          auto restore_gil_cb = [&]() { PyEval_RestoreThread(result->state_); };
+                          auto release_gil_cb = [result]() { result->state_ = PyEval_SaveThread(); };
+                          auto restore_gil_cb = [result]() { PyEval_RestoreThread(result->state_); };
                           result->vol_->set_release_gil(release_gil_cb);
                           result->vol_->set_acquire_gil(restore_gil_cb);
 
-                          return *result;
+                          return result;
 //                      }, "local"_a, "intercomms"_a, "construct the object", py::return_value_policy::reference);
                       }, "local"_a, "intercomms"_a, "construct the object");
 #endif
