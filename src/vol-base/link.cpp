@@ -21,6 +21,7 @@ _link_create_reissue(H5VL_link_create_type_t create_type,
     void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id,
     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     // TODO: is this right? making a new object from the reissued one?
@@ -131,6 +132,7 @@ _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o_src = (pass_through_t *)src_obj;
@@ -195,6 +197,7 @@ _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o_src = (pass_through_t *)src_obj;
@@ -252,6 +255,7 @@ LowFive::VOLBase::
 _link_get(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -291,6 +295,7 @@ LowFive::VOLBase::
 _link_specific(void *obj, const H5VL_loc_params_t *loc_params, 
     H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -330,6 +335,7 @@ LowFive::VOLBase::
 _link_optional(void *obj, H5VL_link_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;

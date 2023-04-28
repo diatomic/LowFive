@@ -5,6 +5,7 @@ option                      (wrapped_mpi      "MPI compiler wrapper requires no 
 option                      (lowfive_python   "Build python bindings"                                 ON)
 option                      (lowfive_backward "Use backward-cpp for debugging"                        ON)
 option                      (lowfive_install_examples   "Install examples"                            OFF)
+option                      (lowfive_caliper  "Enable profiling with Caliper"                         OFF)
 
 # C++17
 if                          (NOT DEFINED CMAKE_CXX_STANDARD)
@@ -87,6 +88,14 @@ set                         (libraries
                              ${libraries}
                              ${CMAKE_THREAD_LIBS_INIT}
                              ${CMAKE_DL_LIBS})
+
+if(lowfive_caliper)
+    find_package(Caliper REQUIRED)
+    add_compile_definitions (LOWFIVE_USE_CALIPER)
+    set                     (libraries
+                             ${libraries}
+                             caliper)
+endif()
 
 add_subdirectory            (src)
 set                         (libraries ${libraries} lowfive lowfive-dist)

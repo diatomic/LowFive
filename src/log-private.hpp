@@ -6,6 +6,14 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
+#ifdef LOWFIVE_USE_CALIPER
+#include <caliper/cali.h>
+#else
+#define CALI_CXX_MARK_FUNCTION
+#define CALI_MARK_BEGIN(x) x;
+#define CALI_MARK_END(x) x;
+#endif
+
 namespace spdlog
 {
     class logger;

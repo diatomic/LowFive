@@ -37,6 +37,7 @@ void
 DistMetadataVOL::
 serve_all(bool delete_data)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
     log->trace("enter serve_all, files.size = {}", files.size());
 
@@ -189,6 +190,7 @@ herr_t
 DistMetadataVOL::
 dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_read");
     ObjectPointers* dset_ = (ObjectPointers*) dset;
@@ -200,7 +202,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         // if (file_space_id == H5S_ALL)
         //     file_space_id = H5Dget_space(?);
         // consumer with the name of a remote dataset: query to producer
+        CALI_MARK_BEGIN("dist_metadata_vol_dataset_read_query");
         ds->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
+        CALI_MARK_END("dist_metadata_vol_dataset_read_query");
     } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
     {
         return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);

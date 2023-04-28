@@ -17,6 +17,7 @@ _attr_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id,
     hid_t aapl_id, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *attr;
@@ -64,6 +65,7 @@ LowFive::VOLBase::
 _attr_open(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *attr;
@@ -109,6 +111,7 @@ LowFive::VOLBase::
 _attr_read(void *attr, hid_t mem_type_id, void *buf,
     hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)attr;
@@ -227,6 +230,7 @@ LowFive::VOLBase::
 _attr_specific(void *obj, const H5VL_loc_params_t *loc_params,
     H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -266,6 +270,7 @@ LowFive::VOLBase::
 _attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req,
     va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -304,6 +309,7 @@ herr_t
 LowFive::VOLBase::
 _attr_close(void *attr, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)attr;

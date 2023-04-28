@@ -14,6 +14,7 @@ herr_t
 LowFive::VOLBase::
 _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -53,6 +54,7 @@ herr_t
 LowFive::VOLBase::
 _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;

@@ -17,6 +17,7 @@ herr_t
 LowFive::VOLBase::
 _token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;

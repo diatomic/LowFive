@@ -17,6 +17,7 @@ void*
 LowFive::VOLBase::
 _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     info_t *info;
@@ -79,6 +80,7 @@ void*
 LowFive::VOLBase::
 _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     info_t *info;
@@ -140,6 +142,7 @@ LowFive::VOLBase::
 _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
     void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)file;
@@ -191,6 +194,7 @@ LowFive::VOLBase::
 _file_specific_reissue(void *obj, hid_t connector_id,
     H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...)
 {
+    CALI_CXX_MARK_FUNCTION;
     // TODO: is this right? making a new object from the reissued one?
     pass_through_t *o = (pass_through_t *)obj;
 
@@ -220,6 +224,7 @@ LowFive::VOLBase::
 _file_specific(void *file, H5VL_file_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)file;
@@ -335,6 +340,7 @@ LowFive::VOLBase::
 _file_optional(void *file, H5VL_file_optional_t opt_type,
     hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)file;
@@ -373,6 +379,7 @@ herr_t
 LowFive::VOLBase::
 _file_close(void *file, hid_t dxpl_id, void **req)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)file;

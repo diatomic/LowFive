@@ -233,6 +233,7 @@ herr_t
 LowFive::VOLBase::
 _optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;

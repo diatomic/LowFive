@@ -14,6 +14,7 @@ herr_t
 LowFive::VOLBase::
 _blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -37,6 +38,7 @@ herr_t
 LowFive::VOLBase::
 _blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -61,6 +63,7 @@ herr_t
 LowFive::VOLBase::
 _blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx)
 {
+    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;

@@ -49,6 +49,7 @@ struct IndexedDataset
 
     diy::MemoryBuffer       get_data(Dataspace fs)
     {
+        CALI_CXX_MARK_FUNCTION;
         auto log = get_logger();
         log->trace("In IndexedDataset::get_data(): {}", fs);
 
@@ -61,12 +62,14 @@ struct IndexedDataset
             {
                 Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   fs.id), true);
                 Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, fs.id), true);
+                CALI_MARK_BEGIN("diy::save");
                 diy::save(queue, file_src);
                 Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                 {
                   diy::save(queue, (char*) y.data + loc, len);
                   ++count_calls;
                 });
+                CALI_MARK_END("diy::save");
             }
         }
 

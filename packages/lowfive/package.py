@@ -18,6 +18,7 @@ class Lowfive(CMakePackage):
     variant("examples", default=False, description="Install the examples")
     variant("auto_load", default=True, description="Set LowFive environment variables")
     variant("python", default=True, description="Install Python bindings")
+    variant("caliper", default=False, description="Enable profiling with Caliper")
 
     depends_on('mpich')
     depends_on('hdf5+mpi+hl@1.12.1 ^mpich', type='link')
@@ -25,12 +26,15 @@ class Lowfive(CMakePackage):
     extends("python", when="+python")       # brings pylowfive into PYTHONPATH
     depends_on("py-mpi4py", when="+python", type=("build", "run"))
 
+    depends_on('caliper~adyak', when="+caliper")
+
     def cmake_args(self):
         args = ['-DCMAKE_C_COMPILER=%s' % self.spec['mpi'].mpicc,
                 '-DCMAKE_CXX_COMPILER=%s' % self.spec['mpi'].mpicxx,
                 '-DBUILD_SHARED_LIBS=false',
                 self.define_from_variant('lowfive_install_examples', 'examples'),
                 self.define_from_variant('lowfive_python', 'python'),
+                self.define_from_variant('lowfive_caliper', 'caliper'),
         ]
 
         if self.spec.satisfies("+python"):
