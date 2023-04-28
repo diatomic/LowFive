@@ -85,6 +85,7 @@ struct PyMetadataVOL: public PyVOLBase
     {
 //        std::cerr << "PyMetadataVOL::unset_callbacks called" << std::endl;
         py::gil_scoped_acquire acq;
+        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_callbacks();
         dynamic_cast<LowFive::MetadataVOL*>(vol_)->unset_callbacks();
     }
 
@@ -147,12 +148,6 @@ struct PyDistMetadataVOL: public PyMetadataVOL
     decltype(auto) get_file_close_counter() const
     {
         return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->file_close_counter_;
-    }
-
-    void unset_callbacks()
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_callbacks();
     }
 
     ~PyDistMetadataVOL()
@@ -257,7 +252,5 @@ PYBIND11_MODULE(_lowfive, m)
         .def("broadcast_files", &PyDistMetadataVOL::broadcast_files,         py::arg("root") = 0,
                                                                                     "broadcast file metadata to all ranks")
         .def("set_serve_indices", &PyDistMetadataVOL::set_serve_indices,     "set the serve_indices callback")
-        .def("unset_callbacks", &PyDistMetadataVOL::unset_callbacks,                 "unset DistMetadataVOL callbacks")
-
     ;
 }
