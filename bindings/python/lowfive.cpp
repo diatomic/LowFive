@@ -130,6 +130,7 @@ struct PyDistMetadataVOL: public PyMetadataVOL
 
     void set_serve_indices(LowFive::DistMetadataVOL::ServeIndices si)
     {
+        py::gil_scoped_acquire acq;
         dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_serve_indices(si);
     }
 
@@ -146,6 +147,19 @@ struct PyDistMetadataVOL: public PyMetadataVOL
     decltype(auto) get_file_close_counter() const
     {
         return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->file_close_counter_;
+    }
+
+    void unset_callbacks()
+    {
+        py::gil_scoped_acquire acq;
+        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_callbacks();
+    }
+
+    ~PyDistMetadataVOL()
+    {
+        py::gil_scoped_acquire acq;
+        //std::cerr << "~PyDistMetadataVOL: unsetting callbacks" << std::endl;
+        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_callbacks();
     }
 };
 
@@ -225,7 +239,7 @@ PYBIND11_MODULE(_lowfive, m)
         .def("set_after_file_close",  &PyMetadataVOL::set_after_file_close,             "set the after_file_close callback")
         .def("set_before_file_open",  &PyMetadataVOL::set_before_file_open,             "set the before_file_open callback")
         .def("set_after_dataset_write", &PyMetadataVOL::set_after_dataset_write,        "set the after_dataset_write callback")
-        .def("unset_callbacks", &PyMetadataVOL::unset_callbacks,                        "unset all callbacks")
+        .def("unset_callbacks", &PyMetadataVOL::unset_callbacks,                        "unset MetadataVOL callbacks")
     ;
 
     py::class_<PyDistMetadataVOL> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
@@ -243,5 +257,7 @@ PYBIND11_MODULE(_lowfive, m)
         .def("broadcast_files", &PyDistMetadataVOL::broadcast_files,         py::arg("root") = 0,
                                                                                     "broadcast file metadata to all ranks")
         .def("set_serve_indices", &PyDistMetadataVOL::set_serve_indices,     "set the serve_indices callback")
+        .def("unset_callbacks", &PyDistMetadataVOL::unset_callbacks,                 "unset DistMetadataVOL callbacks")
+
     ;
 }
