@@ -103,9 +103,9 @@ struct PyDistMetadataVOL: public PyMetadataVOL
         dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_intercomm(filename, full_path, intercomm_index);
     }
 
-    void serve_all(bool delete_data = true)
+    void serve_all()
     {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_all(delete_data);
+        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_all();
     }
 
     decltype(auto)  get_filenames(int intercomm_index)
@@ -230,16 +230,16 @@ PYBIND11_MODULE(_lowfive, m)
 
     py::class_<PyMetadataVOL> metadata_vol(m, "MetadataVOL", "metadata VOL object", vol_base);
     metadata_vol
-        .def("set_passthru",   &PyMetadataVOL::set_passthru, "filename"_a, "pattern"_a, "set (filename,pattern) for passthru")
-        .def("set_memory",     &PyMetadataVOL::set_memory,   "filename"_a, "pattern"_a, "set (filename,pattern) for memory")
-        .def("set_zerocopy",   &PyMetadataVOL::set_zerocopy, "filename"_a, "pattern"_a, "set (filename,pattern) for zerocopy")
-        .def("set_keep",       &PyMetadataVOL::set_keep,     "keep_a",                  "set whether to keep files in the metadata after they are closed")
-        .def("print_files",    &PyMetadataVOL::print_files,                             "print file metadata")
-        .def("clear_files",    &PyMetadataVOL::clear_files,                             "clear all files")
-        .def("set_after_file_close",  &PyMetadataVOL::set_after_file_close,             "set the after_file_close callback")
-        .def("set_before_file_open",  &PyMetadataVOL::set_before_file_open,             "set the before_file_open callback")
-        .def("set_after_dataset_write", &PyMetadataVOL::set_after_dataset_write,        "set the after_dataset_write callback")
-        .def("unset_callbacks", &PyMetadataVOL::unset_callbacks,                        "unset MetadataVOL callbacks")
+        .def("set_passthru",            &PyMetadataVOL::set_passthru, "filename"_a, "pattern"_a, "set (filename,pattern) for passthru")
+        .def("set_memory",              &PyMetadataVOL::set_memory,   "filename"_a, "pattern"_a, "set (filename,pattern) for memory")
+        .def("set_zerocopy",            &PyMetadataVOL::set_zerocopy, "filename"_a, "pattern"_a, "set (filename,pattern) for zerocopy")
+        .def("set_keep",                &PyMetadataVOL::set_keep,     "keep_a",                  "set whether to keep files in the metadata after they are closed")
+        .def("print_files",             &PyMetadataVOL::print_files,                             "print file metadata")
+        .def("clear_files",             &PyMetadataVOL::clear_files,                             "clear all files")
+        .def("set_after_file_close",    &PyMetadataVOL::set_after_file_close,                    "set the after_file_close callback")
+        .def("set_before_file_open",    &PyMetadataVOL::set_before_file_open,                    "set the before_file_open callback")
+        .def("set_after_dataset_write", &PyMetadataVOL::set_after_dataset_write,                 "set the after_dataset_write callback")
+        .def("unset_callbacks",         &PyMetadataVOL::unset_callbacks,                         "unset MetadataVOL callbacks")
     ;
 
     py::class_<PyDistMetadataVOL> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
