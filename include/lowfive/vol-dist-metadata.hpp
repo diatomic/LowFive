@@ -65,7 +65,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
         serve_indices = si;
     }
 
-    void unset_callbacks()
+    void unset_dist_callbacks()
     {
         serve_indices = nullptr;
     }
