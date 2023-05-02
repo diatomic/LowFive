@@ -135,6 +135,12 @@ struct PyDistMetadataVOL: public PyMetadataVOL
         dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_serve_indices(si);
     }
 
+    void set_consumer_filename(LowFive::DistMetadataVOL::SetFileName name)
+    {
+        py::gil_scoped_acquire acq;
+        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_consumer_filename(name);
+    }
+
     bool get_serve_on_close() const
     {
         return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_on_close;
@@ -252,5 +258,6 @@ PYBIND11_MODULE(_lowfive, m)
         .def("broadcast_files", &PyDistMetadataVOL::broadcast_files,         py::arg("root") = 0,
                                                                                     "broadcast file metadata to all ranks")
         .def("set_serve_indices", &PyDistMetadataVOL::set_serve_indices,     "set the serve_indices callback")
+        .def("set_consumer_filename", &PyDistMetadataVOL::set_consumer_filename,     "set the consumer_filename callback")
     ;
 }

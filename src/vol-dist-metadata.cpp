@@ -222,6 +222,14 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 {
     auto log = get_logger();
     log->trace("DistMetadataVOL::file_open()");
+
+    std::string filename;
+    if (set_filename){
+        filename = set_filename();
+        name = filename.c_str();
+        log->trace("file_open(): filename set to {} with set_filename callback", name);
+    }
+
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
     // if producer opens existing file
