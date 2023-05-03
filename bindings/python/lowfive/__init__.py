@@ -18,6 +18,7 @@ def create_DistMetadataVOL(local, intercomm):
 
 def unset_vol_callbacks():
     for vol in vols:
+        vol.unset_dist_callbacks()
         vol.unset_callbacks()
 
 atexit.register(unset_vol_callbacks)

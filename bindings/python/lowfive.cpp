@@ -85,7 +85,6 @@ struct PyMetadataVOL: public PyVOLBase
     {
 //        std::cerr << "PyMetadataVOL::unset_callbacks called" << std::endl;
         py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_callbacks();
         dynamic_cast<LowFive::MetadataVOL*>(vol_)->unset_callbacks();
     }
 
