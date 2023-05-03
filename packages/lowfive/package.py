@@ -26,7 +26,7 @@ class Lowfive(CMakePackage):
     extends("python", when="+python")       # brings pylowfive into PYTHONPATH
     depends_on("py-mpi4py", when="+python", type=("build", "run"))
 
-    depends_on('caliper~adyak', when="+caliper")
+    depends_on('caliper~adiak', when="+caliper")
 
     def cmake_args(self):
         args = ['-DCMAKE_C_COMPILER=%s' % self.spec['mpi'].mpicc,
