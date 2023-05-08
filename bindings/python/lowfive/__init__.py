@@ -3,7 +3,8 @@ from ._lowfive import _create_DistMetadataVOL, _create_MetadataVOL
 
 import atexit
 
-vols = []
+vols      = []
+dist_vols = []
 
 def create_MetadataVOL():
     vol = _create_MetadataVOL()
@@ -13,10 +14,14 @@ def create_MetadataVOL():
 
 def create_DistMetadataVOL(local, intercomm):
     vol = _create_DistMetadataVOL(local, intercomm)
-    vols.append(vol)
+    dist_vols.append(vol)
     return vol
 
 def unset_vol_callbacks():
+    for vol in dist_vols:
+        vol.unset_dist_callbacks()
+        vol.unset_callbacks()
+
     for vol in vols:
         vol.unset_callbacks()
 
