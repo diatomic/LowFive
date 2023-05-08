@@ -284,8 +284,23 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
         {
             case H5VL_ATTR_DELETE:                      // H5Adelete(_by_name/idx)
             {
-                // TODO
-                throw MetadataError(fmt::format("H5VL_ATTR_DELETE not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+                Attribute* attr = nullptr;
+
+                if (H5VL_OBJECT_BY_SELF == loc_params->type)
+                    attr = static_cast<Attribute*>(mdata_obj);
+                else if (H5VL_OBJECT_BY_NAME == loc_params->type)
+                {
+                    const char *attr_name = va_arg(arguments, const char *);
+                    Object* o = mdata_obj->locate(*loc_params).exact();
+                    attr = dynamic_cast<Attribute*>(o->search(attr_name).exact());
+                }
+                else if (H5VL_OBJECT_BY_IDX == loc_params->type)
+                    throw MetadataError(fmt::format("H5VL_ATTR_DELETE by index not yet implemented in LowFive::MetadataVOL::attr_specific()"));
+
+                // remove attribute from metadata tree and free its memory
+                // will throw, if dynamic cast failed
+                attr->remove();
+                delete attr;
                 break;
             }
             case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
