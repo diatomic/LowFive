@@ -288,16 +288,25 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
 
                 if (H5VL_OBJECT_BY_SELF == loc_params->type)
                 {
-                    log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by self");
-                    attr = static_cast<Attribute*>(mdata_obj);
+                    // we still search by name, but only in immediate children
+                    // mdata_obj is dataset/group, not the attribute to be deleted
+                    const char *attr_name_ = va_arg(arguments, const char *);
+                    std::string attr_name(attr_name_);
+                    log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by self, attr_name = {}, mdata_obj = {}", attr_name, fmt::ptr(mdata_obj));
+                    for (auto& c : mdata_obj->children) {
+                        if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name_) {
+                            attr = dynamic_cast<Attribute*>(c);
+                            break;
+                        }
+                    }
+                    log->trace("attr_specific: attr = {}", fmt::ptr(attr));
                 }
                 else if (H5VL_OBJECT_BY_NAME == loc_params->type)
                 {
-                    // TODO: deleting by name after deleting previous attribute fails; locate apparently doesn't allow changing the metadata
-                    log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by name");
                     const char *attr_name = va_arg(arguments, const char *);
                     Object* o = mdata_obj->locate(*loc_params).exact();
                     attr = dynamic_cast<Attribute*>(o->search(attr_name).exact());
+                    log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by name, attr_name = {}, mdata_obj = {}, attr = {}", attr_name, fmt::ptr(mdata_obj), fmt::ptr(attr));
                 }
                 else if (H5VL_OBJECT_BY_IDX == loc_params->type)
                     throw MetadataError(fmt::format("H5VL_ATTR_DELETE locate object by index not yet implemented in LowFive::MetadataVOL::attr_specific()"));
