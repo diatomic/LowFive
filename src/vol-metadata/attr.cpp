@@ -293,13 +293,19 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
                     const char *attr_name_ = va_arg(arguments, const char *);
                     std::string attr_name(attr_name_);
                     log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by self, attr_name = {}, mdata_obj = {}", attr_name, fmt::ptr(mdata_obj));
-                    for (auto& c : mdata_obj->children) {
-                        if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name_) {
+                    bool found = false;
+                    for (auto& c : mdata_obj->children)
+                    {
+                        if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name_)
+                        {
                             attr = dynamic_cast<Attribute*>(c);
+                            found = true;
                             break;
                         }
                     }
                     log->trace("attr_specific: attr = {}", fmt::ptr(attr));
+                    if (!found)
+                        throw MetadataError(fmt::format("MetadataVOL::attr_specific: Did not find attribute {} as a child of the parent {}", attr_name, mdata_obj->name));
                 }
                 else if (H5VL_OBJECT_BY_NAME == loc_params->type)
                 {

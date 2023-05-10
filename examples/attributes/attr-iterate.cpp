@@ -214,10 +214,9 @@ int main(int argc, char**argv)
     H5Aclose(attr1);
     H5Aclose(attr2);
 
-    // test deleting an attribute, supposedly only after all attributes on an abject are closed
-    // TODO: deleting attr2 by name after deleting attr1 fails; locate apparently doesn't allow changing the metadata
-    // deleting attr1 works, and deleting attr2 by name if attr1 is not disturbed works fine
-//     H5Adelete(dset, "attr1");
+    // test deleting attributes
+    // according to the spec, only after all attributes on an abject are closed
+    H5Adelete(dset, "attr1");
     H5Adelete_by_name(dset, ".", "attr2", H5P_DEFAULT);
 
     // continue cleaning up
