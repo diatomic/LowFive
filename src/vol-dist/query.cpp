@@ -38,6 +38,7 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
     b.min = Point(file_space.min);
     b.max = Point(file_space.max);
 
+    CALI_MARK_BEGIN("all_redirects");
     BoxLocations all_redirects;
     auto gids = IndexQuery::bounds_to_gids(b, decomposer);
     for (int gid : gids)
@@ -50,8 +51,10 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
         for (auto& x : redirects)
             all_redirects.push_back(x);
     }
+    CALI_MARK_END("all_redirects");
 
     // request and receive data
+    CALI_MARK_BEGIN("request_receive_data");
     std::set<int> blocks;
     for (auto& y : all_redirects)
     {
@@ -74,6 +77,7 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
             queue.reset();      // move position to 0
             log->trace("Received queue of size: {}", queue.size());
 
+            CALI_MARK_BEGIN("load_from_queue");
             while (queue)
             {
                 Dataspace ds;
@@ -90,9 +94,11 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
                   std::memcpy((char*)buf + loc, queue.advance(len), len);
                 });
             }
+            CALI_MARK_END("load_from_queue");
         }
     }
     log->trace("Leaving RemoteDataset::query");
+    CALI_MARK_END("request_receive_data");
 }
 
 
