@@ -180,7 +180,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
             make_remote_dataset(result, filepath);
 
-        log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");
+        //log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");
     }
 
     return (void*)result;
@@ -205,6 +205,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         CALI_MARK_BEGIN("dist_metadata_vol_dataset_read_query");
         ds->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         CALI_MARK_END("dist_metadata_vol_dataset_read_query");
+    } else if (dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
+    {
+        return MetadataVOL::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
     } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
     {
         return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -258,8 +261,6 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         hierarchy.reset();
         Object* hf = deserialize(hierarchy);
 
-        rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
-
         auto* hff = static_cast<File*>(hf);
         if (hff->copy_whole)
         {
@@ -267,6 +268,8 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
             result->mdata_obj = hff;
         } else
         {
+            rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
+
             // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
             delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
             log->trace("Creating remote");
