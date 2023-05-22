@@ -9,7 +9,7 @@ struct File: public Object
     Hid             fcpl;                   // hdf5 id of file creation property list
     Hid             fapl;                   // hdf5 id of file access property list
 
-    bool            copy_whole = false;
+    bool            copy_whole = true;
     bool            copy_of_remote = false;
 
     File(std::string filename_, Hid fcpl_, Hid fapl_):
