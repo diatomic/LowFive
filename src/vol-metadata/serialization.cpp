@@ -1,18 +1,37 @@
 #include "../vol-metadata-private.hpp"
 
 void
-LowFive::serialize(diy::BinaryBuffer& bb, Object* o)
+LowFive::serialize(diy::BinaryBuffer& bb, Object* o, bool include_data)
 {
     diy::save(bb, o->type);
     diy::save(bb, o->name);
     diy::save(bb, o->children.size());
 
+    if (o->type == ObjectType::File)
+    {
+        include_data = static_cast<File*>(o)->copy_whole;
+        diy::save(bb, include_data);
+    }
     if (o->type == ObjectType::Dataset)
     {
         auto* d = static_cast<Dataset*>(o);
         diy::save(bb, d->type);
         diy::save(bb, d->space);
         diy::save(bb, d->ownership);
+
+        if (include_data)
+        {
+            // serialize triplets
+            diy::save(bb, d->data.size());
+            for (auto& dt : d->data)
+            {
+                diy::save(bb, dt.type);
+                diy::save(bb, dt.memory);
+                diy::save(bb, dt.file);
+                size_t nbytes   = dt.memory.size() * dt.type.dtype_size;
+                bb.save_binary(static_cast<const char*>(dt.data), nbytes);
+            }
+        }
     }
     else if (o->type == ObjectType::Attribute)
     {
@@ -31,13 +50,13 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o)
         diy::save(bb, static_cast<SoftLink*>(o)->target);
 
     for (Object* child : o->children)
-        serialize(bb, child);
+        serialize(bb, child, include_data);
 }
 
 namespace LowFive
 {
 using HardLinks = std::unordered_map<HardLink*, std::string>;
-Object* deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links);
+Object* deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_data);
 }
 
 // top-level call
@@ -45,7 +64,7 @@ LowFive::Object*
 LowFive::deserialize(diy::BinaryBuffer& bb)
 {
     HardLinks hard_links;
-    auto* o = deserialize(bb, hard_links);
+    auto* o = deserialize(bb, hard_links, false);
 
     // link the hard links
     for (auto& x : hard_links)
@@ -55,7 +74,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
 }
 
 LowFive::Object*
-LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links)
+LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_data)
 {
     ObjectType type;
     std::string name;
@@ -68,8 +87,12 @@ LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links)
     // figure out the type
     Object* o;
     if (type == ObjectType::File)
-        o = new File(name, H5P_FILE_CREATE_DEFAULT, H5P_FILE_ACCESS_DEFAULT);
-    else if (type == ObjectType::Group)
+    {
+        diy::load(bb, include_data);
+        File* f = new File(name, H5P_FILE_CREATE_DEFAULT, H5P_FILE_ACCESS_DEFAULT);
+        f->copy_whole = include_data;
+        o = f;
+    } else if (type == ObjectType::Group)
         o = new Group(name, H5P_GROUP_CREATE_DEFAULT);
     else if (type == ObjectType::Dataset)
     {
@@ -81,7 +104,26 @@ LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links)
         diy::load(bb, s);
         diy::load(bb, own);
 
-        o = new Dataset(name, dt.id, s.id, own, H5P_DATASET_CREATE_DEFAULT, H5P_DATASET_ACCESS_DEFAULT);
+        auto* d = new Dataset(name, dt.id, s.id, own, H5P_DATASET_CREATE_DEFAULT, H5P_DATASET_ACCESS_DEFAULT);
+        o = d;
+
+        // load triplets
+        if (include_data)
+        {
+            // deserialize triplets
+            size_t ntriplets;
+            diy::load(bb, ntriplets);
+            for (size_t i = 0; i < ntriplets; ++i)
+            {
+                Datatype type; diy::load(bb, type);
+                Dataspace memory; diy::load(bb, memory);
+                Dataspace file; diy::load(bb, file);
+                size_t nbytes   = memory.size() * type.dtype_size;
+                char* p         = new char[nbytes];
+                bb.load_binary(p, nbytes);
+                d->data.emplace_back(Dataset::DataTriple { type, memory, file, p, std::unique_ptr<char[]>(p) });
+            }
+        }
     }
     else if (type == ObjectType::Attribute)
     {
@@ -121,7 +163,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links)
         MetadataError("unhandled case in deserialization");
 
     for (size_t i = 0; i < n_children; ++i)
-        o->add_child(deserialize(bb, hard_links));
+        o->add_child(deserialize(bb, hard_links, include_data));
 
     return o;
 }

@@ -9,6 +9,8 @@ struct File: public Object
     Hid             fcpl;                   // hdf5 id of file creation property list
     Hid             fapl;                   // hdf5 id of file access property list
 
+    bool            copy_whole = false;
+
     File(std::string filename_, Hid fcpl_, Hid fapl_):
         Object(ObjectType::File, filename_), fcpl(fcpl_), fapl(fapl_)
     {}

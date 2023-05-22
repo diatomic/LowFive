@@ -260,16 +260,24 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
         rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
 
-        // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
-        delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
-        log->trace("Creating remote");
-        RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
-        files.emplace(name, f);
-        result->mdata_obj = f;
+        auto* hff = static_cast<File*>(hf);
+        if (hff->copy_whole)
+        {
+            files.emplace(name, hff);
+            result->mdata_obj = hff;
+        } else
+        {
+            // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
+            delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
+            log->trace("Creating remote");
+            RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
+            files.emplace(name, f);
+            result->mdata_obj = f;
 
-        // move the hierarchy over and delete the plain File object hf
-        f->move_children(hf);
-        delete hf;
+            // move the hierarchy over and delete the plain File object hf
+            f->move_children(hf);
+            delete hf;
+        }
     }
 
     return result;
