@@ -43,7 +43,7 @@ inline H5I_type_t   get_identifier_type(Object* o)
 }
 
 // using different names to avoid confusion
-void serialize(diy::BinaryBuffer& bb, Object* o, bool include_data = false);
-Object* deserialize(diy::BinaryBuffer& bb);
+void serialize(diy::MemoryBuffer& bb, Object* o, bool include_data = false);
+Object* deserialize(diy::MemoryBuffer& bb);
 
 }

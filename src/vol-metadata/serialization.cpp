@@ -1,11 +1,14 @@
 #include "../vol-metadata-private.hpp"
 
 void
-LowFive::serialize(diy::BinaryBuffer& bb, Object* o, bool include_data)
+LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
 {
     diy::save(bb, o->type);
     diy::save(bb, o->name);
     diy::save(bb, o->children.size());
+
+    auto log = get_logger();
+    log->trace("Writing {} with {} children (include_data = {})", o->name, o->children.size(), include_data);
 
     if (o->type == ObjectType::File)
     {
@@ -21,25 +24,17 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o, bool include_data)
 
         if (include_data)
         {
-            // serialize triplets
             diy::save(bb, d->data.size());
 
-            size_t total = 0;
-            for (auto& dt : d->data)
-            {
-                size_t nbytes = dt.memory.size() * dt.type.dtype_size;
-                total += nbytes;
-                total += 1024;      // crude bound for type/memory/file
-            }
-
-            static_cast<diy::MemoryBuffer&>(bb).reserve(static_cast<diy::MemoryBuffer&>(bb).position + total);
+            // serialize triplets
             for (auto& dt : d->data)
             {
                 diy::save(bb, dt.type);
                 diy::save(bb, dt.memory);
                 diy::save(bb, dt.file);
                 size_t nbytes   = dt.memory.size() * dt.type.dtype_size;
-                bb.save_binary(static_cast<const char*>(dt.data), nbytes);
+                bb.save_binary_blob(static_cast<const char*>(dt.data), nbytes);
+                log->trace("position = {}, size = {}", bb.position, bb.size());
             }
         }
     }
@@ -66,12 +61,12 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o, bool include_data)
 namespace LowFive
 {
 using HardLinks = std::unordered_map<HardLink*, std::string>;
-Object* deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_data);
+Object* deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_data);
 }
 
 // top-level call
 LowFive::Object*
-LowFive::deserialize(diy::BinaryBuffer& bb)
+LowFive::deserialize(diy::MemoryBuffer& bb)
 {
     HardLinks hard_links;
     auto* o = deserialize(bb, hard_links, false);
@@ -84,7 +79,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb)
 }
 
 LowFive::Object*
-LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_data)
+LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_data)
 {
     ObjectType type;
     std::string name;
@@ -93,6 +88,9 @@ LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_
     diy::load(bb, type);
     diy::load(bb, name);
     diy::load(bb, n_children);
+
+    auto log = get_logger();
+    log->trace("Reading {} with {} children (include_data = {})", name, n_children, include_data);
 
     // figure out the type
     Object* o;
@@ -124,15 +122,20 @@ LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_
             // deserialize triplets
             size_t ntriplets;
             diy::load(bb, ntriplets);
+            log->trace("Reading {} triplets from buffer with {} blobs", ntriplets, bb.nblobs());
             for (size_t i = 0; i < ntriplets; ++i)
             {
+                log->trace("position = {}, size = {}", bb.position, bb.size());
                 Datatype type; diy::load(bb, type);
                 Dataspace memory; diy::load(bb, memory);
                 Dataspace file; diy::load(bb, file);
-                size_t nbytes   = memory.size() * type.dtype_size;
-                char* p         = new char[nbytes];
-                bb.load_binary(p, nbytes);
+
+                auto blob = bb.load_binary_blob();
+                char* p = (char*) blob.pointer.get();
+                assert(blob.size == memory.size() * type.dtype_size);
                 d->data.emplace_back(Dataset::DataTriple { type, memory, file, p, std::unique_ptr<char[]>(p) });
+
+                log->trace("Read binary blob of size {}", blob.size);
             }
         }
     }

@@ -11,6 +11,8 @@
 #include "../log-private.hpp"
 #include "operations.h"
 
+#include "send-recv.h"
+
 namespace LowFive
 {
 
@@ -59,7 +61,7 @@ process(int source)
     auto log = get_logger();
 
     diy::MemoryBuffer in, out;
-    comm_.recv(source, tags::consumer, in.buffer);
+    recv(comm_, source, tags::consumer, in);
 
     ops::Operation op;
     diy::load(in, op);
@@ -86,7 +88,7 @@ process(int source)
     else
         throw std::runtime_error("Uknown operation");
 
-    comm_.send(source, tags::producer, out.buffer);
+    send(comm_, source, tags::producer, out);
 
     return false;
 }

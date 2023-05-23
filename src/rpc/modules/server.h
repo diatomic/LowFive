@@ -133,7 +133,11 @@ struct server::module::Function: public FunctionBase
         auto log = get_logger();
         log->trace("Called function {}", name_);
         R res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
-        diy::save(out, res);
+
+        if constexpr (std::is_same_v<R, diy::MemoryBuffer>)
+            out.swap(res);
+        else
+            diy::save(out, res);
     }
 
     private:
@@ -243,7 +247,10 @@ struct server::module::MemberFunction: public MemberFunctionBase
         C* x = (C*) self->objects_[obj_id].obj;
 
         R res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
-        diy::save(out, res);
+        if constexpr (std::is_same_v<R, diy::MemoryBuffer>)
+            out.swap(res);
+        else
+            diy::save(out, res);
     }
 
     private:

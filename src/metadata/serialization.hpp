@@ -35,17 +35,21 @@ struct Serialization<::LowFive::Datatype>
 
     static void         save(BinaryBuffer& bb, const Datatype& dt)
     {
+        auto log = ::LowFive::get_logger();
         // encode the destination space
         size_t nalloc = 0;
         H5Tencode(dt.id, NULL, &nalloc);                  // first time sets nalloc to the required size
+        log->trace("Saving datatype nalloc = {}", nalloc);
         diy::save(bb, nalloc);
         H5Tencode(dt.id, bb.grow(nalloc), &nalloc);       // second time actually encodes the data
     }
 
     static void         load(BinaryBuffer& bb, Datatype& dt)
     {
+        auto log = ::LowFive::get_logger();
         size_t nalloc;
         diy::load(bb,nalloc);
+        log->trace("Loading datatype nalloc = {}", nalloc);
         hid_t dt_id = H5Tdecode(bb.advance(nalloc));
 
         dt = Datatype(dt_id, true);

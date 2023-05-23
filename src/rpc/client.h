@@ -9,6 +9,8 @@
 
 #include "operations.h"
 
+#include "send-recv.h"
+
 // client and server rely on functions being registered in the same order to
 // work across platforms
 
@@ -48,7 +50,7 @@ struct client
     inline void     destroy(int target, size_t id);
 
     inline size_t&  ref_count(int target, size_t obj_id)    { return ref_count_[std::make_tuple(target, obj_id)]; }
-    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); comm_.send(target, tags::consumer, out.buffer); }
+    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); send(comm_, target, tags::consumer, out); }
 
     private:
         template<class R>
@@ -77,7 +79,12 @@ R
 LowFive::rpc::client::
 load(diy::MemoryBuffer& in, int target, bool own)
 {
-    if constexpr (std::is_same_v<R, object>)
+    auto log = get_logger();
+    if constexpr (std::is_same_v<R, diy::MemoryBuffer>)
+    {
+        log->trace("Returning MemoryBuffer directly");
+        return std::move(in);
+    } else if constexpr (std::is_same_v<R, object>)
     {
         size_t obj_id, cls_id;
         diy::load(in, cls_id);
@@ -123,8 +130,8 @@ call(int target, std::string name, Args... args)
 
     save(out, args...);
 
-    comm_.send(target, tags::consumer, out.buffer);
-    comm_.recv(target, tags::producer, in.buffer);
+    send(comm_, target, tags::consumer, out);
+    recv(comm_, target, tags::producer, in);
 
     return load<R>(in, target, false);
 }
@@ -143,8 +150,8 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
 
     save(out, args...);
 
-    comm_.send(target, tags::consumer, out.buffer);
-    comm_.recv(target, tags::producer, in.buffer);
+    send(comm_, target, tags::consumer, out);
+    recv(comm_, target, tags::producer, in);
 
     return load<R>(in, target, false);
 }
@@ -164,8 +171,8 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
 
     save(out, args...);
 
-    comm_.send(target, tags::consumer, out.buffer);
-    comm_.recv(target, tags::producer, in.buffer);
+    send(comm_, target, tags::consumer, out);
+    recv(comm_, target, tags::producer, in);
 
     return load<object>(in, target, true);     // true indicates that we own this object (and will automatically delete it, when all references go out of scope)
 }
@@ -184,5 +191,5 @@ LowFive::rpc::client::destroy(int target, size_t id)
     diy::save(out, ops::destroy);
     diy::save(out, id);
 
-    comm_.send(target, tags::consumer, out.buffer);
+    send(comm_, target, tags::consumer, out);
 }
