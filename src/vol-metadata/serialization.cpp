@@ -91,6 +91,7 @@ LowFive::deserialize(diy::BinaryBuffer& bb, HardLinks& hard_links, bool include_
         diy::load(bb, include_data);
         File* f = new File(name, H5P_FILE_CREATE_DEFAULT, H5P_FILE_ACCESS_DEFAULT);
         f->copy_whole = include_data;
+        f->copy_of_remote = include_data;
         o = f;
     } else if (type == ObjectType::Group)
         o = new Group(name, H5P_GROUP_CREATE_DEFAULT);

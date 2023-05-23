@@ -264,6 +264,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         auto* hff = static_cast<File*>(hf);
         if (hff->copy_whole)
         {
+            query->c.finish(0);
             files.emplace(name, hff);
             result->mdata_obj = hff;
         } else
@@ -329,7 +330,10 @@ file_close(void *file, hid_t dxpl_id, void **req)
     } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
-        if (serve_on_close && match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
+        if (f->copy_of_remote)
+        {
+            log->trace("Local file is a copy of remote, skipping");
+        } else if (serve_on_close && match_any(f->name, "", memory, true))      // TODO: is this the right place to serve? should we wait for all files to be closed?
         {
             log->trace("Closing file {}", fmt::ptr(f));
             serve_all();
