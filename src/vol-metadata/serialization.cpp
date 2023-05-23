@@ -23,6 +23,16 @@ LowFive::serialize(diy::BinaryBuffer& bb, Object* o, bool include_data)
         {
             // serialize triplets
             diy::save(bb, d->data.size());
+
+            size_t total = 0;
+            for (auto& dt : d->data)
+            {
+                size_t nbytes = dt.memory.size() * dt.type.dtype_size;
+                total += nbytes;
+                total += 1024;      // crude bound for type/memory/file
+            }
+
+            static_cast<diy::MemoryBuffer&>(bb).reserve(static_cast<diy::MemoryBuffer&>(bb).position + total);
             for (auto& dt : d->data)
             {
                 diy::save(bb, dt.type);
