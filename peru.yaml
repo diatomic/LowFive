@@ -15,8 +15,8 @@ git module fmt:
     rev: 8.1.1
 
 git module diy:
-    url: https://gitlab.kitware.com/mrzv/diy
-    rev: 3b31e3e9ab12b648cfc332cf8dffc9cc6c34c02b
+    url: https://github.com/diatomic/diy
+    rev: 9bea15a1bf36d25295dc4b1199bf175b896d7186
     drop: include/diy/thirdparty/fmt
 
 git module pybind11:
