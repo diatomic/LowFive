@@ -21,7 +21,7 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files):
         for (auto& x : datasets)
         {
             auto* ds = x.second;
-            IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local.size());
+            IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
             index(*ids);
             ds->extra = ids;
 

@@ -122,6 +122,11 @@ struct IndexQuery
     static
     std::vector<int>    bounds_to_gids(const Bounds& bounds, const Decomposer& decomposer)
     {
+        // for dummy decomposer return nothing
+        // decomposer is dummy, if the corresponding dataset has less data than the number of ranks
+        if (decomposer.nblocks == 0)
+            return {};
+
         int dim = decomposer.dim;
         std::vector< std::pair<Coordinate, Coordinate> > ranges(dim);
         for (int i = 0; i < dim; ++i)

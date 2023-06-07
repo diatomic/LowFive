@@ -22,7 +22,7 @@ struct IndexedDataset
     using BoxLocations  = IndexQuery::BoxLocations;
     using Bounds        = IndexQuery::Bounds;
 
-    IndexedDataset(Dataset* ds_, int comm_size):
+    IndexedDataset(Dataset* ds_, const diy::mpi::communicator& comm):
         ds(ds_)
     {
         dim = ds->space.dims.size();
@@ -32,7 +32,21 @@ struct IndexedDataset
         Bounds domain { dim };
         domain.max = ds->space.dims;
 
-        decomposer = Decomposer(dim, domain, comm_size);
+        try {
+            decomposer = Decomposer(dim, domain, comm.size());
+        } catch (std::runtime_error&) {
+            // assume we are in size(domain) < #ranks
+            // for now just give all data to rank 0, other ranks get nothing
+            if (comm.rank() == 0) {
+                // give nblocks = 1 so that this rank takes the whole domain
+                decomposer = Decomposer(dim, domain, 1);
+            } else {
+                decomposer = Decomposer(1, Bounds({0}, {1}), 1);
+                // to signal that this decomposer is dummy
+                decomposer.dim = decomposer.nblocks = 0;
+            } ;
+        }
+
     }
 
     BoxLocations            redirects(Dataspace ds)
