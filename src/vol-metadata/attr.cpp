@@ -222,7 +222,7 @@ attr_iter(void *obj, va_list arguments)
         if (c->type == LowFive::ObjectType::Attribute)
         {
             ainfo.data_size =                               // size of raw data (bytes)
-                static_cast<Attribute*>(mdata_obj)->space.size() * static_cast<Attribute*>(mdata_obj)->type.dtype_size;
+                static_cast<Attribute*>(c)->space.size() * static_cast<Attribute*>(c)->type.dtype_size;
             found = true;
             log->trace("attr_iter: found attribute {} with data_size {} as a child of the parent {}", c->name, ainfo.data_size, mdata_obj->name);
             if (idx)
