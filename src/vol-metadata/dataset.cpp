@@ -29,7 +29,11 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     std::string name_str = name ? name : "";
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name_str);
 
-    if (unwrap(obj_) && match_any(filepath, passthru))
+    bool is_passthru = unwrap(obj_) && match_any(filepath, passthru);
+    assert(not is_passthru or unwrap(obj_));
+    bool is_memory = match_any(filepath, memory);
+
+    if (is_passthru)
         result = wrap(VOLBase::dataset_create(unwrap(obj_), loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req));
     else
         result = wrap(nullptr);
@@ -42,7 +46,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     // add the dataset
     auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name_str);
     assert(obj_path.is_name());
-    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id, dapl_id));
+    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id, dapl_id, is_passthru, is_memory));
 
     log->trace("created dataset in metadata, new object {} under parent object {} named {}",
             *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
@@ -225,9 +229,14 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
 
     if (dset_->mdata_obj)
     {
+        // we build our hierarchy for all datasets, so here we must check if this dataset is passthru only
+        auto filepath = static_cast<Object*>(dset_->mdata_obj)->fullname();
         // save our metadata
         Dataset* ds = (Dataset*) dset_->mdata_obj;
-        ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
+        if (ds->is_memory)
+            ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
+        // if dataset is marked as passthru, it must have an underlying HDF5 object
+        assert(not ds->is_passthru or unwrap(dset));
     }
 
     if (after_dataset_write)

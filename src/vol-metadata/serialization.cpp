@@ -18,6 +18,8 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
     if (o->type == ObjectType::Dataset)
     {
         auto* d = static_cast<Dataset*>(o);
+        diy::save(bb, d->is_passthru);
+        diy::save(bb, d->is_memory);
         diy::save(bb, d->type);
         diy::save(bb, d->space);
         diy::save(bb, d->ownership);
@@ -105,15 +107,18 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         o = new Group(name, H5P_GROUP_CREATE_DEFAULT);
     else if (type == ObjectType::Dataset)
     {
+        bool is_passthru, is_memory;
         Datatype dt;
         Dataspace s;
         Dataset::Ownership own;
 
+        diy::load(bb, is_passthru);
+        diy::load(bb, is_memory);
         diy::load(bb, dt);
         diy::load(bb, s);
         diy::load(bb, own);
 
-        auto* d = new Dataset(name, dt.id, s.id, own, H5P_DATASET_CREATE_DEFAULT, H5P_DATASET_ACCESS_DEFAULT);
+        auto* d = new Dataset(name, dt.id, s.id, own, H5P_DATASET_CREATE_DEFAULT, H5P_DATASET_ACCESS_DEFAULT, is_passthru, is_memory);
         o = d;
 
         // load triplets

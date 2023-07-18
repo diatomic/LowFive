@@ -28,9 +28,13 @@ struct Dataset : public Object
     Ownership                       ownership;
     Hid                             dcpl;                   // hdf5 id of dataset creation property list
     Hid                             dapl;                   // hdf5 id of dataset access property list
+    bool                            is_passthru {false };   // true if dataset that should go to disk
+    bool                            is_memory {false };     // true if dataset should be kept in memory
 
-    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own, Hid dcpl_, Hid dapl_):
-        Object(ObjectType::Dataset, name), type(dtype_id), space(space_id), ownership(own), dcpl(dcpl_), dapl(dapl_)
+    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own, Hid dcpl_, Hid dapl_, bool is_passthru_, bool is_memory_):
+            Object(ObjectType::Dataset, name), type(dtype_id), space(space_id), ownership(own), dcpl(dcpl_), dapl(dapl_),
+            is_passthru(is_passthru_),
+            is_memory(is_memory_)
     {}
 
     void write(Datatype type, Dataspace memory, Dataspace file, const void* buf)
