@@ -29,9 +29,10 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     std::string name_str = name ? name : "";
     auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name_str);
 
-    bool is_passthru = unwrap(obj_) && match_any(filepath, passthru);
-    assert(not is_passthru or unwrap(obj_));
+    bool is_passthru = match_any(filepath, passthru);
     bool is_memory = match_any(filepath, memory);
+
+    log->trace("MetadataVOL::dataset_create: is_passthru = {}, is_memory = {}, filepath = ({}, {})", is_passthru, is_memory, filepath.first, filepath.second);
 
     if (is_passthru)
         result = wrap(VOLBase::dataset_create(unwrap(obj_), loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req));
@@ -233,9 +234,14 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
         auto filepath = static_cast<Object*>(dset_->mdata_obj)->fullname();
         // save our metadata
         Dataset* ds = (Dataset*) dset_->mdata_obj;
-        if (ds->is_memory)
+        if (ds->is_memory) {
+            //log->trace("MetadataVOL::dataset_write: saving data to memory, dataset {} is_memory is true", ds->name);
             ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
+        } else {
+            //log->trace("MetadataVOL::dataset_write: not saving data to memory, dataset {} is passthru only", ds->name);
+        }
         // if dataset is marked as passthru, it must have an underlying HDF5 object
+
         assert(not ds->is_passthru or unwrap(dset));
     }
 

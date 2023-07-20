@@ -227,62 +227,75 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     log->trace("DistMetadataVOL::file_open()");
 
     std::string filename;
-    if (set_filename){
+    if (set_filename) {
         filename = set_filename();
         name = filename.c_str();
         log->trace("file_open(): filename set to {} with set_filename callback", name);
     }
 
-    ObjectPointers* result = (ObjectPointers*) MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
+    bool need_memory = match_any(name, "", memory, true);
+    bool need_passthru = match_any(name, "", passthru, true);
 
-    // if producer opens existing file
-    if (dynamic_cast<File*>((Object*) result->mdata_obj))
-        return result;
+    if (not need_passthru and not need_memory)
+        log->critical("DistMetadataVOL::file_open: neither memory nor passthru set for {}", name);
 
-    if (match_any(name, "", memory, true))
-    {
-        // get an intercomm for this file
-        auto locs = find_matches(name, "", intercomm_locations, true);
-        if (locs.empty())
-            throw MetadataError(fmt::format("file_open(): no intercomm found for {}", name));
+    if (has_real_file(name))
+        return MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
-        std::set<int> dedup_indices;
-        for (auto loc : locs)
-            dedup_indices.emplace(intercomm_indices[loc]);
+    if (need_passthru and not need_memory)
+        return MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
 
-        if (dedup_indices.size() > 1)
-            throw MetadataError(fmt::format("file_open(): found more than one intercomm for {}", name));
+    // need_memory must be true.
+    // First do the in-memory thing, so we force the producer to enter
+    // serve_all to get file hierarchy. This ensures that the file was closed,
+    // so when we call MetadataVOL::file_open, it will be on disk.
+    // Will break, if so far the producer only created passthru datasets,
+    // because indexed_datasets will be empty and we won't start serving.
 
-        int intercomm_index = *dedup_indices.begin();
+    void* result_mdata {nullptr};
+    // get an intercomm for this file
+    auto locs = find_matches(name, "", intercomm_locations, true);
+    if (locs.empty())
+        throw MetadataError(fmt::format("file_open(): no intercomm found for {}", name));
 
-        std::string name_ = name;
-        std::unique_ptr<Query> query(new Query(local, intercomms, remote_size(intercomm_index), intercomm_index));
-        diy::MemoryBuffer hierarchy = query->c.call<diy::MemoryBuffer>("get_file_hierarchy", name_);
-        hierarchy.reset();
-        Object* hf = deserialize(hierarchy);
+    std::set<int> dedup_indices;
+    for(auto loc: locs)
+        dedup_indices.emplace(intercomm_indices[loc]);
 
-        auto* hff = static_cast<File*>(hf);
-        if (hff->copy_whole)
-        {
-            query->c.finish(0);
-            files.emplace(name, hff);
-            result->mdata_obj = hff;
-        } else
-        {
-            rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
+    if (dedup_indices.size() > 1)
+        throw MetadataError(fmt::format("file_open(): found more than one intercomm for {}", name));
 
-            // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
-            delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
-            log->trace("Creating remote");
-            RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
-            files.emplace(name, f);
-            result->mdata_obj = f;
+    int intercomm_index = *dedup_indices.begin();
 
-            // move the hierarchy over and delete the plain File object hf
-            f->move_children(hf);
-            delete hf;
-        }
+    std::string name_ = name;
+    std::unique_ptr<Query> query(new Query(local, intercomms, remote_size(intercomm_index), intercomm_index));
+    diy::MemoryBuffer hierarchy = query->c.call<diy::MemoryBuffer>("get_file_hierarchy", name_);
+    hierarchy.reset();
+    Object* hf = deserialize(hierarchy);
+
+    auto* hff = static_cast<File*>(hf);
+    if (hff->copy_whole) {
+        query->c.finish(0);
+        files.emplace(name, hff);
+        result_mdata = hff;
+    } else {
+        rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
+
+        log->trace("Creating remote");
+        RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
+        files.emplace(name, f);
+        result_mdata = f;
+
+        // move the hierarchy over and delete the plain File object hf
+        f->move_children(hf);
+        delete hf;
     }
+
+    ObjectPointers* result = (ObjectPointers*)MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
+    // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
+    delete dynamic_cast<DummyFile*>((Object*)result->mdata_obj);
+
+    result->mdata_obj = result_mdata;
 
     return result;
 }
