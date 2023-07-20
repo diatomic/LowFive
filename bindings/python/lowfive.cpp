@@ -103,9 +103,9 @@ struct PyDistMetadataVOL: public PyMetadataVOL
         dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_intercomm(filename, full_path, intercomm_index);
     }
 
-    void serve_all()
+    void serve_all(bool delete_data = true, bool perform_indexing = true)
     {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_all();
+        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_all(delete_data, perform_indexing);
     }
 
     decltype(auto)  get_filenames(int intercomm_index)

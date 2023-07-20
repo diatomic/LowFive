@@ -35,7 +35,7 @@ remote_size(int intercomm_index)
 
 void
 DistMetadataVOL::
-serve_all(bool delete_data)
+serve_all(bool delete_data, bool perform_indexing)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -54,11 +54,11 @@ serve_all(bool delete_data)
 
     if (!selected_intercomms.empty())
     {
-        Index index(local, selected_intercomms, &files);
+        Index index(local, selected_intercomms, &files, perform_indexing);
         // we only serve if there any datasets; this matched old (pre-RPC)
         // behavior, but is probably not the right universal solution; we should
         // make this behavior user-configurable
-        if (index.indexed_datasets)
+        if (index.indexed_datasets || !perform_indexing)
             index.serve();
 
     }
