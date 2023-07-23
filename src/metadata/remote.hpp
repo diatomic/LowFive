@@ -59,7 +59,7 @@ struct RemoteDataset : public Dataset, public RemoteObject
     Decomposer                      decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy to be overwritten
 
             RemoteDataset(std::string name, rpc::client::object&& obj):
-                Dataset(name, 0, 0, Ownership::lowfive, 0, 0),
+                Dataset(name, 0, 0, Ownership::lowfive, 0, 0, false, true),
                 RemoteObject(std::move(obj))
     {
         auto log = get_logger();

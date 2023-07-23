@@ -80,7 +80,8 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         mdata = f;
     }
 
-    if (match_any(name, "", passthru, true) && !match_any(name, "", memory, true))
+//    if (match_any(name, "", passthru, true) && !match_any(name, "", memory, true))
+    if (match_any(name, "", passthru, true))
         obj_ptrs = wrap(VOLBase::file_open(name, flags, fapl_id, dxpl_id, req));
     else
         obj_ptrs = wrap(nullptr);
@@ -317,4 +318,15 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
 
     else
         throw MetadataError(fmt::format("file_specific(): neither passthru nor metadata are active"));
+}
+
+
+bool LowFive::MetadataVOL::
+has_real_file(const char* name) const
+{
+    auto it = files.find(std::string(name));
+    if (it == files.end())
+        return false;
+
+    return dynamic_cast<File*>(it->second) != nullptr;
 }

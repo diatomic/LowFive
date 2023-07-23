@@ -6,6 +6,7 @@
 #include    <map>
 #include    <unordered_set>
 #include    <functional>
+#include    <ostream>
 
 #include    <fmt/core.h>
 #include    "vol-base.hpp"
@@ -13,11 +14,16 @@
 namespace LowFive
 {
 
-struct LocationPattern
-{
-    std::string         filename;
-    std::string         pattern;
+struct LocationPattern {
+    std::string filename;
+    std::string pattern;
 };
+
+inline std::ostream& operator<<(std::ostream& out, const LocationPattern& p)
+{
+    out << "LocationPattern(filename = " << p.filename << ", pattern = " << p.pattern;
+    return out;
+}
 
 struct Object;              // forward declaration for Files
 struct ObjectPointers;      // forward declaration for wrap
@@ -74,6 +80,9 @@ struct MetadataVOL: public LowFive::VOLBase
     void            drop(std::string filename);
 
     void            print_files();
+
+    bool            has_real_file(const char* fname) const; // return true, if fname is in files and
+                                                            // it is not a DummyFile
 
     // locate an object in the metadata of one file by its full path, which uniquely identifies one object
     Object*         locate(std::string filename, std::string full_path) const;

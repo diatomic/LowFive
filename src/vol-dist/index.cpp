@@ -8,24 +8,27 @@
 namespace LowFive {
 
 // producer version of the constructor
-Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files):
+Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, bool perform_indexing):
     IndexQuery(local_, intercomms_), idx_srv(files)
 {
     auto log = get_logger();
     log->trace("Index ctor, number of intercomms: {}, files.size = {}", intercomms_.size(), files->size());
 
-    // traverse all datasets
-    for (auto& f : *(idx_srv.files))
+    if(perform_indexing)
     {
-        auto datasets = find_datasets(dynamic_cast<File*>(f.second));
-        for (auto& x : datasets)
+        // traverse all datasets
+        for (auto& f : *(idx_srv.files))
         {
-            auto* ds = x.second;
-            IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
-            index(*ids);
-            ds->extra = ids;
+            auto datasets = find_datasets(dynamic_cast<File*>(f.second));
+            for (auto& x : datasets)
+            {
+                auto* ds = x.second;
+                IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
+                index(*ids);
+                ds->extra = ids;
 
-            ++indexed_datasets;
+                ++indexed_datasets;
+            }
         }
     }
 }

@@ -80,7 +80,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     void            broadcast_files(int root = 0);
 
-    void            serve_all(bool delete_data = true);
+    void            serve_all(bool delete_data = true, bool perform_indexing = true);
 
     void*           object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
