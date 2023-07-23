@@ -2,7 +2,9 @@
 
 #include <memory>
 
+#include "hid.hpp"
 #include "object.hpp"
+#include "file.hpp"
 #include "datatype.hpp"
 #include "dataspace.hpp"
 
@@ -22,11 +24,12 @@ struct RemoteObject
     rpc::client::object obj;
 };
 
-struct RemoteFile: public Object, public RemoteObject
+struct RemoteFile: public File, public RemoteObject
 {
-    RemoteFile(std::string filename_, rpc::client::object&& obj, std::unique_ptr<Query>&& q):
-        Object(ObjectType::File, filename_),
-        RemoteObject(std::move(obj)), query_(std::move(q))
+    RemoteFile(const File& f, rpc::client::object&& obj, std::unique_ptr<Query>&& q):
+        File(f),
+        RemoteObject(std::move(obj)),
+        query_(std::move(q))
     {}
 
     ~RemoteFile()

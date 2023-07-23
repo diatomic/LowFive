@@ -97,7 +97,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
     if (type == ObjectType::File)
     {
         diy::load(bb, include_data);
-        File* f = new File(name, H5P_FILE_CREATE_DEFAULT, H5P_FILE_ACCESS_DEFAULT);
+        File* f = new File(name, H5Pcreate(H5P_FILE_CREATE), H5Pcreate(H5P_FILE_ACCESS));
         f->copy_whole = include_data;
         f->copy_of_remote = include_data;
         o = f;
@@ -113,7 +113,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         diy::load(bb, s);
         diy::load(bb, own);
 
-        auto* d = new Dataset(name, dt.id, s.id, own, H5P_DATASET_CREATE_DEFAULT, H5P_DATASET_ACCESS_DEFAULT);
+        auto* d = new Dataset(name, dt.id, s.id, own, H5Pcreate(H5P_DATASET_CREATE), H5Pcreate(H5P_DATASET_ACCESS));
         o = d;
 
         // load triplets

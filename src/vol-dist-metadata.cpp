@@ -274,7 +274,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
             // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
             delete dynamic_cast<DummyFile*>((Object*) result->mdata_obj);
             log->trace("Creating remote");
-            RemoteFile* f = new RemoteFile(name, std::move(rf), std::move(query));
+            RemoteFile* f = new RemoteFile(*hff, std::move(rf), std::move(query));
             files.emplace(name, f);
             result->mdata_obj = f;
 
