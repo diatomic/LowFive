@@ -126,6 +126,8 @@ make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string>
     auto it = std::find(mdata_obj->parent->children.begin(), mdata_obj->parent->children.end(), dset);
     assert(it != mdata_obj->parent->children.end() && *it == dset);
     *it = ds;
+    ds->parent = mdata_obj->parent;
+    mdata_obj->parent = nullptr;
     ds->move_children(mdata_obj);
     result->mdata_obj = ds;
     delete mdata_obj;
