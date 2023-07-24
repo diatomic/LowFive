@@ -237,7 +237,7 @@ link_iter(void *obj, va_list arguments)
     // TODO: currently ignores the iteration order and current index
     // just blindly goes through all the links in the order they were created
     // also ignoring recursive flag (controls whether to iterate / visit, see H5VL__native_link_specific)
-    for (auto& c : mdata_obj->children)
+    for (auto c : mdata_obj->children)
     {
         // top-level attributes cannot be objects, skip over them
         if (c->type == ObjectType::Attribute &&
