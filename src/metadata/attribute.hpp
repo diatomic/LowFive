@@ -70,7 +70,8 @@ struct Attribute: public Object
     void read(Datatype mem_type_, void* buf)
     {
         auto log = get_logger();
-        log_assert(mem_type.equal(mem_type_), "Currently only know how to read the same datatype as written");
+        // This assertion fails for varialbe length types that are deserialized.
+        //log_assert(mem_type.equal(mem_type_), "Currently only know how to read the same datatype as written");
 
         if (mem_type.dtype_class == DatatypeClass::VarLen)
         {

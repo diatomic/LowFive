@@ -46,10 +46,21 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
         diy::save(bb, a->type);
         diy::save(bb, a->space);
         diy::save(bb, a->mem_type);
-        if (!a->mem_type.is_var_length_string())
-            diy::save(bb, a->data.get(), a->mem_type.dtype_size);
-        else
+        if (a->mem_type.is_var_length_string())
             diy::save(bb, a->strings);
+        else if (a->mem_type.dtype_class == DatatypeClass::VarLen)
+        {
+            hvl_t* data_hvl = (hvl_t*) a->data.get();
+            auto base_type = Datatype(H5Tget_super(a->mem_type.id));
+            for (size_t i = 0; i < a->space.size(); ++i)
+            {
+                auto len = data_hvl[i].len;
+                size_t count = len * base_type.dtype_size;
+                diy::save(bb, len);
+                diy::save(bb, (char*) data_hvl[i].p, count);
+            }
+        } else
+            diy::save(bb, a->data.get(), a->mem_type.dtype_size);
     }
     else if (o->type == ObjectType::HardLink)
         diy::save(bb, static_cast<HardLink*>(o)->target->fullname().second);
@@ -154,12 +165,34 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
 
         auto* a = new Attribute(name, dt.id, s.id);
         diy::load(bb, a->mem_type);
-        if (!a->mem_type.is_var_length_string())
+
+        {
+        }
+        if (a->mem_type.is_var_length_string())
+            diy::load(bb, a->strings);
+        else if (a->mem_type.dtype_class == DatatypeClass::VarLen)
+        {
+            size_t nbytes = a->space.size() * sizeof(hvl_t);
+            a->data = std::unique_ptr<char>(new char[nbytes]);
+
+            hvl_t* data_hvl = (hvl_t*) a->data.get();
+            auto base_type = Datatype(H5Tget_super(a->mem_type.id));
+
+            for (size_t i = 0; i < a->space.size(); ++i)
+            {
+                decltype(data_hvl[i].len) len;
+                diy::load(bb, len);
+                data_hvl[i].len = len;
+                size_t count = len * base_type.dtype_size;
+                data_hvl[i].p = new char[count];
+                diy::load(bb, (char*) data_hvl[i].p, count);
+            }
+        }
+        else
         {
             a->data = std::unique_ptr<char>(new char[a->mem_type.dtype_size]);
             diy::load(bb, a->data.get(), a->mem_type.dtype_size);
-        } else
-            diy::load(bb, a->strings);
+        }
 
         o = a;
     }
