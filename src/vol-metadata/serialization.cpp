@@ -3,6 +3,7 @@
 void
 LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
 {
+    diy::save(bb, o->token);
     diy::save(bb, o->type);
     diy::save(bb, o->name);
     diy::save(bb, o->children.size());
@@ -94,10 +95,12 @@ LowFive::deserialize(diy::MemoryBuffer& bb)
 LowFive::Object*
 LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_data)
 {
+    std::uintptr_t token;
     ObjectType type;
     std::string name;
     size_t n_children;
 
+    diy::load(bb, token);
     diy::load(bb, type);
     diy::load(bb, name);
     diy::load(bb, n_children);
@@ -213,6 +216,8 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         o = new SoftLink(name, target);
     } else
         MetadataError("unhandled case in deserialization");
+
+    o->token = token;
 
     for (size_t i = 0; i < n_children; ++i)
         o->add_child(deserialize(bb, hard_links, include_data));

@@ -11,13 +11,13 @@ token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *
     log->trace("token_compare: {} ({} {}) {} {}", fmt::ptr(obj), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), fmt::ptr(token1), fmt::ptr(token2));
     if (!unwrap(obj))           // look up in memory
     {
-        void* p1;
-        void* p2;
-        memcpy(&p1, token1->__data, sizeof(void*));
-        memcpy(&p2, token2->__data, sizeof(void*));
-        log->trace("token_compare: comparing {} {}", fmt::ptr(p1), fmt::ptr(p2));
+        std::uintptr_t p1;
+        std::uintptr_t p2;
+        memcpy(&p1, token1->__data, sizeof(std::uintptr_t));
+        memcpy(&p2, token2->__data, sizeof(std::uintptr_t));
+        log->trace("token_compare: comparing {} {}", p1, p2);
 
-        *cmp_value = memcmp(token1->__data, token2->__data, sizeof(void*));
+        *cmp_value = memcmp(token1->__data, token2->__data, sizeof(std::uintptr_t));
         log->trace("token_compare: result = {}", *cmp_value);
         return 0;
     } else

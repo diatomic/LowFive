@@ -122,6 +122,7 @@ make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string>
 
     // assume we are the consumer, since nothing stored in memory (open also implies that)
     auto* ds = new RemoteDataset(mdata_obj->name, std::move(ds_obj));     // build and record the index to be used in read
+    ds->token = dset->token;
     ds->dcpl = dset->dcpl;
     ds->dapl = dset->dapl;
     auto it = std::find(mdata_obj->parent->children.begin(), mdata_obj->parent->children.end(), dset);

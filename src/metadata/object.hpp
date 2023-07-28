@@ -12,6 +12,7 @@ struct Object
 {
     Object*                         parent;
     std::vector<Object*>            children;
+    std::uintptr_t                  token;
 
     ObjectType                      type;
     std::string                     name;
@@ -37,7 +38,9 @@ struct Object
         parent(nullptr),
         type(type_),
         name(name_)
-    {}
+    {
+        token = reinterpret_cast<std::uintptr_t>(this);
+    }
 
     virtual ~Object()
     {
@@ -68,12 +71,11 @@ struct Object
         for (size_t i = 0; i < H5O_MAX_TOKEN_SIZE; ++i)
             token.__data[i] = 0;
 
-        void* _this = this;
-        memcpy(token.__data, &_this, sizeof(void*));
+        memcpy(token.__data, &this->token, sizeof(std::uintptr_t));
 
         // debug
-//         fmt::print(stderr, "fill_token: {} ", fmt::ptr(this));
-//         print_token(token);
+        //fmt::print(stderr, "fill_token: {} ", fmt::ptr(this));
+        //print_token(token);
     }
 
     // for debugging
@@ -82,6 +84,21 @@ struct Object
         for (size_t i = 0; i < H5O_MAX_TOKEN_SIZE; ++i)
             fmt::print(stderr, "{0:x}", token.__data[i]);
         fmt::print(stderr, "\n");
+    }
+
+    Object* find_token(std::uintptr_t t)
+    {
+        if (token == t)
+            return this;
+
+        for (auto* child : children)
+        {
+            auto* res = child->find_token(t);
+            if (res)
+                return res;
+        }
+
+        return nullptr;
     }
 
     virtual ObjectPath search(const char* cur_path_)
@@ -99,11 +116,17 @@ struct Object
         else if (loc_params.type == H5VL_OBJECT_BY_TOKEN)
         {
             H5O_token_t* token = loc_params.loc_data.loc_by_token.token;
-            Object* ptr;
-            memcpy((void*) &ptr, token->__data, sizeof(void*));
+            std::uintptr_t t;
+            memcpy(&t, token->__data, sizeof(std::uintptr_t));
+
             auto log = get_logger();
-            log->trace("located by token: {} name = {}", fmt::ptr(ptr), ptr->name);
-            return ObjectPath { ptr, "" };
+            log->trace("locating by token: {}", t);
+
+            Object* o = find_root()->find_token(t);
+            assert(o);
+
+            log->trace("located by token: {} name = {}", fmt::ptr(o), o->name);
+            return ObjectPath { o, "" };
         }
         else
             throw MetadataError(fmt::format("don't know how to locate by loc_params.type = {}", loc_params.type));
