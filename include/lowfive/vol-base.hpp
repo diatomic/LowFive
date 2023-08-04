@@ -154,13 +154,19 @@ struct VOLBase
     static herr_t          _dataset_close(void *dset, hid_t dxpl_id, void **req);
     virtual herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req);
 
-    //// datatype
-    //void dtype_commit()             {}
-    //void dtype_open()               {}
-    //void dtype_get()                {}
-    //void dtype_specific()           {}
-    //void dtype_optional()           {}
-    //void dtype_close()              {}
+    // datatype
+    static void *          _datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
+    virtual void *          datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
+    static void *          _datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
+    virtual void *          datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
+    static herr_t          _datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _datatype_optional(void *obj, H5VL_datatype_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    virtual herr_t          datatype_optional(void *obj, H5VL_datatype_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _datatype_close(void *dt, hid_t dxpl_id, void **req);
+    virtual herr_t          datatype_close(void *dt, hid_t dxpl_id, void **req);
 
     //// file
     static void*           _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);

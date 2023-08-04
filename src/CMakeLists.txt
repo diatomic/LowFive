@@ -8,6 +8,7 @@ add_library             (lowfive SHARED
                             vol-base/base.cpp
                             vol-base/info.cpp
                             vol-base/dataset.cpp
+                            vol-base/datatype.cpp
                             vol-base/file.cpp
                             vol-base/attr.cpp
                             vol-base/group.cpp
