@@ -87,8 +87,8 @@ struct VOLBase
                             VOLBase& operator=(const VOLBase&) = delete;
                             VOLBase& operator=(VOLBase&&) = delete;
 
-//    we do not instantiate VOLBase, so no create function
-//    static VOLBase&         create_vol_base();
+    // only for debugging purposes; shouldn't every have to be used in real code
+    static VOLBase&         create_vol_base()   { auto vol_base = new VOLBase; info->vol = vol_base; return *vol_base; }
 
     virtual void            drop(void* p)       {}
 

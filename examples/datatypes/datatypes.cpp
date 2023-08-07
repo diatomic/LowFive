@@ -33,6 +33,7 @@ int main(int argc, char**argv)
     bool                      shared            = false;          // producer and consumer run on the same ranks
     size_t                    local_num_points  = 20;            // points per block
     std::string               log_level         = "";
+    bool                      base              = false;          // use VOLBase
 
     (void) shared; // suppress warning
 
@@ -56,6 +57,7 @@ int main(int argc, char**argv)
         >> Option('m', "memory",    metadata,       "build and use in-memory metadata")
         >> Option('f', "file",      passthru,       "write file to disk")
         >> Option('l', "log",       log_level,      "level for the log output (trace, debug, info, ...)")
+        >> Option(     "base",      base,           "use VOLBase")
         ;
     ops
         >> Option('x',  "max-x",    domain.max[0],  "domain max x")
@@ -92,18 +94,26 @@ int main(int argc, char**argv)
     LowFive::LocationPattern particles { "outfile.h5", "/group1/particles"};
 
     // create the vol plugin
-    l5::MetadataVOL& vol_plugin = l5::MetadataVOL::create_MetadataVOL();
-    if (metadata)
+    l5::VOLBase* vol_plugin_base;
+    if (base)
     {
-        //vol_plugin.memory.push_back(all);
-        vol_plugin.memory.push_back(grid);
-        vol_plugin.memory.push_back(particles);
-    }
-    if (passthru)
+        vol_plugin_base = &l5::VOLBase::create_vol_base();
+    } else
     {
-        //vol_plugin.passthru.push_back(all);
-        vol_plugin.passthru.push_back(grid);
-        vol_plugin.passthru.push_back(particles);
+        l5::MetadataVOL& vol_plugin = l5::MetadataVOL::create_MetadataVOL();
+        if (metadata)
+        {
+            //vol_plugin.memory.push_back(all);
+            vol_plugin.memory.push_back(grid);
+            vol_plugin.memory.push_back(particles);
+        }
+        if (passthru)
+        {
+            //vol_plugin.passthru.push_back(all);
+            vol_plugin.passthru.push_back(grid);
+            vol_plugin.passthru.push_back(particles);
+        }
+        vol_plugin_base = &vol_plugin;
     }
     communicator local;
     local.duplicate(world);
@@ -112,7 +122,7 @@ int main(int argc, char**argv)
     hid_t plist = H5Pcreate(H5P_FILE_ACCESS);
     if (passthru)
         H5Pset_fapl_mpio(plist, local, MPI_INFO_NULL);
-    l5::H5VOLProperty vol_prop(vol_plugin);
+    l5::H5VOLProperty vol_prop(*vol_plugin_base);
     if (!getenv("HDF5_VOL_CONNECTOR"))
     {
         fmt::print("HDF5_VOL_CONNECTOR is not set; enabling VOL explicitly\n");
