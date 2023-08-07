@@ -18,7 +18,12 @@ struct Datatype: Hid
     DatatypeClass           dtype_class;
     size_t                  dtype_size;         // in bytes
 
-            Datatype(hid_t dtype_id_ = 0, bool owned = false):
+    // DM: We never take ownership of a data type.
+    // Either way seems to work for built-in type, but once we make a copy of a
+    // type (and possibly commit, although that's less clear), incrementing its
+    // reference count, which is what owned does, breaks closing of the types.
+    // I'm not quite sure why it works this way.
+            Datatype(hid_t dtype_id_ = 0, bool owned = true):
                 Hid(dtype_id_, owned)
     {
         if (id == 0) return;
