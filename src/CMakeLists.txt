@@ -20,6 +20,7 @@ add_library             (lowfive SHARED
                             vol-base/link.cpp
                             vol-metadata.cpp
                             vol-metadata/dataset.cpp
+                            vol-metadata/datatype.cpp
                             vol-metadata/file.cpp
                             vol-metadata/attr.cpp
                             vol-metadata/group.cpp
