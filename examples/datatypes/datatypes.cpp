@@ -169,20 +169,31 @@ int main(int argc, char**argv)
     // commit the datatype to convert from transient to named, so it can be shared
     H5Tcommit(file, "my_float", dtype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-    // create the grid dataset with default properties
-    hid_t dset = H5Dcreate(group, "grid", dtype, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    // query the class and committed status of the datatype
+    H5T_class_t dtype_class = H5Tget_class(dtype);
+    htri_t status = H5Tcommitted(dtype);
+    fmt::print(stderr, "dtype class = {} H5T_FLOAT = {} committed = {}\n", dtype_class, H5T_FLOAT, status);
+
+    // open a datatype from the named one
+    hid_t dtype1 = H5Topen(file, "my_float", H5P_DEFAULT);
+
+    // create the grid dataset from the opened datatype
+    hid_t dset = H5Dcreate(group, "grid", dtype1, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     // write the grid data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_grid(cp, dset); });
 
     // clean up
+    H5Tclose(dtype1);
     H5Tclose(dtype);
     H5Dclose(dset);
     H5Sclose(filespace);
     H5Gclose(group);
     H5Fclose(file);
     H5Pclose(plist);
+
+    fmt::print(stderr, "Success\n");
 
     return 0;
 }

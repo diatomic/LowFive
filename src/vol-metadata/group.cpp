@@ -46,6 +46,8 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     } while (!obj_path.path.empty());
     result->mdata_obj = obj_path.obj;
 
+    log->trace("group_create: created group = {}", *result);
+
     return (void*)result;
 }
 
