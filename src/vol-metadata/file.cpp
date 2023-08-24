@@ -296,6 +296,52 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
     auto log = get_logger();
+
+    // special case, when checking for accessibility
+    if (!file_)
+    {
+        log->trace("file_specific: file == 0");
+
+        if (specific_type == H5VL_FILE_IS_ACCESSIBLE)
+        {
+            va_list args;
+            va_copy(args,arguments);
+
+            hid_t fapl_id, under_fapl_id;
+            const char *name;
+            htri_t *ret;
+
+            /* Get the arguments for the 'is accessible' check */
+            fapl_id = va_arg(args, hid_t);
+            name    = va_arg(args, const char *);
+            ret     = va_arg(args, htri_t *);
+
+            log->trace("file_specific: looking up {}", name);
+
+            bool result = true;
+            if (match_any(name, "", passthru, true))
+            {
+                VOLBase::file_specific(file, specific_type, dxpl_id, req, arguments);
+                result &= (*ret > 0);
+                log->trace("file_specific: passthru result = {}", result);
+            }
+
+            if (match_any(name, "", memory, true))
+            {
+                result &= (files.find(name) != files.end());
+                log->trace("file_specific: memory result = {}", result);
+            }
+
+            if (result)
+                *ret = 1;
+            else
+                *ret = 0;
+
+            return 0;
+        } else
+            throw MetadataError(fmt::format("file_specific(): file == 0, but specific_type = {} != {} (H5VL_FILE_IS_ACCESSIBLE)", specific_type, H5VL_FILE_IS_ACCESSIBLE));
+    }
+
     log->trace("file_specific: {}", *file_);
 
     // debug
