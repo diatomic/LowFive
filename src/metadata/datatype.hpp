@@ -18,8 +18,9 @@ struct Datatype: Hid
     DatatypeClass           dtype_class;
     size_t                  dtype_size;         // in bytes
 
+    // always copy datatypes
             Datatype(hid_t dtype_id_ = 0, bool owned = false):
-                Hid(dtype_id_, owned)
+                Hid(dtype_id_ ? H5Tcopy(dtype_id_) : dtype_id_, true)
     {
         if (id == 0) return;
 

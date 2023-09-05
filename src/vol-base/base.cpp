@@ -49,12 +49,12 @@ H5VL_class_t LowFive::VOLBase::connector =
         &_dataset_close                             /* close */
     },
     {                                           /* datatype_cls */
-        NULL, // OUR_pass_through_datatype_commit,          /* commit */
-        NULL, // OUR_pass_through_datatype_open,            /* open */
-        NULL, // OUR_pass_through_datatype_get,             /* get_size */
-        NULL, // OUR_pass_through_datatype_specific,        /* specific */
-        NULL, // OUR_pass_through_datatype_optional,        /* optional */
-        NULL  // OUR_pass_through_datatype_close            /* close */
+        &_datatype_commit,                          /* commit */
+        &_datatype_open,                            /* open */
+        &_datatype_get,                             /* get_size */
+        &_datatype_specific,                        /* specific */
+        &_datatype_optional,                        /* optional */
+        &_datatype_close                            /* close */
     },
     {                                           /* file_cls */
         &_file_create,                               /* create */

@@ -75,13 +75,13 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     else
         result = wrap(nullptr);
 
-    if (match_any(filepath, memory))
-    {
-        // find the dataset in our file metadata
+    //if (match_any(filepath, memory))
+    //{
+    //    // find the dataset in our file metadata
         auto obj_path = parent->search(name);
         if (obj_path.path.empty())
             result->mdata_obj = obj_path.obj;
-    }
+    //}
 
     if (!result->mdata_obj)
     {
@@ -233,7 +233,8 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
         // we build our hierarchy for all datasets, so here we must check if this dataset is passthru only
         auto filepath = static_cast<Object*>(dset_->mdata_obj)->fullname();
         // save our metadata
-        Dataset* ds = (Dataset*) dset_->mdata_obj;
+        Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj);
+        assert(ds);
         if (ds->is_memory) {
             //log->trace("MetadataVOL::dataset_write: saving data to memory, dataset {} is_memory is true", ds->name);
             ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);

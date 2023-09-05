@@ -179,37 +179,6 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
 }
 
 /*-------------------------------------------------------------------------
- * Function:    pass_through_file_specific_reissue
- *
- * Purpose:     Re-wrap vararg arguments into a va_list and reissue the
- *              file specific callback to the underlying VOL connector.
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_file_specific_reissue(void *obj, hid_t connector_id,
-    H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...)
-{
-    CALI_CXX_MARK_FUNCTION;
-    // TODO: is this right? making a new object from the reissued one?
-    pass_through_t *o = (pass_through_t *)obj;
-
-    va_list arguments;
-    herr_t ret_value;
-
-    va_start(arguments, req);
-    // TODO: is this right? making a new object from the reissued one?
-    ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
-    va_end(arguments);
-
-    return ret_value;
-} /* end _file_specific_reissue() */
-
-/*-------------------------------------------------------------------------
  * Function:    _file_specific
  *
  * Purpose:     Specific operation on file
@@ -233,6 +202,11 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
 
     log->debug("------- PASS THROUGH VOL FILE Specific");
 
+    // file can be 0, in which case need to be a little careful
+    ret_value = info->vol->file_specific(o ? o->under_object : o, specific_type, dxpl_id, req, arguments);
+
+    // DM: not sure why any of this is needed or was here, so commenting it out (also removed file_specific_reissue)
+#if 0
     /* Unpack arguments to get at the child file pointer when mounting a file */
     if(specific_type == H5VL_FILE_MOUNT) {
         H5I_type_t loc_type;
@@ -309,6 +283,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
             va_end(my_arguments);
         } /* end if */
     } /* end else */
+#endif
 
     /* Check for async request */
     if(req && *req)
