@@ -38,38 +38,31 @@ datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
 }
 
 herr_t
-LowFive::MetadataVOL::
-datatype_get(void *dt, H5VL_datatype_get_t get_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+LowFive::MetadataVOL::datatype_get(void* dt, H5VL_datatype_get_args_t* args, hid_t dxpl_id, void** req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) dt;
     if (unwrap(obj_))
-        return VOLBase::datatype_get(unwrap(obj_), get_type, dxpl_id, req, arguments);
+        return VOLBase::datatype_get(unwrap(obj_), args, dxpl_id, req);
 
     throw MetadataError("datatype_get not implemented in-memory");
 }
 
 herr_t
-LowFive::MetadataVOL::
-datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+LowFive::MetadataVOL::datatype_specific(void* obj, H5VL_datatype_specific_args_t* args, hid_t dxpl_id, void** req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     if (unwrap(obj_))
-        return VOLBase::datatype_specific(unwrap(obj_), specific_type, dxpl_id, req, arguments);
+        return VOLBase::datatype_specific(unwrap(obj_), args, dxpl_id, req);
 
     throw MetadataError("datatype_specific not implemented in-memory");
 }
 
 herr_t
-LowFive::MetadataVOL::
-datatype_optional(void *obj, H5VL_datatype_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+LowFive::MetadataVOL::datatype_optional(void* obj, H5VL_optional_args_t* args, hid_t dxpl_id, void** req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     if (unwrap(obj_))
-        return VOLBase::datatype_optional(unwrap(obj_), opt_type, dxpl_id, req, arguments);
+        return VOLBase::datatype_optional(unwrap(obj_), args, dxpl_id, req);
 
     throw MetadataError("datatype_optional not implemented in-memory");
 }
-

@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 #include "../log-private.hpp"
 
+
 /*-------------------------------------------------------------------------
  * Function:    file_create
  *
@@ -127,56 +128,6 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     return H5VLfile_open(name, flags, fapl_id, dxpl_id, req);
 }
 
-/*-------------------------------------------------------------------------
- * Function:    file_get
- *
- * Purpose:     Get info about a file
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
-    void **req, va_list arguments)
-{
-    CALI_CXX_MARK_FUNCTION;
-    auto log = get_logger();
-
-    pass_through_t *o = (pass_through_t *)file;
-    herr_t ret_value;
-
-    log->debug("------- PASS THROUGH VOL FILE Get");
-
-    log->trace("file_get: get_type = {}", get_type);
-    va_list args;
-    va_copy(args, arguments);
-
-    ret_value = o->vol->file_get(o->under_object, get_type, dxpl_id, req, arguments);
-
-    if (get_type == H5VL_FILE_GET_OBJ_COUNT)
-    {
-        unsigned types     = va_arg(args, unsigned);
-        ssize_t *ret       = va_arg(args, ssize_t *);
-        log->trace("file_get: H5VL_FILE_GET_OBJ_COUNT, types = {}, ret = {}", types, *ret);
-    }
-
-    /* Check for async request */
-    if(req && *req)
-        *req = o->create(*req);
-
-    return ret_value;
-} /* end file_get() */
-
-herr_t
-LowFive::VOLBase::
-file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
-    void **req, va_list arguments)
-{
-    return H5VLfile_get(file, info->under_vol_id, get_type, dxpl_id, req, arguments);
-}
 
 /*-------------------------------------------------------------------------
  * Function:    _file_specific
@@ -190,8 +141,7 @@ file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id,
  */
 herr_t
 LowFive::VOLBase::
-_file_specific(void *file, H5VL_file_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+_file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -203,7 +153,7 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
     log->debug("------- PASS THROUGH VOL FILE Specific");
 
     // file can be 0, in which case need to be a little careful
-    ret_value = info->vol->file_specific(o ? o->under_object : o, specific_type, dxpl_id, req, arguments);
+    ret_value = info->vol->file_specific(o ? o->under_object : o, args, dxpl_id, req);
 
     // DM: not sure why any of this is needed or was here, so commenting it out (also removed file_specific_reissue)
 #if 0
@@ -294,50 +244,9 @@ _file_specific(void *file, H5VL_file_specific_t specific_type,
 
 herr_t
 LowFive::VOLBase::
-file_specific(void *file, H5VL_file_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req)
 {
-    return H5VLfile_specific(file, info->under_vol_id, specific_type, dxpl_id, req, arguments);
-}
-
-/*-------------------------------------------------------------------------
- * Function:    file_optional
- *
- * Purpose:     Perform a connector-specific operation on a file
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_file_optional(void *file, H5VL_file_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
-{
-    CALI_CXX_MARK_FUNCTION;
-    auto log = get_logger();
-
-    pass_through_t *o = (pass_through_t *)file;
-    herr_t ret_value;
-
-    log->debug("------- PASS THROUGH VOL File Optional");
-
-    ret_value = o->vol->file_optional(o->under_object, opt_type, dxpl_id, req, arguments);
-
-    /* Check for async request */
-    if(req && *req)
-        *req = o->create(*req);
-
-    return ret_value;
-} /* end file_optional() */
-
-herr_t
-LowFive::VOLBase::
-file_optional(void *file, H5VL_file_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
-{
-    return H5VLfile_optional(file, info->under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLfile_specific(file, info->under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -384,3 +293,128 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
     return H5VLfile_close(file, info->under_vol_id, dxpl_id, req);
 }
+
+/////////////////////////////////////
+
+
+
+/*-------------------------------------------------------------------------
+ * Function:    file_get
+ *
+ * Purpose:     Get info about a file
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)file;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL FILE Get");
+
+    auto get_type = args->op_type;
+
+    log->trace("file_get: get_type = {}", get_type);
+
+    ret_value = o->vol->file_get(o->under_object, args, dxpl_id, req);
+
+    if (get_type == H5VL_FILE_GET_OBJ_COUNT)
+    {
+        unsigned types     = args->args.get_obj_count.types;
+        size_t*  count     = args->args.get_obj_count.count;
+        log->trace("file_get: H5VL_FILE_GET_OBJ_COUNT, types = {}, ret = {}", types, *count);
+    }
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end file_get() */
+
+herr_t
+LowFive::VOLBase::
+file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLfile_get(file, info->under_vol_id, args, dxpl_id, req);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    file_optional
+ *
+ * Purpose:     Perform a connector-specific operation on a file
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    CALI_CXX_MARK_FUNCTION;
+    auto log = get_logger();
+
+    pass_through_t *o = (pass_through_t *)file;
+    herr_t ret_value;
+
+    log->debug("------- PASS THROUGH VOL File Optional");
+
+    ret_value = o->vol->file_optional(o->under_object, args, dxpl_id, req);
+
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
+    return ret_value;
+} /* end file_optional() */
+
+herr_t
+LowFive::VOLBase::
+file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    return H5VLfile_optional(file, info->under_vol_id, args, dxpl_id, req);
+}
+
+// AN: commented out, as the calling part in file_specific was commented out
+#if 0
+/*-------------------------------------------------------------------------
+ * Function:    pass_through_file_specific_reissue
+ *
+ * Purpose:     Re-wrap vararg arguments into a va_list and reissue the
+ *              file specific callback to the underlying VOL connector.
+ *
+ * Return:      Success:    0
+ *              Failure:    -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+LowFive::VOLBase::
+_file_specific_reissue(void *obj, hid_t connector_id,
+        H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...)
+{
+    throw std::runtime_error("not implemented");
+    // TODO: is this right? making a new object from the reissued one?
+    pass_through_t *o = (pass_through_t *)obj;
+
+    va_list arguments;
+    herr_t ret_value;
+
+    va_start(arguments, req);
+    // TODO: is this right? making a new object from the reissued one?
+//    ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
+    va_end(arguments);
+
+    return ret_value;
+} /* end _file_specific_reissue() */
+#endif
+

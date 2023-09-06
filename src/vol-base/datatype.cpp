@@ -107,8 +107,7 @@ datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
  */
 herr_t
 LowFive::VOLBase::
-_datatype_get(void *dt, H5VL_datatype_get_t get_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+_datatype_get(void *dt, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -118,7 +117,7 @@ _datatype_get(void *dt, H5VL_datatype_get_t get_type,
 
     log->debug("------- PASS THROUGH VOL DATATYPE Get");
 
-    ret_value = o->vol->datatype_get(o->under_object, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->datatype_get(o->under_object, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -129,10 +128,9 @@ _datatype_get(void *dt, H5VL_datatype_get_t get_type,
 
 herr_t
 LowFive::VOLBase::
-datatype_get(void *dt, H5VL_datatype_get_t get_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+datatype_get(void *dt, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    return H5VLdatatype_get(dt, info->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLdatatype_get(dt, info->under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -147,8 +145,7 @@ datatype_get(void *dt, H5VL_datatype_get_t get_type,
  */
 herr_t
 LowFive::VOLBase::
-_datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+_datatype_specific(void *obj, H5VL_datatype_specific_args_t *args, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -163,7 +160,7 @@ _datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
     // refresh destroying the current object
     under_vol_id = o->under_vol_id;
 
-    ret_value = o->vol->datatype_specific(o->under_object, specific_type, dxpl_id, req, arguments);
+    ret_value = o->vol->datatype_specific(o->under_object, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -174,10 +171,9 @@ _datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
 
 herr_t
 LowFive::VOLBase::
-datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+datatype_specific(void *obj, H5VL_datatype_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    return H5VLdatatype_specific(obj, info->under_vol_id, specific_type, dxpl_id, req, arguments);
+    return H5VLdatatype_specific(obj, info->under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -192,8 +188,7 @@ datatype_specific(void *obj, H5VL_datatype_specific_t specific_type,
  */
 herr_t
 LowFive::VOLBase::
-_datatype_optional(void *obj, H5VL_datatype_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+_datatype_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -203,7 +198,7 @@ _datatype_optional(void *obj, H5VL_datatype_optional_t opt_type,
 
     log->debug("------- PASS THROUGH VOL DATATYPE Optional");
 
-    ret_value = o->vol->datatype_optional(o->under_object, opt_type, dxpl_id, req, arguments);
+    ret_value = o->vol->datatype_optional(o->under_object, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -214,10 +209,9 @@ _datatype_optional(void *obj, H5VL_datatype_optional_t opt_type,
 
 herr_t
 LowFive::VOLBase::
-datatype_optional(void *obj, H5VL_datatype_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+datatype_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **req)
 {
-    return H5VLdatatype_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLdatatype_optional(obj, info->under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------

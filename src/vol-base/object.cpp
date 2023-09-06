@@ -16,7 +16,6 @@ LowFive::VOLBase::
 _object_open(void *obj, const H5VL_loc_params_t *loc_params,
     H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *new_obj;
@@ -67,7 +66,6 @@ _object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id,
     void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o_src = (pass_through_t *)src_obj;
@@ -96,6 +94,7 @@ object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
 {
     return H5VLobject_copy(src_obj, src_loc_params, src_name, dst_obj, dst_loc_params, dst_name, info->under_vol_id, ocpypl_id, lcpl_id, dxpl_id, req);
 }
+
 /*-------------------------------------------------------------------------
  * Function:    _object_get
  *
@@ -108,9 +107,8 @@ object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params,
  */
 herr_t
 LowFive::VOLBase::
-_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -118,7 +116,7 @@ _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t ge
 
     log->debug("------- PASS THROUGH VOL OBJECT Get");
 
-    ret_value = o->vol->object_get(o->under_object, loc_params, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->object_get(o->under_object, loc_params, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -129,9 +127,9 @@ _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t ge
 
 herr_t
 LowFive::VOLBase::
-object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req)
 {
-    return H5VLobject_get(obj, loc_params, info->under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLobject_get(obj, loc_params, info->under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -147,9 +145,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get
 herr_t
 LowFive::VOLBase::
 _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
-    H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+        H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -162,7 +159,7 @@ _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
     // refresh destroying the current object
     //under_vol_id = o->under_vol_id;
 
-    ret_value = o->vol->object_specific(o->under_object, loc_params, specific_type, dxpl_id, req, arguments);
+    ret_value = o->vol->object_specific(o->under_object, loc_params, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -174,9 +171,9 @@ _object_specific(void *obj, const H5VL_loc_params_t *loc_params,
 herr_t
 LowFive::VOLBase::
 object_specific(void *obj, const H5VL_loc_params_t *loc_params,
-    H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+        H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req)
 {
-    return H5VLobject_specific(obj, loc_params, info->under_vol_id, specific_type, dxpl_id, req, arguments);
+    return H5VLobject_specific(obj, loc_params, info->under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -191,9 +188,8 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
  */
 herr_t
 LowFive::VOLBase::
-_object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
+_object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
     pass_through_t *o = (pass_through_t *)obj;
@@ -201,7 +197,7 @@ _object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void
 
     log->debug("------- PASS THROUGH VOL OBJECT Optional");
 
-    ret_value = o->vol->object_optional(o->under_object, opt_type, dxpl_id, req, arguments);
+    ret_value = o->vol->object_optional(o->under_object, loc_params, args, dxpl_id, req);
 
     return ret_value;
 } /* end _object_optional() */
@@ -209,7 +205,7 @@ _object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void
 
 herr_t
 LowFive::VOLBase::
-object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
+object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
-    return H5VLobject_optional(obj, info->under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLobject_optional(obj, loc_params, info->under_vol_id, args, dxpl_id, req);
 }

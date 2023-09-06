@@ -6,112 +6,114 @@
 hid_t LowFive::VOLBase::connector_id = -1;
 
 H5VL_class_t LowFive::VOLBase::connector =
-{
-    0,                                              /* version      */
-    (H5VL_class_value_t) 510,                       /* value        */
-    "lowfive",                                      /* name         */
-    0,                                              /* capability flags */
-    &_init,                                         /* initialize   */
-    &_term,                                         /* terminate    */
-    {                                               /* info_cls */
-        sizeof(info_t),                             /* size    */
-        &_info_copy,                                /* copy    */
-        NULL, //&OUR_pass_through_info_cmp,                  /* compare */
-        &_info_free,                                /* free    */
-        &_info_to_str,                              /* to_str  */
-        &_str_to_info                               /* from_str */
-    },
-    {                                           /* wrap_cls */
-        &_wrap_get_object,                          /* get_object   */
-        &_get_wrap_ctx,                             /* get_wrap_ctx */
-        &_wrap_object,                              /* wrap_object  */
-        &_unwrap_object,                            /* unwrap_object */
-        &_free_wrap_ctx                             /* free_wrap_ctx */
-    },
-    {                                           /* attribute_cls */
-        &_attr_create,                              /* create */
-        &_attr_open,                                /* open */
-        &_attr_read,                                /* read */
-        &_attr_write,                               /* write */
-        &_attr_get,                                 /* get */
-        &_attr_specific,                            /* specific */
-        &_attr_optional,                            /* optional */
-        &_attr_close                                /* close */
-    },
-    {                                           /* dataset_cls */
-        &_dataset_create,                           /* create */
-        &_dataset_open,                             /* open */
-        &_dataset_read,                             /* read */
-        &_dataset_write,                            /* write */
-        &_dataset_get,                              /* get */
-        &_dataset_specific,                         /* specific */
-        &_dataset_optional,                         /* optional */
-        &_dataset_close                             /* close */
-    },
-    {                                           /* datatype_cls */
-        &_datatype_commit,                          /* commit */
-        &_datatype_open,                            /* open */
-        &_datatype_get,                             /* get_size */
-        &_datatype_specific,                        /* specific */
-        &_datatype_optional,                        /* optional */
-        &_datatype_close                            /* close */
-    },
-    {                                           /* file_cls */
-        &_file_create,                               /* create */
-        &_file_open,                                 /* open */
-        &_file_get,                                  /* get */
-        &_file_specific,                             /* specific */
-        &_file_optional,                             /* optional */
-        &_file_close                                 /* close */
-    },
-    {                                           /* group_cls */
-        &_group_create,                              /* create */
-        &_group_open,                                /* open */
-        &_group_get,                                 /* get */
-        &_group_specific,                            /* specific */
-        &_group_optional,                            /* optional */
-        &_group_close                                /* close */
-    },
-    {                                           /* link_cls */
-        &_link_create,                              /* create */
-        &_link_copy,                                /* copy */
-        &_link_move,                                /* move */
-        &_link_get,                                 /* get */
-        &_link_specific,                            /* specific */
-        &_link_optional                             /* optional */
-    },
-    {                                           /* object_cls */
-        &_object_open,                              /* open */
-        &_object_copy,                              /* copy */
-        &_object_get,                               /* get */
-        &_object_specific,                          /* specific */
-        &_object_optional                           /* optional */
-    },
-    {                                           /* introspect_cls */
-        &_introspect_get_conn_cls,                   /* get_conn_cls */
-        &_introspect_opt_query                       /* opt_query */
-    },
-    {                                           /* request_cls */
-        NULL, // OUR_pass_through_request_wait,             /* wait */
-        NULL, // OUR_pass_through_request_notify,           /* notify */
-        NULL, // OUR_pass_through_request_cancel,           /* cancel */
-        NULL, // OUR_pass_through_request_specific,         /* specific */
-        NULL, // OUR_pass_through_request_optional,         /* optional */
-        NULL  // OUR_pass_through_request_free              /* free */
-    },
-    {                                                       /* blob_cls */
-        &_blob_put,                                         /* put */
-        &_blob_get,                                         /* get */
-        &_blob_specific,                                    /* specific */
-        NULL, // OUR_pass_through_blob_optional             /* optional */
-    },
-    {                                           /* token_cls */
-        &_token_cmp,                                 /* cmp */
-        NULL, // OUR_pass_through_token_to_str,             /* to_str */
-        NULL, // OUR_pass_through_token_from_str              /* from_str */
-    },
-    &_optional                                              /* optional */
-};
+        {
+                3,                                              /* version, must be 2 for HDF5 1.13 and 3 for HDF5 1.14 */
+                (H5VL_class_value_t) 510,                       /* value        */
+                "lowfive",                                      /* name         */
+                0,                                              /* connector version */
+                _cap_flags,                                    /* capability flags */
+                &_init,                                         /* initialize   */
+                &_term,                                         /* terminate    */
+                {                                               /* info_cls */
+                        sizeof(info_t),                             /* size    */
+                        &_info_copy,                                /* copy    */
+                        NULL, //&OUR_pass_through_info_cmp,                  /* compare */
+                        &_info_free,                                /* free    */
+                        &_info_to_str,                              /* to_str  */
+                        &_str_to_info                               /* from_str */
+                },
+                {                                           /* wrap_cls */
+                        &_wrap_get_object,                          /* get_object   */
+                        &_get_wrap_ctx,                             /* get_wrap_ctx */
+                        &_wrap_object,                              /* wrap_object  */
+                        &_unwrap_object,                            /* unwrap_object */
+                        &_free_wrap_ctx                             /* free_wrap_ctx */
+                },
+                {                                           /* attribute_cls */
+                        &_attr_create,                              /* create */
+                        &_attr_open,                                /* open */
+                        &_attr_read,                                /* read */
+                        &_attr_write,                               /* write */
+                        &_attr_get,                                 /* get */
+                        &_attr_specific,                            /* specific */
+                        &_attr_optional,                            /* optional */
+                        &_attr_close                                /* close */
+                },
+                {                                           /* dataset_cls */
+                        &_dataset_create,                           /* create */
+                        &_dataset_open,                             /* open */
+                        &_dataset_read,                             /* read */
+                        &_dataset_write,                            /* write */
+                        &_dataset_get,                              /* get */
+                        &_dataset_specific,                         /* specific */
+                        &_dataset_optional,                         /* optional */
+                        &_dataset_close                             /* close */
+                },
+                {                                           /* datatype_cls */
+                        &_datatype_commit,                          /* commit */
+                        &_datatype_open,                            /* open */
+                        &_datatype_get,                             /* get_size */
+                        &_datatype_specific,                        /* specific */
+                        &_datatype_optional,                        /* optional */
+                        &_datatype_close                            /* close */
+                },
+                {                                           /* file_cls */
+                        &_file_create,                               /* create */
+                        &_file_open,                                 /* open */
+                        &_file_get,                                  /* get */
+                        &_file_specific,                             /* specific */
+                        &_file_optional,                             /* optional */
+                        &_file_close                                 /* close */
+                },
+                {                                           /* group_cls */
+                        &_group_create,                              /* create */
+                        &_group_open,                                /* open */
+                        &_group_get,                                 /* get */
+                        &_group_specific,                            /* specific */
+                        &_group_optional,                            /* optional */
+                        &_group_close                                /* close */
+                },
+                {                                           /* link_cls */
+                        &_link_create,                              /* create */
+                        &_link_copy,                                /* copy */
+                        &_link_move,                                /* move */
+                        &_link_get,                                 /* get */
+                        &_link_specific,                            /* specific */
+                        &_link_optional                             /* optional */
+                },
+                {                                           /* object_cls */
+                        &_object_open,                              /* open */
+                        &_object_copy,                              /* copy */
+                        &_object_get,                               /* get */
+                        &_object_specific,                          /* specific */
+                        &_object_optional                           /* optional */
+                },
+                {                                           /* introspect_cls */
+                        &_introspect_get_conn_cls,                   /* get_conn_cls */
+                        &_introspect_get_cap_flags,                  /* get_cap_flags */
+                        &_introspect_opt_query                       /* opt_query */
+                },
+                {                                           /* request_cls */
+                        NULL, // OUR_pass_through_request_wait,             /* wait */
+                        NULL, // OUR_pass_through_request_notify,           /* notify */
+                        NULL, // OUR_pass_through_request_cancel,           /* cancel */
+                        NULL, // OUR_pass_through_request_specific,         /* specific */
+                        NULL, // OUR_pass_through_request_optional,         /* optional */
+                        NULL  // OUR_pass_through_request_free              /* free */
+                },
+                {                                                       /* blob_cls */
+                        &_blob_put,                                         /* put */
+                        &_blob_get,                                         /* get */
+                        &_blob_specific,                                    /* specific */
+                        NULL, // OUR_pass_through_blob_optional             /* optional */
+                },
+                {                                           /* token_cls */
+                        &_token_cmp,                                 /* cmp */
+                        NULL, // OUR_pass_through_token_to_str,             /* to_str */
+                        NULL, // OUR_pass_through_token_from_str              /* from_str */
+                },
+                &_optional                                              /* optional */
+        };
 
 H5PL_type_t H5PLget_plugin_type(void) { return H5PL_TYPE_VOL; }
 const void *H5PLget_plugin_info(void)
@@ -231,7 +233,7 @@ _term(void)
  */
 herr_t
 LowFive::VOLBase::
-_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
+_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -241,15 +243,14 @@ _optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
 
     log->debug("------- PASS THROUGH VOL generic Optional");
 
-    ret_value = o->vol->optional(o->under_object, op_type, dxpl_id, req, arguments);
+    ret_value = o->vol->optional(o->under_object, args, dxpl_id, req);
 
     return ret_value;
 }
 
 herr_t
 LowFive::VOLBase::
-optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments)
+optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
-    return H5VLoptional(obj, info->under_vol_id, op_type, dxpl_id, req, arguments);
+    return H5VLoptional(obj, info->under_vol_id, args, dxpl_id, req);
 }
-
