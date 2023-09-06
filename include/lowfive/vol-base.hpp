@@ -6,6 +6,8 @@
 
 #include <hdf5.h>
 
+static_assert(H5_VERS_MAJOR == 1 and H5_VERS_MINOR == 14, "LowFive supports HDF5 1.14 only");
+
 namespace LowFive
 {
 
@@ -72,7 +74,7 @@ struct VOLBase
     static H5VL_class_t     connector;      // need this static for H5PL_* functions (for automatic plugin loading via environment variables)
     static hid_t            connector_id;   // static only because of term()
 
-                            // prohibit copy/move ctor and assignment, make
+                             // prohibit copy/move ctor and assignment, make
                             // default ctor private
     protected:
                             VOLBase();
@@ -127,12 +129,12 @@ struct VOLBase
     virtual herr_t          attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req);
     static herr_t          _attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req);
     virtual herr_t          attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req);
-    static herr_t          _attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
     static herr_t          _attr_close(void *attr, hid_t dxpl_id, void **req);
     virtual herr_t          attr_close(void *attr, hid_t dxpl_id, void **req);
 
@@ -141,30 +143,37 @@ struct VOLBase
     virtual void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
     static void*           _dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
     virtual void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
-    static herr_t          _dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req);
     virtual herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req);
-    static herr_t          _dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
     virtual herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
-    static herr_t          _dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _dataset_specific(void *obj, H5VL_dataset_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          dataset_specific(void *obj, H5VL_dataset_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _dataset_optional(void *obj, H5VL_dataset_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          dataset_optional(void *obj, H5VL_dataset_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[], hid_t file_space_id[], hid_t dxpl_id, void *buf[], void **req);
+    static herr_t          _dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[], hid_t file_space_id[], hid_t dxpl_id, const void *buf[], void **req);
+    static herr_t          _dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _dataset_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          dataset_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
     static herr_t          _dataset_close(void *dset, hid_t dxpl_id, void **req);
     virtual herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req);
 
-    // datatype
+    //// datatype
+    //void dtype_commit()             {}
+    //void dtype_open()               {}
+    //void dtype_get()                {}
+    //void dtype_specific()           {}
+    //void dtype_optional()           {}
+    //void dtype_close()              {}
+
     static void *          _datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
     virtual void *          datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
     static void *          _datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
     virtual void *          datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
-    static herr_t          _datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _datatype_optional(void *obj, H5VL_datatype_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          datatype_optional(void *obj, H5VL_datatype_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req);
+    virtual herr_t          datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req);
+    static herr_t          _datatype_specific(void *obj, H5VL_datatype_specific_args_t *args, hid_t dxpl_id, void **req);
+    virtual herr_t          datatype_specific(void *obj, H5VL_datatype_specific_args_t *args, hid_t dxpl_id, void **req);
+    static herr_t          _datatype_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **req);
+    virtual herr_t          datatype_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **req);
     static herr_t          _datatype_close(void *dt, hid_t dxpl_id, void **req);
     virtual herr_t          datatype_close(void *dt, hid_t dxpl_id, void **req);
 
@@ -173,70 +182,74 @@ struct VOLBase
     virtual void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
     static void*           _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
     virtual void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
-    static herr_t          _file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
-    static herr_t          _file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
     static herr_t          _file_close(void *file, hid_t dxpl_id, void **req);
     virtual herr_t          file_close(void *file, hid_t dxpl_id, void **req);
+    static herr_t          _file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t args, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
+    static herr_t          _file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
 
     //// group
     static void*           _group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     virtual void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
     static void*           _group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
     virtual void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
-    static herr_t          _group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _group_specific(void *obj, H5VL_group_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          group_specific(void *obj, H5VL_group_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _group_optional(void *obj, H5VL_group_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          group_optional(void *obj, H5VL_group_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _group_specific(void *obj, H5VL_group_specific_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          group_specific(void *obj, H5VL_group_specific_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _group_optional(void *obj, H5VL_optional_args_t* arguments, hid_t dxpl_id, void **req);
+    virtual herr_t          group_optional(void *obj, H5VL_optional_args_t* arguments, hid_t dxpl_id, void **req);
     static herr_t          _group_close(void *obj, hid_t dxpl_id, void **req);
     virtual herr_t          group_close(void *obj, hid_t dxpl_id, void **req);
 
-    //// link
-    static herr_t          _link_create_reissue(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...); // helper function for link_create()
-    static herr_t          _link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _link_create_reissue(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req); // helper function for link_create()
+    static herr_t          _link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+    virtual herr_t          link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     static herr_t          _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     virtual herr_t          link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     static herr_t          _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     virtual herr_t          link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
-    static herr_t          _link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _link_optional(void *obj, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t *args, hid_t dxpl_id, void **req);
+    virtual herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_args_t *args, hid_t dxpl_id, void **req);
+    static herr_t          _link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_args_t *args, hid_t dxpl_id, void **req);
+    virtual herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_args_t *args, hid_t dxpl_id, void **req);
+    static herr_t          _link_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t *args, hid_t dxpl_id, void **req);
+    virtual herr_t          link_optional(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_optional_args_t *args, hid_t dxpl_id, void **req);
 
     //// object
     static void *          _object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
     virtual void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
     static herr_t          _object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req);
     virtual herr_t          object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req);
-    static herr_t          _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-    static herr_t          _object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          object_optional(void *obj, H5VL_object_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req);
+    static herr_t          _object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
+    virtual herr_t          object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
 
     //// Container/connector introspection
     static herr_t          _introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls);
     virtual herr_t          introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls);
-    static herr_t          _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
-    virtual herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
+    // 1.12 takes supported, 1.14 takes flags
+    virtual herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported, uint64_t* flags);
+    static herr_t          _introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags);
+    static const uint64_t  _cap_flags { H5VL_CAP_FLAG_ATTR_BASIC | H5VL_CAP_FLAG_DATASET_BASIC | H5VL_CAP_FLAG_FILE_BASIC |
+                                        H5VL_CAP_FLAG_GROUP_BASIC | H5VL_CAP_FLAG_OBJECT_BASIC };           // TODO: combine flags from H5VL_CAP_FLAG_*
+    static herr_t          _introspect_get_cap_flags(const void *info, uint64_t *cap_flags);
+
 
     //// blob
     static herr_t          _blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
     virtual herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx);
     static herr_t          _blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx);
     virtual herr_t          blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx);
-    static herr_t          _blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments);
-    virtual herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments);
+    static herr_t          _blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args);
+    virtual herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args);
     //void blob_optional              {}
 
     //// token
@@ -253,8 +266,8 @@ struct VOLBase
     //void req_optional()             {}
     //void req_free()                 {}
 
-    static herr_t          _optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
-    virtual herr_t          optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments);
+    static herr_t          _optional(void *obj, H5VL_optional_args_t* arg, hid_t dxpl_id, void **req);
+    virtual herr_t          optional(void *obj, H5VL_optional_args_t* arg, hid_t dxpl_id, void **req);
 };
 
 }

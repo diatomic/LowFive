@@ -35,22 +35,6 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     return obj_ptrs;
 }
 
-herr_t
-LowFive::MetadataVOL::
-file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments)
-{
-    ObjectPointers* file_ = (ObjectPointers*) file;
-
-    auto log = get_logger();
-    log->trace("file_optional: file = {}, opt_type = {}", *file_, opt_type);
-    // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
-
-    herr_t res = 0;
-    if (unwrap(file_))
-        res = VOLBase::file_optional(unwrap(file_), opt_type, dxpl_id, req, arguments);
-
-    return res;
-}
 
 void*
 LowFive::MetadataVOL::
@@ -93,152 +77,6 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     return obj_ptrs;
 }
 
-herr_t
-LowFive::MetadataVOL::
-file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
-{
-    ObjectPointers* file_ = (ObjectPointers*) file;
-
-    va_list args;
-    va_copy(args,arguments);
-
-    auto log = get_logger();
-    log->trace("file_get: file = {}, get_type = {} req = {} dxpl_id = {}",
-            *file_, get_type, fmt::ptr(req), dxpl_id);
-    // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
-
-    herr_t result = 0;
-    if (unwrap(file_))
-        // NB: The case of H5VL_FILE_GET_OBJ_IDS requires that we augment the
-        //     output with mdata_obj pointers.  The native implementation seems to
-        //     do this automagically.
-        result = VOLBase::file_get(unwrap(file_), get_type, dxpl_id, req, arguments);
-    else
-    {
-        // see hdf5 H5VLnative_file.c, H5VL__native_file_get()
-        if (get_type == H5VL_FILE_GET_CONT_INFO)            // file container info
-        {
-            H5VL_file_cont_info_t *info = va_arg(arguments, H5VL_file_cont_info_t *);
-
-            /* Verify structure version */
-            assert(info->version == H5VL_CONTAINER_INFO_VERSION);
-
-            /* Set the container info fields */
-            info->feature_flags = 0;
-            info->token_size    = 8;
-            info->blob_id_size  = 8;
-        }
-        else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
-        {
-            hid_t* plist_id = va_arg(arguments, hid_t*);
-            *plist_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
-        }
-        else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
-        {
-            hid_t* plist_id = va_arg(arguments, hid_t*);
-            *plist_id = static_cast<File*>(file_->mdata_obj)->fcpl.id;
-        }
-        // TODO
-        else if (get_type == H5VL_FILE_GET_FILENO)          // file number
-            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet"));
-        else if (get_type == H5VL_FILE_GET_INTENT)          // file intent
-        {
-            unsigned *intent_flags = va_arg(arguments, unsigned *);
-            log->warn("file_get(): H5VL_FILE_GET_INTENT forces H5F_ACC_RDWR as a response");
-            *intent_flags = H5F_ACC_RDWR;
-        }
-        else if (get_type == H5VL_FILE_GET_NAME)            // file name
-        {
-            H5I_type_t type = (H5I_type_t)va_arg(arguments, int); /* enum work-around */
-            size_t     size = va_arg(arguments, size_t);
-            char *     name = va_arg(arguments, char *);
-            ssize_t *  ret  = va_arg(arguments, ssize_t *);
-            size_t     len;
-
-            auto* name_c = static_cast<File*>(file_->mdata_obj)->name.c_str();
-            len = std::strlen(name_c);
-
-            if (name) {
-                std::strncpy(name, name_c, std::min(len + 1, size));
-                if (len >= size)
-                    name[size - 1] = '\0';
-            } /* end if */
-
-            /* Set the return value for the API call */
-            *ret = (ssize_t)len;
-        }
-        else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
-        {
-            unsigned types     = va_arg(arguments, unsigned);
-            ssize_t *ret       = va_arg(arguments, ssize_t *);
-            size_t   obj_count = 0; /* Number of opened objects */
-
-            // TODO
-            log->warn("FILE_GET_OBJ_COUNT doesn't currently check whether objects belong to the given file");
-
-            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
-            auto count = [](hid_t, void* obj_count_) -> herr_t
-                         {
-                            ++(*static_cast<size_t*>(obj_count_));
-                            return 0;
-                         };
-
-            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     count, &obj_count);
-            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    count, &obj_count);
-            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  count, &obj_count);
-            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
-            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, count, &obj_count);
-            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     count, &obj_count);
-
-            *ret = (ssize_t)obj_count;
-        }
-        else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
-        {
-            unsigned types     = va_arg(arguments, unsigned);
-            size_t   max_objs  = va_arg(arguments, size_t);
-            hid_t *  oid_list  = va_arg(arguments, hid_t *);
-            ssize_t *ret       = va_arg(arguments, ssize_t *);
-            size_t   obj_count = 0; /* Number of opened objects */
-
-            // TODO
-            log->warn("FILE_GET_OBJ_IDS doesn't currently check whether objects belong to the given file");
-
-            using ListInfo = std::tuple<size_t*, hid_t**, size_t*, size_t>;
-            ListInfo list_info(&max_objs, &oid_list, &obj_count, 0);
-
-            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
-            auto get_objs = [](hid_t obj_id, void* list_info_) -> herr_t
-                            {
-                                ListInfo* list_info = static_cast<ListInfo*>(list_info_);
-
-                                size_t& max_objs  = *std::get<0>(*list_info);
-                                hid_t*& oid_list  = *std::get<1>(*list_info);
-                                size_t& obj_count = *std::get<2>(*list_info);
-                                size_t& n         =  std::get<3>(*list_info);
-
-                                ++obj_count;
-
-                                if (n < max_objs)
-                                    oid_list[n++] = obj_id;
-
-                                return 0;        // TODO: could stop early
-                            };
-
-            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     get_objs, &list_info);
-            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    get_objs, &list_info);
-            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  get_objs, &list_info);
-            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
-            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, get_objs, &list_info);
-            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     get_objs, &list_info);
-
-            *ret = (ssize_t)obj_count;
-        }
-        else
-            throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));
-    }
-
-    return result;
-}
 
 herr_t
 LowFive::MetadataVOL::
@@ -291,8 +129,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
 herr_t
 LowFive::MetadataVOL::
-file_specific(void *file, H5VL_file_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req)
 {
     ObjectPointers* file_ = (ObjectPointers*) file;
     auto log = get_logger();
@@ -302,70 +139,211 @@ file_specific(void *file, H5VL_file_specific_t specific_type,
     {
         log->trace("file_specific: file == 0");
 
-        if (specific_type == H5VL_FILE_IS_ACCESSIBLE)
+        if (args->op_type == H5VL_FILE_IS_ACCESSIBLE)
         {
-            va_list args;
-            va_copy(args,arguments);
+            log->trace("file_specific: looking up {}", args->args.is_accessible.filename);
 
-            hid_t fapl_id, under_fapl_id;
-            const char *name;
-            htri_t *ret;
-
-            /* Get the arguments for the 'is accessible' check */
-            fapl_id = va_arg(args, hid_t);
-            name    = va_arg(args, const char *);
-            ret     = va_arg(args, htri_t *);
-
-            log->trace("file_specific: looking up {}", name);
-
-            bool result = true;
+            hbool_t result = true;
             if (match_any(name, "", passthru, true))
             {
-                VOLBase::file_specific(file, specific_type, dxpl_id, req, arguments);
-                result &= (*ret > 0);
+                VOLBase::file_specific(file, args, dxpl_id, req);
+                result = result and (*args->args.is_accessible.accessible);
                 log->trace("file_specific: passthru result = {}", result);
             }
 
             if (match_any(name, "", memory, true))
             {
-                result &= (files.find(name) != files.end());
+                result = result and (files.find(name) != files.end());
                 log->trace("file_specific: memory result = {}", result);
             }
 
-            if (result)
-                *ret = 1;
-            else
-                *ret = 0;
+            *args->args.is_accessible.accessible = result;
 
             return 0;
         } else
-            throw MetadataError(fmt::format("file_specific(): file == 0, but specific_type = {} != {} (H5VL_FILE_IS_ACCESSIBLE)", specific_type, H5VL_FILE_IS_ACCESSIBLE));
+            throw MetadataError(fmt::format("file_specific(): file == 0, but specific_type = {} != {} (H5VL_FILE_IS_ACCESSIBLE)", args->op_type, H5VL_FILE_IS_ACCESSIBLE));
     }
 
     log->trace("file_specific: {}", *file_);
 
     // debug
-    if (specific_type == H5VL_FILE_FLUSH)
+    if (args->op_type == H5VL_FILE_FLUSH)
         log->trace("file_specific(): specific_type = H5VL_FILE_FLUSH");
 
     if (unwrap(file_))
-        return VOLBase::file_specific(unwrap(file_), specific_type, dxpl_id, req, arguments);
+        return VOLBase::file_specific(unwrap(file_), args, dxpl_id, req);
 
     else if (file_->mdata_obj)
     {
-        if (specific_type == H5VL_FILE_FLUSH)
+        if (args->op_type == H5VL_FILE_FLUSH)
         {
             log->trace("file_specific(): specific_type = H5VL_FILE_FLUSH: no-op for metadata");
             return 0;
         }
         else
-            throw MetadataError(fmt::format("file_specific(): specific_type {} not implemented for in-memory regime", specific_type));
+            throw MetadataError(fmt::format("file_specific(): specific_type {} not implemented for in-memory regime", args->op_type));
     }
 
     else
         throw MetadataError(fmt::format("file_specific(): neither passthru nor metadata are active"));
 }
 
+
+herr_t
+LowFive::MetadataVOL::
+file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* file_ = (ObjectPointers*) file;
+
+    auto get_type = args->op_type;
+
+    auto log = get_logger();
+    log->trace("file_get: file = {}, get_type = {} req = {} dxpl_id = {}",
+            *file_, args->op_type, fmt::ptr(req), dxpl_id);
+    // enum H5VL_file_get_t is defined in H5VLconnector.h and lists the meaning of the values
+
+    herr_t result = 0;
+    if (unwrap(file_))
+        // NB: The case of H5VL_FILE_GET_OBJ_IDS requires that we augment the
+        //     output with mdata_obj pointers.  The native implementation seems to
+        //     do this automagically.
+        result = VOLBase::file_get(unwrap(file_), args, dxpl_id, req);
+    else
+    {
+        // see hdf5 H5VLnative_file.c, H5VL__native_file_get()
+        if (get_type == H5VL_FILE_GET_CONT_INFO)            // file container info
+        {
+            H5VL_file_cont_info_t *info = args->args.get_cont_info.info;
+
+            /* Verify structure version */
+            assert(info->version == H5VL_CONTAINER_INFO_VERSION);
+
+            /* Set the container info fields */
+            info->feature_flags = 0;
+            info->token_size    = 8;
+            info->blob_id_size  = 8;
+        }
+        else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
+        {
+            args->args.get_fapl.fapl_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
+        }
+        else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
+        {
+            args->args.get_fcpl.fcpl_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
+        }
+            // TODO
+        else if (get_type == H5VL_FILE_GET_FILENO)          // file number
+//            args->args.get_fileno.fileno = ???
+            throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet"));
+        else if (get_type == H5VL_FILE_GET_INTENT)          // file intent
+        {
+            log->warn("file_get(): H5VL_FILE_GET_INTENT forces H5F_ACC_RDWR as a response");
+            *args->args.get_intent.flags = H5F_ACC_RDWR;
+        }
+        else if (get_type == H5VL_FILE_GET_NAME)            // file name
+        {
+            size_t     size = args->args.get_name.buf_size;
+            char *     name = args->args.get_name.buf;
+            size_t*    len  = args->args.get_name.file_name_len;
+
+            auto* name_c = static_cast<File*>(file_->mdata_obj)->name.c_str();
+            *len = std::strlen(name_c);
+
+            if (args->args.get_name.buf) {
+                std::strncpy(name, name_c, std::min(*len + 1, size));
+                if (*len >= size)
+                    name[size - 1] = '\0';
+            }
+        }
+        else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
+        {
+            size_t   obj_count = 0; /* Number of opened objects */
+
+            unsigned types     = args->args.get_obj_count.types;
+            size_t*  ret       = args->args.get_obj_count.count;
+            // TODO
+            log->warn("FILE_GET_OBJ_COUNT doesn't currently check whether objects belong to the given file");
+
+            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
+            auto count = [](hid_t, void* obj_count_) -> herr_t
+            {
+              ++(*static_cast<size_t*>(obj_count_));
+              return 0;
+            };
+
+            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     count, &obj_count);
+            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    count, &obj_count);
+            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  count, &obj_count);
+            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
+            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, count, &obj_count);
+            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     count, &obj_count);
+
+            *ret = obj_count;
+        }
+        else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
+        {
+            unsigned types     = args->args.get_obj_ids.types;
+            size_t   max_objs  = args->args.get_obj_ids.max_objs;
+            hid_t *  oid_list  = args->args.get_obj_ids.oid_list;
+            size_t*  ret       = args->args.get_obj_ids.count;
+            size_t   obj_count = 0; /* Number of opened objects */
+
+            // TODO
+            log->warn("FILE_GET_OBJ_IDS doesn't currently check whether objects belong to the given file");
+
+            using ListInfo = std::tuple<size_t*, hid_t**, size_t*, size_t>;
+            ListInfo list_info(&max_objs, &oid_list, &obj_count, 0);
+
+            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
+            auto get_objs = [](hid_t obj_id, void* list_info_) -> herr_t
+            {
+              ListInfo* list_info = static_cast<ListInfo*>(list_info_);
+
+              size_t& max_objs  = *std::get<0>(*list_info);
+              hid_t*& oid_list  = *std::get<1>(*list_info);
+              size_t& obj_count = *std::get<2>(*list_info);
+              size_t& n         =  std::get<3>(*list_info);
+
+              ++obj_count;
+
+              if (n < max_objs)
+                  oid_list[n++] = obj_id;
+
+              return 0;        // TODO: could stop early
+            };
+
+            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     get_objs, &list_info);
+            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    get_objs, &list_info);
+            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  get_objs, &list_info);
+            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
+            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, get_objs, &list_info);
+            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     get_objs, &list_info);
+
+            *ret = (ssize_t)obj_count;
+        }
+        else
+            throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));
+    }
+
+    return result;
+}
+
+herr_t
+LowFive::MetadataVOL::
+file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
+{
+    ObjectPointers* file_ = (ObjectPointers*) file;
+
+    auto log = get_logger();
+    log->trace("file_optional: file = {}, opt_type = {}", *file_, args->op_type);
+    // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
+
+    herr_t res = 0;
+    if (unwrap(file_))
+        res = VOLBase::file_optional(unwrap(file_), args, dxpl_id, req);
+
+    return res;
+}
 
 bool LowFive::MetadataVOL::
 has_real_file(const char* name) const

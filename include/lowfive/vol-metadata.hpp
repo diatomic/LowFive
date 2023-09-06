@@ -186,73 +186,70 @@ struct MetadataVOL: public LowFive::VOLBase
         }
         return result;
     }
-
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          file_optional(void *file, H5VL_file_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req) override;
     herr_t          file_close(void *file, hid_t dxpl_id, void **req) override;
     void*           file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req) override;
 
     void*           dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req) override;
     herr_t          dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req) override;
     herr_t          dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, void *buf, void **req) override;
     void*           dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req) override;
     herr_t          dataset_close(void *dset, hid_t dxpl_id, void **req) override;
-    herr_t          dataset_specific(void *obj, H5VL_dataset_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          dataset_optional(void *obj, H5VL_dataset_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          dataset_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req) override;
 
     void*           datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req) override;
     herr_t          datatype_close(void *dt, hid_t dxpl_id, void **req) override;
     void *          datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          datatype_specific(void *obj, H5VL_datatype_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          datatype_optional(void *obj, H5VL_datatype_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req) override;
+    herr_t          datatype_specific(void *obj, H5VL_datatype_specific_args_t *args, hid_t dxpl_id, void **req) override;
+    herr_t          datatype_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **req) override;
 
     void*           group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req) override;
     void*           group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req) override;
     herr_t          group_close(void *grp, hid_t dxpl_id, void **req) override;
-    herr_t          group_optional(void *obj, H5VL_group_optional_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          group_get(void *dset, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          group_specific(void *obj, H5VL_group_specific_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          group_get(void *dset, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          group_specific(void *obj, H5VL_group_specific_args_t* args, hid_t dxpl_id, void **req) override;
 
-    herr_t          link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req) override;
     herr_t          link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req) override;
     herr_t          link_move(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req) override;
-    herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          link_iter(void *obj, va_list arguments);
+    herr_t          link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_get_args_t *args, hid_t dxpl_id, void **req) override;
+    herr_t          link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_link_specific_args_t *args, hid_t dxpl_id, void **req) override;
+    herr_t          link_optional(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, H5VL_optional_args_t *args, hid_t dxpl_id, void **req) override;
+    herr_t          link_iter(void *obj, H5VL_link_specific_args_t* args);
 
+    herr_t          link_create_trampoline(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
 
-    herr_t          link_create_trampoline(H5VL_link_create_type_t create_type, void *obj,
-                                           const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id,
-                                           hid_t dxpl_id, void **req, ...);
 
     void*           attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req) override;
     void*           attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req) override;
     herr_t          attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req) override;
     herr_t          attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req) override;
-    herr_t          attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          attr_optional(void *obj, H5VL_attr_optional_t opt_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          attr_optional(void *obj, H5VL_optional_args_t * args, hid_t dxpl_id, void **req) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
-    htri_t          attr_exists(Object *mdata_obj, va_list arguments);
-    herr_t          attr_iter(void *obj, va_list arguments);
+    htri_t          attr_exists(Object *mdata_obj, const char* attr_name, htri_t* ret);
+    herr_t          attr_iter(void *obj, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data);
 
     void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
     herr_t          object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req) override;
-    herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments) override;
-    herr_t          object_optional(void *obj, int op_type, hid_t dxpl_id, void **req, va_list arguments) override;
+    herr_t          object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_args_t* args, hid_t dxpl_id, void **req) override;
+    herr_t          object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_args_t * args, hid_t dxpl_id, void **req) override;
 
     herr_t          introspect_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const H5VL_class_t **conn_cls) override;
-    herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported) override;
+    herr_t          introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported, uint64_t* flags) override;
 
     herr_t          blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx) override;
     herr_t          blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx) override;
-    herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_t specific_type, va_list arguments) override;
+    herr_t          blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args) override;
 
     herr_t          token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value) override;
 

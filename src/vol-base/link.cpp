@@ -4,6 +4,7 @@
 #include <fmt/format.h>
 #include "../log-private.hpp"
 
+
 /*-------------------------------------------------------------------------
  * Function:    pass_through_link_create_reissue
  *
@@ -17,25 +18,19 @@
  */
 herr_t
 LowFive::VOLBase::
-_link_create_reissue(H5VL_link_create_type_t create_type,
-    void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id,
-    hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, ...)
+_link_create_reissue(H5VL_link_create_args_t* args, void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void** req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
 
-    // TODO: is this right? making a new object from the reissued one?
     pass_through_t *o = (pass_through_t *)obj;
 
     log->debug("------- PASS THROUGH VOL LINK Create Reissue");
 
-    va_list arguments;
     herr_t ret_value;
 
-    va_start(arguments, req);
     // TODO: is this right? making a new object from the reissued one?
-    ret_value = o->vol->link_create(create_type, o->under_object, loc_params, connector_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
-    va_end(arguments);
+    ret_value = o->vol->link_create(args, o->under_object, loc_params, connector_id, lcpl_id, lapl_id, dxpl_id, req);
 
     return ret_value;
 } /* end pass_through_link_create_reissue() */
@@ -52,9 +47,8 @@ _link_create_reissue(H5VL_link_create_type_t create_type,
  */
 herr_t
 LowFive::VOLBase::
-_link_create(H5VL_link_create_type_t create_type, void *obj,
-    const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id,
-    hid_t dxpl_id, void **req, va_list arguments)
+_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params,
+        hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     auto log = get_logger();
 
@@ -69,31 +63,24 @@ _link_create(H5VL_link_create_type_t create_type, void *obj,
         under_vol_id = o->under_vol_id;
 
     /* Fix up the link target object for hard link creation */
-    if(H5VL_LINK_CREATE_HARD == create_type) {
-        void         *cur_obj;
-        H5VL_loc_params_t* cur_params;
-
-        /* Retrieve the object & loc params for the link target */
-        cur_obj = va_arg(arguments, void *);
-        cur_params = va_arg(arguments, H5VL_loc_params_t*);
-
-        /* If it's a non-NULL pointer, find the 'under object' and re-set the property */
-        if(cur_obj) {
+    if(H5VL_LINK_CREATE_HARD == args->op_type) {
+        /* If curr_obj a non-NULL pointer, find the 'under object' and re-set the property */
+        if(args->args.hard.curr_obj) {
             /* Check if we still need the "under" VOL ID */
             if(under_vol_id < 0)
-                under_vol_id = ((pass_through_t *)cur_obj)->under_vol_id;
+                under_vol_id = ((pass_through_t *)args->args.hard.curr_obj)->under_vol_id;
 
             /* Set the object for the link target */
-            cur_obj = ((pass_through_t *)cur_obj)->under_object;
+            args->args.hard.curr_obj = ((pass_through_t *)args->args.hard.curr_obj)->under_object;
         } /* end if */
 
         /* Re-issue 'link create' call, using the unwrapped pieces */
-        ret_value = _link_create_reissue(create_type, obj, loc_params,
-                under_vol_id, lcpl_id, lapl_id, dxpl_id, req, cur_obj, cur_params);
+        ret_value = _link_create_reissue(args, obj, loc_params,
+                under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
     } /* end if */
     else
-        ret_value = o->vol->link_create(create_type, o->under_object, loc_params,
-                under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
+        ret_value = o->vol->link_create(args, o->under_object, loc_params,
+                under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -103,12 +90,9 @@ _link_create(H5VL_link_create_type_t create_type, void *obj,
 } /* end pass_through_link_create() */
 
 herr_t
-LowFive::VOLBase::
-link_create(H5VL_link_create_type_t create_type, void *obj,
-    const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id,
-    hid_t dxpl_id, void **req, va_list arguments)
+LowFive::VOLBase::link_create(H5VL_link_create_args_t* args, void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void** req)
 {
-    return H5VLlink_create(create_type, obj, loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req, arguments);
+    return H5VLlink_create(args, obj, loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -129,8 +113,8 @@ link_create(H5VL_link_create_type_t create_type, void *obj,
 herr_t
 LowFive::VOLBase::
 _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
-    void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
-    hid_t lapl_id, hid_t dxpl_id, void **req)
+        void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
+        hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -170,8 +154,8 @@ _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
 herr_t
 LowFive::VOLBase::
 link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
-    void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
-    hid_t lapl_id, hid_t dxpl_id, void **req)
+        void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
+        hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     return H5VLlink_copy(src_obj, loc_params1, dst_obj, loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
 }
@@ -194,8 +178,8 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
 herr_t
 LowFive::VOLBase::
 _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
-    void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
-    hid_t lapl_id, hid_t dxpl_id, void **req)
+        void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
+        hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -234,8 +218,8 @@ _link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
 herr_t
 LowFive::VOLBase::
 link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
-    void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
-    hid_t lapl_id, hid_t dxpl_id, void **req)
+        void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
+        hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     return H5VLlink_move(src_obj, loc_params1, dst_obj, loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
 }
@@ -251,9 +235,7 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
  *-------------------------------------------------------------------------
  */
 herr_t
-LowFive::VOLBase::
-_link_get(void *obj, const H5VL_loc_params_t *loc_params,
-    H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+LowFive::VOLBase::_link_get(void* obj, const H5VL_loc_params_t* loc_params, H5VL_link_get_args_t* args, hid_t dxpl_id, void** req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -263,7 +245,7 @@ _link_get(void *obj, const H5VL_loc_params_t *loc_params,
 
     log->debug("------- PASS THROUGH VOL LINK Get");
 
-    ret_value = o->vol->link_get(o->under_object, loc_params, o->under_vol_id, get_type, dxpl_id, req, arguments);
+    ret_value = o->vol->link_get(o->under_object, loc_params, o->under_vol_id, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -273,11 +255,9 @@ _link_get(void *obj, const H5VL_loc_params_t *loc_params,
 } /* end pass_through_link_get() */
 
 herr_t
-LowFive::VOLBase::
-link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
-    H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+LowFive::VOLBase::link_get(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, H5VL_link_get_args_t* args, hid_t dxpl_id, void** req)
 {
-    return H5VLlink_get(obj, loc_params, under_vol_id, get_type, dxpl_id, req, arguments);
+    return H5VLlink_get(obj, loc_params, under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -291,9 +271,8 @@ link_get(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
  *-------------------------------------------------------------------------
  */
 herr_t
-LowFive::VOLBase::
-_link_specific(void *obj, const H5VL_loc_params_t *loc_params, 
-    H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+LowFive::VOLBase::_link_specific(void* obj, const H5VL_loc_params_t* loc_params,
+        H5VL_link_specific_args_t* args, hid_t dxpl_id, void** req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -303,7 +282,7 @@ _link_specific(void *obj, const H5VL_loc_params_t *loc_params,
 
     log->debug("------- PASS THROUGH VOL LINK Specific");
 
-    ret_value = o->vol->link_specific(o->under_object, loc_params, o->under_vol_id, specific_type, dxpl_id, req, arguments);
+    ret_value = o->vol->link_specific(o->under_object, loc_params, o->under_vol_id, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -313,11 +292,10 @@ _link_specific(void *obj, const H5VL_loc_params_t *loc_params,
 } /* end pass_through_link_specific() */
 
 herr_t
-LowFive::VOLBase::
-link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id,
-    H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments)
+LowFive::VOLBase::link_specific(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id,
+        H5VL_link_specific_args_t* args, hid_t dxpl_id, void** req)
 {
-    return H5VLlink_specific(obj, loc_params, under_vol_id, specific_type, dxpl_id, req, arguments);
+    return H5VLlink_specific(obj, loc_params, under_vol_id, args, dxpl_id, req);
 }
 
 /*-------------------------------------------------------------------------
@@ -332,8 +310,8 @@ link_specific(void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id
  */
 herr_t
 LowFive::VOLBase::
-_link_optional(void *obj, H5VL_link_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+_link_optional(void* obj, const H5VL_loc_params_t* loc_params,
+        H5VL_optional_args_t* args, hid_t dxpl_id, void** req)
 {
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
@@ -343,7 +321,7 @@ _link_optional(void *obj, H5VL_link_optional_t opt_type,
 
     log->debug("------- PASS THROUGH VOL LINK Optional");
 
-    ret_value = o->vol->link_optional(o->under_object, o->under_vol_id, opt_type, dxpl_id, req, arguments);
+    ret_value = o->vol->link_optional(o->under_object, loc_params, o->under_vol_id, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
@@ -353,11 +331,8 @@ _link_optional(void *obj, H5VL_link_optional_t opt_type,
 } /* end pass_through_link_optional() */
 
 herr_t
-LowFive::VOLBase::
-link_optional(void *obj, hid_t under_vol_id, H5VL_link_optional_t opt_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+LowFive::VOLBase::link_optional(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id,
+        H5VL_optional_args_t* args, hid_t dxpl_id, void** req)
 {
-    return H5VLlink_optional(obj, under_vol_id, opt_type, dxpl_id, req, arguments);
+    return H5VLlink_optional(obj, loc_params, under_vol_id, args, dxpl_id, req);
 }
-
-
