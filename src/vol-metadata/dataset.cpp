@@ -191,7 +191,14 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
         auto filepath = static_cast<Object*>(dset_->mdata_obj)->fullname();
         // save our metadata
         Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj);
-        assert(ds);
+        if (!ds)
+        {
+            // this error typically happens when a file is created, closed, and then re-opened for writing.
+            // for this to work, the file needs to remain in memory from close to re-open, which means
+            // set_keep(true) needs to be called on the vol
+            log->critical("Opened a dummy dataset; did you forget to set_keep(true)?");
+            assert(ds);
+        }
         if (ds->is_memory) {
             //log->trace("MetadataVOL::dataset_write: saving data to memory, dataset {} is_memory is true", ds->name);
             ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
