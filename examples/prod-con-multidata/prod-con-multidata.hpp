@@ -165,7 +165,7 @@ struct PointBlock
         status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
         if (status < 0)
-            fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+            fmt::print(stderr, "Error in H5Sselect_hyperslab: status = {}", status);
 
         // memspace = core selected out of bounds
         hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
@@ -174,7 +174,9 @@ struct PointBlock
         status = H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &ofst[0], NULL, &core_cnts[0], NULL);
 
         // write the dataset
-        status = H5Dwrite(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &grid[0]);
+        status = H5Dwrite(dset, H5T_IEEE_F32LE, memspace, filespace, H5P_DEFAULT, &grid[0]);
+        if (status < 0)
+            fmt::print(stderr, "Error writing grid dataset in write_block_grid(): status  = {}\n", status);
 
         status = H5Sclose(filespace);
         status = H5Sclose(memspace);
