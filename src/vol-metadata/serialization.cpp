@@ -67,6 +67,8 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
         diy::save(bb, static_cast<HardLink*>(o)->target->fullname().second);
     else if (o->type == ObjectType::SoftLink)
         diy::save(bb, static_cast<SoftLink*>(o)->target);
+    else if (o->type == ObjectType::CommittedDatatype)
+        diy::save(bb, static_cast<CommittedDatatype*>(o)->data);
 
     for (Object* child : o->children)
         serialize(bb, child, include_data);
@@ -214,6 +216,12 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         std::string target;
         diy::load(bb, target);
         o = new SoftLink(name, target);
+    }
+    else if (o->type == ObjectType::CommittedDatatype)
+    {
+        auto* dt = new CommittedDatatype(name, 0);
+        diy::load(bb, dt->data);
+        o = dt;
     } else
         MetadataError("unhandled case in deserialization");
 
