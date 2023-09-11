@@ -13,7 +13,8 @@ enum class ObjectType
     Attribute,
     NamedDtype,
     HardLink,
-    SoftLink
+    SoftLink,
+    CommittedDatatype
 };
 
 }
