@@ -217,7 +217,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         diy::load(bb, target);
         o = new SoftLink(name, target);
     }
-    else if (o->type == ObjectType::CommittedDatatype)
+    else if (type == ObjectType::CommittedDatatype)
     {
         auto* dt = new CommittedDatatype(name, 0);
         diy::load(bb, dt->data);
