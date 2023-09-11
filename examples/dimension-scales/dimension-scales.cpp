@@ -9,26 +9,29 @@
 
 using communicator = diy::mpi::communicator;
 
-// user-define operator over attributes
-// returns 0: keep iterating, 1: intentional early termination, -1: failure, early termination
-herr_t iter_op(
-        hid_t               location_id,
-        const char          *attr_name,
-        const H5A_info_t    *ainfo,
-        void *              op_data)
-{
-    fmt::print(stderr, "Location type: {}\n", H5Iget_type(location_id));
-
-    // in this example, the operator simply prints the attribute name
-    fmt::print(stderr, "Iterating over attributes: name = {}\n", attr_name);
-    return 0;
-}
-
 herr_t fail_on_hdf5_error(hid_t stack_id, void*)
 {
     H5Eprint(stack_id, stderr);
     fprintf(stderr, "An HDF5 error was detected. Terminating.\n");
     exit(1);
+}
+
+void nonneg(herr_t retval, char* msg)
+{
+    if (retval < 0)
+    {
+        fmt::print(stderr, "Error executing {}\n", msg);
+        abort();
+    }
+}
+
+void zero(herr_t retval, char* msg)
+{
+    if (retval)
+    {
+        fmt::print(stderr, "Error executing {}\n", msg);
+        abort();
+    }
 }
 
 int main(int argc, char**argv)
@@ -46,8 +49,9 @@ int main(int argc, char**argv)
     int                       metadata          = 1;              // build in-memory metadata
     int                       passthru          = 0;              // write file to disk
     bool                      shared            = false;          // producer and consumer run on the same ranks
-    size_t                    local_num_points  = 20;            // points per block
+    size_t                    local_num_points  = 20;             // points per block
     std::string               log_level         = "";
+    std::string               outfile           = "outfile.h5";   // output file name
 
     (void) shared; // suppress warning
 
@@ -101,25 +105,12 @@ int main(int argc, char**argv)
     // set HDF5 error handler
     H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
-    // set location patterns
-    LowFive::LocationPattern all { "outfile.h5", "*"};
-    LowFive::LocationPattern grid { "outfile.h5", "/group1/grid"};
-    LowFive::LocationPattern particles { "outfile.h5", "/group1/particles"};
-
     // create the vol plugin
     l5::MetadataVOL& vol_plugin = l5::MetadataVOL::create_MetadataVOL();
     if (metadata)
-    {
-        //vol_plugin.memory.push_back(all);
-        vol_plugin.memory.push_back(grid);
-        vol_plugin.memory.push_back(particles);
-    }
+        vol_plugin.set_memory(outfile, "*");
     if (passthru)
-    {
-        //vol_plugin.passthru.push_back(all);
-        vol_plugin.passthru.push_back(grid);
-        vol_plugin.passthru.push_back(particles);
-    }
+        vol_plugin.set_passthru(outfile, "*");
     communicator local;
     local.duplicate(world);
 
@@ -154,12 +145,8 @@ int main(int argc, char**argv)
     prod_decomposer.decompose(local.rank(), prod_assigner, prod_create);
 
     // create a new file and group using default properties
-    hid_t file = H5Fcreate("outfile.h5", H5F_ACC_TRUNC, H5P_DEFAULT, plist);
+    hid_t file = H5Fcreate(outfile.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist);
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    // get info back about the group
-    H5G_info_t group_info;
-    H5Gget_info(group, &group_info);
 
     std::vector<hsize_t> domain_cnts(DIM);
     for (auto i = 0; i < dim; i++)
@@ -169,73 +156,60 @@ int main(int argc, char**argv)
     hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
     // create the grid dataset with default properties
-    hid_t dset = H5Dcreate2(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t dset = H5Dcreate(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     // write the grid data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_grid(cp, dset); });
 
-    // add some attributes to the grid dataset
-    hid_t attr_space = H5Screate_simple(1, &domain_cnts[0], NULL);
-    hid_t attr1 = H5Acreate(dset, "attr1", H5T_IEEE_F32LE, attr_space, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t attr2 = H5Acreate(dset, "attr2", H5T_C_S1, attr_space, H5P_DEFAULT, H5P_DEFAULT);
-
-    // iterate through the attributes of the grid dataset, printing their names
-    // TODO: currently LowFive ignores the iteration order, increment direction, and current index
-    // it just blindly goes through all the attributes in the order they were created
-    hsize_t n = 0;
-    H5Aiterate(dset, H5_INDEX_CRT_ORDER, H5_ITER_INC, &n, &iter_op, NULL);
-
-    // get info back about the dataset
-    H5O_info_t oinfo;
-    H5Oget_info(dset, &oinfo, H5O_INFO_ALL);
-
-    // dimension scale example
-    // make a 1-d array dataset that will be the scale for the 0th dimension of the grid data
-    // in this example, the scale is a vector of values, each associated with each point in the grid, eg, its physical space position
+    // dimension scales
+    // make a 1-d array dataset for the scale for each dimension of the grid data
+    // the scale is a vector of values, each associated with each point in the grid, eg, its physical space position
     // although HDF5 makes no restrictions on how dimension scales are used, that's a typical scenario
-    // thie example only assigns a scale to one dimension, which is valid; other dimensions could be done similarly
     // the dimension scale of another dataset is itself a dataset that needs to be created first
-    hid_t scale_space = H5Screate_simple(1, &domain_cnts[0], NULL);
-    hid_t scale = H5Dcreate2(group, "grid_scale", H5T_IEEE_F32LE, scale_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    std::vector<float> scale_data(domain_cnts[0]);
-    for (auto i = 0; i < static_cast<decltype(i)>(scale_data.size()); i++)
-        scale_data[i] = i * 10;
-    H5Dwrite(scale, H5T_NATIVE_FLOAT, scale_space, scale_space, H5P_DEFAULT, &scale_data[0]);
+    std::vector<hid_t>              scale_spaces(DIM);
+    std::vector<hid_t>              scale_dsets(DIM);
+    std::vector<std::vector<float>> scale_data(DIM);
+    char dset_name[256];
+    char dim_name[256];
+    herr_t retval;
+    for (int i = 0; i < DIM; i++)      // for all dimensions
+    {
+        // dataspace for the scale dataset
+        scale_spaces[i] = H5Screate_simple(1, &domain_cnts[i], NULL);
 
-    // now attach the dimension scale dataset to the original grid dataset
-    H5DSset_scale(dset, "scale");
-    H5DSattach_scale(dset, scale, 0);
+        // dataset for the scale
+        snprintf(dset_name, 256, "grid_scale%d", i);
+        scale_dsets[i] = H5Dcreate(group, dset_name, H5T_NATIVE_FLOAT, scale_spaces[i], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        scale_data[i].resize(domain_cnts[i]);
+        for (int j = 0; j < domain_cnts[i]; j++)
+            scale_data[i][j] = j;
+        retval = H5Dwrite(scale_dsets[i], H5T_NATIVE_FLOAT, scale_spaces[i], scale_spaces[i], H5P_DEFAULT, &scale_data[i][0]); nonneg(retval, "H5Dwrite");
 
-    // clean up
-    H5Sclose(attr_space);
-    H5Dclose(scale);
-    H5Sclose(scale_space);
-    H5Aclose(attr1);
-    H5Aclose(attr2);
+        // create a dimension scale out of a dataset
+        snprintf(dim_name, 256, "dim%d", i);
+        retval = H5DSset_scale(scale_dsets[i], dim_name); zero(retval, "H5DSset_scale");
 
-    // test deleting attributes
-    // according to the spec, only after all attributes on an abject are closed
-    H5Adelete(dset, "attr1");
-    H5Adelete_by_name(dset, ".", "attr2", H5P_DEFAULT);
+        // check the scale setting
+        fmt::print(stderr, "After setting scale, checking if {} is a dimension scale: {}\n", dim_name, H5DSis_scale(scale_dsets[i]));
 
-    // continue cleaning up
-    H5Dclose(dset);
-    H5Sclose(filespace);
+        // attach a dimension scale to the grid dataset
+        retval = H5DSattach_scale(dset, scale_dsets[i], i); zero(retval, "H5DSattach_scale");
 
-    // create the file data space for the particles
-    domain_cnts[0]  = global_num_points;
-    domain_cnts[1]  = DIM;
-    filespace = H5Screate_simple(2, &domain_cnts[0], NULL);
-
-    // create the particle dataset with default properties
-    dset = H5Dcreate2(group, "particles", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    // write the particle data
-    prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
-            { b->write_block_points(cp, dset, global_nblocks); });
+        // check the scale attaching
+        fmt::print(stderr, "After attaching scale, checking how many scales are attached to grid dimension {}: {}\n",
+                i, H5DSget_num_scales(dset, i));
+        // for some reason the following seg-faults in passthru mode
+//         fmt::print(stderr, "After attaching scale, checking if {} is attached to grid dimension {}: {}\n",
+//                 dim_name, i, H5DSis_attached(dset, scale_dsets[i], i));
+    }
 
     // clean up
+    for (int i = 0; i < DIM; i++)
+    {
+        H5Dclose(scale_dsets[i]);
+        H5Sclose(scale_spaces[i]);
+    }
     H5Dclose(dset);
     H5Sclose(filespace);
     H5Gclose(group);
