@@ -407,3 +407,4 @@ attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
     return VOLBase::attr_optional(unwrap(obj), args, dxpl_id, req);
 }
+

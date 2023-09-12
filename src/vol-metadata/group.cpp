@@ -105,18 +105,72 @@ LowFive::MetadataVOL::
 group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
+    Object* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+
+    // native operation's arguments, from H5VLnative_group.c, H5VL__native_group_optional
     auto opt_type = args->op_type;
+    H5VL_native_group_optional_args_t *opt_args = static_cast<H5VL_native_group_optional_args_t*>(args->args);
 
     auto log = get_logger();
     log->trace("group_optional: group = {} optional_type = {}", *obj_, opt_type);
 
     herr_t res = 0;
-    if (unwrap(obj_))
+
+    if (unwrap(obj_))               // passthru
         res = VOLBase::group_optional(unwrap(obj_), args, dxpl_id, req);
-    else if (obj_->mdata_obj)
+    else if (mdata_obj)             // memory
     {
         // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_GROUP_* constants)
-        throw MetadataError(fmt::format("group_optional() not implemented in metadata yet"));
+        switch (opt_type)
+        {
+        // iterate over the objects in a group performing custom callback on each
+        case H5VL_NATIVE_GROUP_ITERATE_OLD:
+        {
+            log->trace("group_optional: opt_type H5VL_NATIVE_GROUP_ITERATE_OLD");
+
+            // get object type in HDF format and use that to get an HDF hid_t to the object
+            std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
+            int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
+            ObjectPointers* obj_tmp = wrap(nullptr);
+            *obj_tmp = *obj_;
+            obj_tmp->tmp = true;
+            auto log = get_logger();
+            log->trace("group_optional: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
+            hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
+
+            // check direct children of the parent group object, not full search all the way down the tree
+            // blindly goes through all the children in the order they were created, ignoring idx
+
+            if (opt_args->iterate_old.idx)
+                log->warn("group_optional: for iterating, ignoring the current index which is {}", opt_args->iterate_old.idx);
+            else
+                log->trace("group_optional: iterating, the current index is unassigned");
+
+            for (auto& c : mdata_obj->children)
+            {
+
+                log->trace("group_optional: found object {} as a child of the parent {}", c->name, mdata_obj->name);
+                // make the application callback, copied from H5Glink.c, H5G__link_iterate_table()
+                res = (opt_args->iterate_old.op)(obj_loc_id, c->name.c_str(), opt_args->iterate_old.op_data);
+                if (res > 0)
+                {
+                    log->trace("group_optional iteration: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
+                    break;
+                }
+                else if (res < 0)
+                    throw MetadataError(fmt::format("group_optional() opt_type H5VL_NATIVE_GROUP_ITERATE_OLD callback returned nonzero value indicating error"));
+            }   // for all children
+            break;
+        }
+        case H5VL_NATIVE_GROUP_GET_OBJINFO:
+        {
+            log->trace("group_optional: opt_type H5VL_NATIVE_GROUP_GET_OBJINFO");
+            throw MetadataError(fmt::format("group_optional() opt_type H5VL_NATIVE_GROUP_GET_OBJINFO not implemented in metadata yet"));
+            break;
+        }
+        default:
+            throw MetadataError(fmt::format("Unknown opt_type in LowFive::MetadataVOL::group_optional()"));
+        }
     }
     else
         throw MetadataError(fmt::format("group_optional(): either passthru or metadata must be specified"));
@@ -208,3 +262,4 @@ group_specific(void *obj, H5VL_group_specific_args_t* args, hid_t dxpl_id, void 
 
     return res;
 }
+
