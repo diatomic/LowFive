@@ -59,8 +59,14 @@ datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
     auto* o = static_cast<Object*>(obj_->mdata_obj);
     if (o)
     {
-        auto* parent = o->locate(*loc_params).exact();
-        result->mdata_obj = parent->search(name).exact();
+        try
+        {
+            auto* parent = o->locate(*loc_params).exact();
+            result->mdata_obj = parent->search(name).exact();
+        } catch(...)
+        {
+            result->mdata_obj = nullptr;
+        }
     }
 
     return result;
