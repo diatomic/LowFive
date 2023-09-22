@@ -349,6 +349,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
     } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
+        f->print();
         if (f->copy_of_remote)
         {
             log->trace("Local file is a copy of remote, skipping");

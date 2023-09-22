@@ -116,6 +116,7 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 
     herr_t res = 0;
 
+    // XXX: this will definitely break if both passthru and memory are on
     if (unwrap(obj_))               // passthru
         res = VOLBase::group_optional(unwrap(obj_), args, dxpl_id, req);
     else if (mdata_obj)             // memory
@@ -128,10 +129,14 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
         {
             log->trace("group_optional: opt_type H5VL_NATIVE_GROUP_ITERATE_OLD");
 
+            // resolve location
+            H5VL_native_group_iterate_old_t *iter_args = &opt_args->iterate_old;
+            mdata_obj = mdata_obj->locate(iter_args->loc_params).exact();
+
             // get object type in HDF format and use that to get an HDF hid_t to the object
             std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
             int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-            ObjectPointers* obj_tmp = wrap(nullptr);
+            ObjectPointers* obj_tmp = wrap(mdata_obj);
             *obj_tmp = *obj_;
             obj_tmp->tmp = true;
             auto log = get_logger();

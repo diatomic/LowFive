@@ -148,8 +148,21 @@ LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, h
     if (unwrap(obj_))
         res = VOLBase::link_get(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
     else if (obj_->mdata_obj)
-        log->warn("Warning: link_get not implemented in metadata yet");
-    else
+    {
+        auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+        if (args->op_type == H5VL_LINK_GET_NAME)
+        {
+            auto* o = mdata_obj->locate(*loc_params).exact();
+            auto name_size = o->name.size();
+            if (args->args.get_name.name && args->args.get_name.name_size >= name_size)
+                memcpy(args->args.get_name.name, o->name.c_str(), name_size + 1);
+            *args->args.get_name.name_len = name_size + 1;                     // should this be +1 for c-string?
+        } else
+        {
+            log->warn("Warning: link_get not implemented in metadata yet");
+            throw MetadataError(fmt::format("link_get not implemented in metadata yet"));
+        }
+    } else
         throw MetadataError(fmt::format("link_get(): either passthru or metadata must be specified"));
 
     return res;
