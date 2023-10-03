@@ -18,6 +18,8 @@ namespace py = pybind11;
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/../../src/log-private.hpp>
 
+#include "py_vol_wrappers.h"
+
 herr_t
 fail_on_hdf5_error(hid_t stack_id, void*)
 {
@@ -26,148 +28,134 @@ fail_on_hdf5_error(hid_t stack_id, void*)
     exit(1);
 }
 
-struct PyVOLBase
+void PyMetadataVOL::set_passthru(std::string filename, std::string pattern)
 {
-    LowFive::VOLBase* vol_ {nullptr};
-};
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_passthru(filename, pattern);
+}
 
-struct PyMetadataVOL: public PyVOLBase
+void PyMetadataVOL::set_memory(std::string filename, std::string pattern)
 {
-    void set_passthru(std::string filename, std::string pattern)
-    {
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_passthru(filename, pattern);
-    }
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_memory(filename, pattern);
+}
 
-    void set_memory(std::string filename, std::string pattern)
-    {
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_memory(filename, pattern);
-    }
-
-    void set_zerocopy(std::string filename, std::string pattern)
-    {
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_zerocopy(filename, pattern);
-    }
-
-    void set_keep(bool keep_)
-    {
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_keep(keep_);
-    }
-
-    void print_files()
-    {
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->print_files();
-    }
-
-    void clear_files()
-    {
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->clear_files();
-    }
-
-    void set_after_file_close(LowFive::MetadataVOL::AfterFileClose afc)
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_after_file_close(afc);
-    }
-
-    void set_before_file_open(LowFive::MetadataVOL::BeforeFileOpen bfo)
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_before_file_open(bfo);
-    }
-
-    void set_after_dataset_write(LowFive::MetadataVOL::AfterDatasetWrite adw)
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_after_dataset_write(adw);
-    }
-
-    void unset_callbacks()
-    {
-//        std::cerr << "PyMetadataVOL::unset_callbacks called" << std::endl;
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->unset_callbacks();
-    }
-
-    ~PyMetadataVOL()
-    {
-        py::gil_scoped_acquire acq;
-//        std::cerr << "~PyMetadataVOL: unsetting callbacks" << std::endl;
-        dynamic_cast<LowFive::MetadataVOL*>(vol_)->unset_callbacks();
-    }
-};
-
-struct PyDistMetadataVOL: public PyMetadataVOL
+void PyMetadataVOL::set_zerocopy(std::string filename, std::string pattern)
 {
-    void set_intercomm(std::string filename, std::string full_path, int intercomm_index)
-    {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_intercomm(filename, full_path, intercomm_index);
-    }
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_zerocopy(filename, pattern);
+}
 
-    void serve_all(bool delete_data = true, bool perform_indexing = true)
-    {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_all(delete_data, perform_indexing);
-    }
+void PyMetadataVOL::set_keep(bool keep_)
+{
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_keep(keep_);
+}
 
-    decltype(auto)  get_filenames(int intercomm_index)
-    {
-        return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->get_filenames(intercomm_index);
-    }
+void PyMetadataVOL::print_files()
+{
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->print_files();
+}
 
-    void send_done(int intercomm_index)
-    {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->send_done(intercomm_index);
-    }
+void PyMetadataVOL::clear_files()
+{
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->clear_files();
+}
 
-    void producer_done()
-    {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->producer_signal_done();
-    }
+void PyMetadataVOL::set_after_file_close(LowFive::MetadataVOL::AfterFileClose afc)
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_after_file_close(afc);
+}
 
-    void broadcast_files(int root = 0)
-    {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->broadcast_files(root);
-    }
+void PyMetadataVOL::set_before_file_open(LowFive::MetadataVOL::BeforeFileOpen bfo)
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_before_file_open(bfo);
+}
 
-    void set_serve_indices(LowFive::DistMetadataVOL::ServeIndices si)
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_serve_indices(si);
-    }
+void PyMetadataVOL::set_after_dataset_write(LowFive::MetadataVOL::AfterDatasetWrite adw)
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->set_after_dataset_write(adw);
+}
 
-    void set_consumer_filename(LowFive::DistMetadataVOL::SetFileName name)
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_consumer_filename(name);
-    }
+void PyMetadataVOL::unset_callbacks()
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->unset_callbacks();
+}
 
-    bool get_serve_on_close() const
-    {
-        return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_on_close;
-    }
+PyMetadataVOL::~PyMetadataVOL()
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::MetadataVOL*>(vol_)->unset_callbacks();
+}
 
-    void set_serve_on_close(bool value)
-    {
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_on_close = value;
-    }
+void PyDistMetadataVOL::set_intercomm(std::string filename, std::string full_path, int intercomm_index)
+{
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_intercomm(filename, full_path, intercomm_index);
+}
 
-    decltype(auto) get_file_close_counter() const
-    {
-        return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->file_close_counter_;
-    }
+void PyDistMetadataVOL::serve_all(bool delete_data, bool perform_indexing)
+{
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_all(delete_data, perform_indexing);
+}
 
-    void unset_dist_callbacks()
-    {
-        py::gil_scoped_acquire acq;
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_dist_callbacks();
-    }
+std::vector<std::string> PyDistMetadataVOL::get_filenames(int intercomm_index)
+{
+    return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->get_filenames(intercomm_index);
+}
 
-    ~PyDistMetadataVOL()
-    {
-        py::gil_scoped_acquire acq;
-        //std::cerr << "~PyDistMetadataVOL: unsetting callbacks" << std::endl;
-        dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_dist_callbacks();
-    }
-};
+void PyDistMetadataVOL::send_done(int intercomm_index)
+{
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->send_done(intercomm_index);
+}
+
+void PyDistMetadataVOL::producer_done()
+{
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->producer_signal_done();
+}
+
+void PyDistMetadataVOL::broadcast_files(int root)
+{
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->broadcast_files(root);
+}
+
+void PyDistMetadataVOL::set_serve_indices(LowFive::DistMetadataVOL::ServeIndices si)
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_serve_indices(si);
+}
+
+void PyDistMetadataVOL::set_consumer_filename(LowFive::DistMetadataVOL::SetFileName name)
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->set_consumer_filename(name);
+}
+
+bool PyDistMetadataVOL::get_serve_on_close() const
+{
+    return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_on_close;
+}
+
+void PyDistMetadataVOL::set_serve_on_close(bool value)
+{
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->serve_on_close = value;
+}
+
+decltype(LowFive::DistMetadataVOL::file_close_counter_) PyDistMetadataVOL::get_file_close_counter() const
+{
+    return dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->file_close_counter_;
+}
+
+void PyDistMetadataVOL::unset_dist_callbacks()
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_dist_callbacks();
+}
+
+PyDistMetadataVOL::~PyDistMetadataVOL()
+{
+    py::gil_scoped_acquire acq;
+    dynamic_cast<LowFive::DistMetadataVOL*>(vol_)->unset_dist_callbacks();
+}
 
 
 PYBIND11_MODULE(_lowfive, m)
