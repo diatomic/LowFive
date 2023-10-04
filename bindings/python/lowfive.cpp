@@ -170,6 +170,15 @@ fail_on_hdf5_error(hid_t stack_id, void*)
 //};
 
 
+struct nodelete_unset_cb {
+    template<class T>
+    void operator()(T* vol)
+    {
+        py::gil_scoped_acquire acq;
+        vol->unset_callbacks();
+    }
+};
+
 PYBIND11_MODULE(_lowfive, m)
 {
     using namespace pybind11::literals;
@@ -190,9 +199,11 @@ PYBIND11_MODULE(_lowfive, m)
     // 1. acquire GIL
     // 2. unset callbacks (so they are destroyed with GIL held)
     // and will NOT delete the object (this is done in _term when HDF5 library is closing)
-//    using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, void(*)(LowFive::MetadataVOL*)>;
-    using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, void(*)(LowFive::DistMetadataVOL*)>;
-    using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL>;
+    //using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, void(*)(LowFive::MetadataVOL*)>;
+    //using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, void(*)(LowFive::DistMetadataVOL*)>;
+    using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, nodelete_unset_cb>;
+    using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, nodelete_unset_cb>;
+    //using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL>;
 //    using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL>;
 
     m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
@@ -201,23 +212,25 @@ PYBIND11_MODULE(_lowfive, m)
                        {
                             std::cerr << "enter _create_MetadataVOL" << std::endl;
                             return PMetadataVOL(&LowFive::MetadataVOL::create_MetadataVOL()
-//                                                ,[](LowFive::MetadataVOL* vol)
-//                                                {
-//                                                    std::cerr << "custom deleter" << std::endl;
-//                                                    py::gil_scoped_acquire acq;
-//                                                    vol->unset_callbacks();
-//                                                }
+                                                , nodelete_unset_cb()
+                                                //,[](LowFive::MetadataVOL* vol)
+                                                //{
+                                                //    std::cerr << "custom deleter" << std::endl;
+                                                //    py::gil_scoped_acquire acq;
+                                                //    vol->unset_callbacks();
+                                                //}
                                                 );
                        }, "Get MetadataVOL object");
     m.def("_create_DistMetadataVOL", [](py::capsule local, py::capsule intercomm) -> PDistMetadataVOL
                       {
-                         return PDistMetadataVOL(&LowFive::DistMetadataVOL::create_DistMetadataVOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm)),
-                                                 [](LowFive::DistMetadataVOL* vol)
-                                                 {
-                                                    std::cerr << "custom deleter" << std::endl;
-                                                    py::gil_scoped_acquire acq;
-                                                    vol->unset_callbacks();
-                                                 }
+                         return PDistMetadataVOL(&LowFive::DistMetadataVOL::create_DistMetadataVOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm))
+                                                 , nodelete_unset_cb()
+                                                 //,[](LowFive::DistMetadataVOL* vol)
+                                                 //{
+                                                 //   std::cerr << "custom deleter" << std::endl;
+                                                 //   py::gil_scoped_acquire acq;
+                                                 //   vol->unset_callbacks();
+                                                 //}
                          );
                       },  "local"_a, "intercomm"_a,  "construct the object");
 
@@ -227,46 +240,49 @@ PYBIND11_MODULE(_lowfive, m)
                           std::vector<MPI_Comm> intercomms_;
                           for (auto& c : intercomms)
                             intercomms_.push_back(from_capsule<MPI_Comm>(c));
-                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_),
-                                  [](LowFive::DistMetadataVOL* vol)
-                                  {
-                                    std::cerr << "custom deleter" << std::endl;
-                                    py::gil_scoped_acquire acq;
-                                    vol->unset_callbacks();
-                                  }
+                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_)
+                                  ,nodelete_unset_cb()
+                                  //,[](LowFive::DistMetadataVOL* vol)
+                                  //{
+                                  //  std::cerr << "custom deleter" << std::endl;
+                                  //  py::gil_scoped_acquire acq;
+                                  //  vol->unset_callbacks();
+                                  //}
                                   };
                       }, "local"_a, "intercomms"_a, "construct the object");
 
 #if defined(LOWFIVE_MPI4PY)
     m.def("_create_DistMetadataVOL", [](mpi4py_comm local, mpi4py_comm intercomm) -> PDistMetadataVOL
         {
-            return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm),
-                    [](LowFive::DistMetadataVOL* vol)
-                    {
-                      std::cerr << "custom deleter" << std::endl;
-                      py::gil_scoped_acquire acq;
-                      vol->unset_callbacks();
-                    }
+            return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm)
+                    ,nodelete_unset_cb()
+                   //,[](LowFive::DistMetadataVOL* vol)
+                   // {
+                   //   std::cerr << "custom deleter" << std::endl;
+                   //   py::gil_scoped_acquire acq;
+                   //   vol->unset_callbacks();
+                   // }
                    };
         },  "local"_a, "intercomm"_a,  "construct the object");
     m.def("_create_DistMetadataVOL", [](mpi4py_comm local, std::vector<mpi4py_comm> intercomms) -> PDistMetadataVOL
                       {
                           MPI_Comm local_ = local;
                           std::vector<MPI_Comm> intercomms_(intercomms.begin(), intercomms.end());
-                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_),
-                                  [](LowFive::DistMetadataVOL* vol)
-                                  {
-                                    std::cerr << "custom deleter" << std::endl;
-                                    py::gil_scoped_acquire acq;
-                                    vol->unset_callbacks();
-                                  }
+                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_)
+                                  ,nodelete_unset_cb()
+                                  //,[](LowFive::DistMetadataVOL* vol)
+                                  //{
+                                  //  std::cerr << "custom deleter" << std::endl;
+                                  //  py::gil_scoped_acquire acq;
+                                  //  vol->unset_callbacks();
+                                  //}
                           };
                       }, "local"_a, "intercomms"_a, "construct the object");
 #endif
 
     py::class_<LowFive::VOLBase> vol_base(m, "VOLBase", "base VOL object");
 
-    py::class_<LowFive::MetadataVOL> metadata_vol(m, "MetadataVOL", "metadata VOL object", vol_base);
+    py::class_<LowFive::MetadataVOL, std::unique_ptr<LowFive::MetadataVOL, nodelete_unset_cb>> metadata_vol(m, "MetadataVOL", "metadata VOL object", vol_base);
     metadata_vol
         .def("set_passthru",            &LowFive::MetadataVOL::set_passthru, "filename"_a, "pattern"_a, "set (filename,pattern) for passthru")
         .def("set_memory",              &LowFive::MetadataVOL::set_memory,   "filename"_a, "pattern"_a, "set (filename,pattern) for memory")
@@ -297,7 +313,7 @@ PYBIND11_MODULE(_lowfive, m)
                                         },                                                              "set the after_dataset_write callback")
     ;
 
-    py::class_<LowFive::DistMetadataVOL> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
+    py::class_<LowFive::DistMetadataVOL, std::unique_ptr<LowFive::DistMetadataVOL, py::nodelete>> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
     dist_metadata_vol
         .def_readwrite("serve_on_close",              &LowFive::DistMetadataVOL::serve_on_close)
         .def_readonly("file_close_counter",           &LowFive::DistMetadataVOL::file_close_counter_)
