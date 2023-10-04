@@ -173,10 +173,12 @@ attr_exists(Object *mdata_obj, const char* attr_name, htri_t* ret)
 
 herr_t
 LowFive::MetadataVOL::
-attr_iter(void *obj, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data)
+attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data)
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
     Object* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+
+    mdata_obj = mdata_obj->locate(*loc_params).exact();
 
     // get object type in HDF format and use that to get an HDF hid_t to the object
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
@@ -371,7 +373,7 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
             if (mdata_obj != mdata_obj->locate(*loc_params).exact())
                 throw MetadataError(fmt::format("attr__specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
 
-            result = attr_iter(obj, args->args.iterate.order, args->args.iterate.idx, args->args.iterate.op, args->args.iterate.op_data);
+            result = attr_iter(obj, loc_params, args->args.iterate.order, args->args.iterate.idx, args->args.iterate.op, args->args.iterate.op_data);
 
             break;
         }

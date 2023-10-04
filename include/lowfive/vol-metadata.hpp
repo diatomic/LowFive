@@ -236,7 +236,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          attr_optional(void *obj, H5VL_optional_args_t * args, hid_t dxpl_id, void **req) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
     htri_t          attr_exists(Object *mdata_obj, const char* attr_name, htri_t* ret);
-    herr_t          attr_iter(void *obj, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data);
+    herr_t          attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data);
 
     void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
     herr_t          object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req) override;
