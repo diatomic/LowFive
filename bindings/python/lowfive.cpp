@@ -169,7 +169,7 @@ fail_on_hdf5_error(hid_t stack_id, void*)
 //    }
 //};
 
-
+// custom deleter for unique_ptrs for VOLs
 struct nodelete_unset_cb {
     template<class T>
     void operator()(T* vol)
@@ -199,39 +199,21 @@ PYBIND11_MODULE(_lowfive, m)
     // 1. acquire GIL
     // 2. unset callbacks (so they are destroyed with GIL held)
     // and will NOT delete the object (this is done in _term when HDF5 library is closing)
-    //using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, void(*)(LowFive::MetadataVOL*)>;
-    //using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, void(*)(LowFive::DistMetadataVOL*)>;
     using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, nodelete_unset_cb>;
     using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, nodelete_unset_cb>;
-    //using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL>;
-//    using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL>;
 
     m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
 
     m.def("_create_MetadataVOL", []() -> PMetadataVOL
                        {
                             std::cerr << "enter _create_MetadataVOL" << std::endl;
-                            return PMetadataVOL(&LowFive::MetadataVOL::create_MetadataVOL()
-                                                , nodelete_unset_cb()
-                                                //,[](LowFive::MetadataVOL* vol)
-                                                //{
-                                                //    std::cerr << "custom deleter" << std::endl;
-                                                //    py::gil_scoped_acquire acq;
-                                                //    vol->unset_callbacks();
-                                                //}
+                            return PMetadataVOL(&LowFive::MetadataVOL::create_MetadataVOL(), nodelete_unset_cb()
                                                 );
                        }, "Get MetadataVOL object");
     m.def("_create_DistMetadataVOL", [](py::capsule local, py::capsule intercomm) -> PDistMetadataVOL
                       {
-                         return PDistMetadataVOL(&LowFive::DistMetadataVOL::create_DistMetadataVOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm))
-                                                 , nodelete_unset_cb()
-                                                 //,[](LowFive::DistMetadataVOL* vol)
-                                                 //{
-                                                 //   std::cerr << "custom deleter" << std::endl;
-                                                 //   py::gil_scoped_acquire acq;
-                                                 //   vol->unset_callbacks();
-                                                 //}
-                         );
+                         return PDistMetadataVOL(&LowFive::DistMetadataVOL::create_DistMetadataVOL(from_capsule<MPI_Comm>(local), from_capsule<MPI_Comm>(intercomm)),
+                                                 nodelete_unset_cb());
                       },  "local"_a, "intercomm"_a,  "construct the object");
 
     m.def("_create_DistMetadataVOL", [](py::capsule local, std::vector<py::capsule> intercomms) -> PDistMetadataVOL
@@ -240,42 +222,20 @@ PYBIND11_MODULE(_lowfive, m)
                           std::vector<MPI_Comm> intercomms_;
                           for (auto& c : intercomms)
                             intercomms_.push_back(from_capsule<MPI_Comm>(c));
-                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_)
-                                  ,nodelete_unset_cb()
-                                  //,[](LowFive::DistMetadataVOL* vol)
-                                  //{
-                                  //  std::cerr << "custom deleter" << std::endl;
-                                  //  py::gil_scoped_acquire acq;
-                                  //  vol->unset_callbacks();
-                                  //}
-                                  };
+                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_), nodelete_unset_cb()};
                       }, "local"_a, "intercomms"_a, "construct the object");
 
 #if defined(LOWFIVE_MPI4PY)
     m.def("_create_DistMetadataVOL", [](mpi4py_comm local, mpi4py_comm intercomm) -> PDistMetadataVOL
         {
-            return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm)
-                    ,nodelete_unset_cb()
-                   //,[](LowFive::DistMetadataVOL* vol)
-                   // {
-                   //   std::cerr << "custom deleter" << std::endl;
-                   //   py::gil_scoped_acquire acq;
-                   //   vol->unset_callbacks();
-                   // }
+            return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm), nodelete_unset_cb()
                    };
         },  "local"_a, "intercomm"_a,  "construct the object");
     m.def("_create_DistMetadataVOL", [](mpi4py_comm local, std::vector<mpi4py_comm> intercomms) -> PDistMetadataVOL
                       {
                           MPI_Comm local_ = local;
                           std::vector<MPI_Comm> intercomms_(intercomms.begin(), intercomms.end());
-                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_)
-                                  ,nodelete_unset_cb()
-                                  //,[](LowFive::DistMetadataVOL* vol)
-                                  //{
-                                  //  std::cerr << "custom deleter" << std::endl;
-                                  //  py::gil_scoped_acquire acq;
-                                  //  vol->unset_callbacks();
-                                  //}
+                          return {&LowFive::DistMetadataVOL::create_DistMetadataVOL(local_, intercomms_), nodelete_unset_cb()
                           };
                       }, "local"_a, "intercomms"_a, "construct the object");
 #endif

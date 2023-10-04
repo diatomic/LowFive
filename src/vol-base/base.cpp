@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include <lowfive/vol-base.hpp>
 #include <fmt/core.h>
 #include <fmt/ostream.h>
@@ -151,7 +149,6 @@ VOLBase()
 LowFive::VOLBase::
 ~VOLBase()
 {
-    std::cerr << "VOLBase dtor" << std::endl;
     // TODO: delete info
 }
 

@@ -36,7 +36,6 @@ LowFive::MetadataVOL::
 {
     auto log = get_logger();
     log->trace("MetadataVOL dtor, calling clear_files");
-    std::cerr << "MetadataVOL dtor" << std::endl;
     clear_files();
     log->trace("MetadataVOL dtor, clear files done");
 }
