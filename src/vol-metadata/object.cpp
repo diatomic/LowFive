@@ -126,6 +126,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
                 log->trace("MetadataVOL: res_pair = {}, mdata = {}", fmt::ptr(res_pair), fmt::ptr(res));
                 res_pair->mdata_obj = res;
                 res_pair->tmp = true;
+                auto file_hid = H5VLwrap_register(res_pair, H5I_FILE);
+                H5Iinc_ref(file_hid);
                 *args->args.get_file.file = res_pair;
             }
             else
