@@ -19,6 +19,19 @@ struct CommittedDatatype: public Object
         }
     }
 
+    void print(int depth) const override
+    {
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+        fmt::print(stderr, "---- Committed Datatype ---\n");
+
+        for (auto i = 0; i < depth; i++)
+            fmt::print(stderr, "    ");
+        fmt::print(stderr, "data.size() = {}\n", data.size());
+
+        Object::print(depth);
+    }
+
     std::vector<char> data;
 };
 
