@@ -102,7 +102,12 @@ struct Dataspace: Hid
 
     size_t  size() const
     {
-        return H5Sget_simple_extent_npoints(id);
+        if (cls == Class::scalar)
+            return 1;
+        else if (cls == Class::simple)
+            return H5Sget_simple_extent_npoints(id);
+        else
+            throw MetadataError("Unknown Dataspace class in size()");
     }
 
     void    set_extent(const hsize_t* size, const hsize_t* maxsize = nullptr)
