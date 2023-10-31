@@ -231,6 +231,10 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
                 break;
             }
         }   // child is type attribute
+
+        // we should be incrementing idx, but it's more nuanced; in the native VOL, on return it's set to the last accessed attribute index
+        //++(*idx);
+
     }   // for all children
 
     auto refcount = H5Idec_ref(obj_loc_id);
