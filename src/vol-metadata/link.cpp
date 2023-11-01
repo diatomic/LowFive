@@ -243,6 +243,9 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
         }
     }   // for all children
 
+    auto refcount = H5Idec_ref(obj_loc_id);
+    log->trace("refcount = {}", refcount);
+
     return retval;
 }
 

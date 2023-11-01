@@ -233,7 +233,8 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
         }   // child is type attribute
     }   // for all children
 
-    log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
+    auto refcount = H5Idec_ref(obj_loc_id);
+    log->trace("refcount = {}", refcount);
     // NB: don't need to delete obj_tmp; it gets deleted (via
     //     MetadataVOL::drop()) automagically, when refcount reaches 0,
     //     i.e., this part works as expected
