@@ -405,7 +405,9 @@ object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_ar
         case H5VL_NATIVE_OBJECT_SET_COMMENT:
         {
             // TODO
-            throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_SET_COMMENT not implemented in metadata yet"));
+            //throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_SET_COMMENT not implemented in metadata yet"));
+            log->warn("OBJECT_SET_COMMENT not implemented in object_optional; skipping silently");
+            return 0;
         }
 
             // H5Odisable_mdc_flushes

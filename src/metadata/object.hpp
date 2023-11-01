@@ -113,6 +113,13 @@ struct Object
             return ObjectPath { this, "" };
         else if (loc_params.type == H5VL_OBJECT_BY_NAME)
             return search(loc_params.loc_data.loc_by_name.name);
+        else if (loc_params.type == H5VL_OBJECT_BY_IDX)
+        {
+            auto log = get_logger();
+            log->warn("locate by index (H5VL_OBJECT_BY_IDX) is alpha quality");
+            auto n = loc_params.loc_data.loc_by_idx.n;
+            return ObjectPath { children[n], "" };
+        }
         else if (loc_params.type == H5VL_OBJECT_BY_TOKEN)
         {
             H5O_token_t* token = loc_params.loc_data.loc_by_token.token;

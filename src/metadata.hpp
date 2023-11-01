@@ -36,6 +36,7 @@ std::ostream& operator<<(std::ostream& os, const T& value)
 #include "metadata/dataset.hpp"
 #include "metadata/file.hpp"
 #include "metadata/link.hpp"
+#include "metadata/committed-datatype.hpp"
 
 #include "metadata/dummy.hpp"
 
