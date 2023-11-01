@@ -165,6 +165,7 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
                 else if (res < 0)
                     throw MetadataError(fmt::format("group_optional() opt_type H5VL_NATIVE_GROUP_ITERATE_OLD callback returned nonzero value indicating error"));
             }   // for all children
+            log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
             break;
         }
         case H5VL_NATIVE_GROUP_GET_OBJINFO:
