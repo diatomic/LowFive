@@ -204,10 +204,11 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj);
     if (ds)
     {
-        //  TODO: support H5S_ALL, need to get file_space_id, mem_space_id with H5Dget_space
-        // if (file_space_id == H5S_ALL)
-        //     file_space_id = H5Dget_space(?);
         // consumer with the name of a remote dataset: query to producer
+        if (file_space_id == H5S_ALL)
+            file_space_id = ds->space.id;
+        if (mem_space_id == H5S_ALL)
+            mem_space_id = ds->space.id;
         CALI_MARK_BEGIN("dist_metadata_vol_dataset_read_query");
         ds->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         CALI_MARK_END("dist_metadata_vol_dataset_read_query");
