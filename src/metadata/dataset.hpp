@@ -59,20 +59,17 @@ struct Dataset : public Object
 
     void print(int depth) const override
     {
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "---- Dataset ---\n");
 
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "type = {}, space = {}, ownership = {}\n", type, space, ownership);
 
         if (data.size())
         {
-            for (auto i = 0; i < depth; i++)
-                fmt::print(stderr, "    ");
+            print_depth(depth);
             for (auto& d : data)
-                fmt::print("memory = {}, file = {}, data = {}\n", d.memory, d.file, fmt::ptr(d.data));
+                fmt::print(stderr, "memory = {}, file = {}, data = {}\n", d.memory, d.file, fmt::ptr(d.data));
         }
 
         Object::print(depth);

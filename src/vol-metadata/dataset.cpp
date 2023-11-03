@@ -50,7 +50,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id, dapl_id, is_passthru, is_memory));
 
     log->trace("created dataset in metadata, new object {} under parent object {} named {}",
-            *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
+            *result, fmt::ptr(obj_path.obj), static_cast<Object*>(obj_path.obj)->name);
 
     return (void*)result;
 }
