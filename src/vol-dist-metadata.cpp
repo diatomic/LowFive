@@ -151,7 +151,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
         auto filepath = mdata_obj->fullname();
         if (match_any(filepath,memory))
         {
-            if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
+            if (dynamic_cast<Dataset*>(mdata_obj) && dynamic_cast<Dataset*>(mdata_obj)->data.empty() && RemoteObject::query(mdata_obj))
                 make_remote_dataset(result, filepath);
         }
     }
@@ -183,7 +183,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
         log->trace("Checking if Dataset: {}", fmt::ptr(mdata_obj));
 
         // Dataset that really should be RemoteDataset
-        if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
+        if (dynamic_cast<Dataset*>(mdata_obj) && dynamic_cast<Dataset*>(mdata_obj)->data.empty() && RemoteObject::query(mdata_obj))
             make_remote_dataset(result, filepath);
 
         //log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");

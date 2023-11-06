@@ -38,7 +38,7 @@ struct Dataset : public Object
             is_passthru(is_passthru_),
             is_memory(is_memory_)
     {
-        if (type.id != 0 && type.is_var_length_string())
+        if (type.is_var_length_string())
             own = Ownership::lowfive;     // always take ownership of strings, otherwise serialization becomes tricky
     }
 
@@ -94,10 +94,35 @@ struct Dataset : public Object
             Dataspace dst(mem_dst, true);
             Dataspace src(mem_src, true);
 
-            Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
+            if (type.is_var_length_string())
             {
-              std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
-            });
+                Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
+                {
+                  std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
+                  char** to = (char**) ((char*) buf + loc1);
+                  intptr_t* from = (intptr_t*) ((char*) dt.data + loc2);
+                  for (size_t i = 0; i < len / sizeof(intptr_t); ++i)
+                  {
+                    auto idx = from[i];
+                    if (!strings[idx].empty())
+                    {
+                        // presumably HDF5 will manage this string and reclaim the
+                        // memory; I'm unclear on how this works, so it's a potential
+                        // memory leak
+                        char *cstr = new char[strings[idx].length() + 1];
+                        strcpy(cstr, strings[idx].c_str());
+                        to[i] = cstr;
+                    } else
+                        to[i] = NULL;
+                  }
+                });
+            } else
+            {
+                Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
+                {
+                  std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
+                });
+            }
         }   // for all data triples
     }
 
