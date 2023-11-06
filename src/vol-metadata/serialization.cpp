@@ -24,10 +24,10 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
         diy::save(bb, d->type);
         diy::save(bb, d->space);
         diy::save(bb, d->ownership);
-        diy::save(bb, d->strings);
 
-        if (include_data || d->type.is_var_length_string())
+        if (include_data)
         {
+            diy::save(bb, d->strings);
             diy::save(bb, d->data.size());
 
             // serialize triplets
@@ -138,11 +138,11 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         auto* d = new Dataset(name, dt.id, s.id, own, H5Pcreate(H5P_DATASET_CREATE), H5Pcreate(H5P_DATASET_ACCESS), is_passthru, is_memory);
         o = d;
 
-        diy::load(bb, d->strings);
-
         // load triplets
-        if (include_data || d->type.is_var_length_string())
+        if (include_data)
         {
+            diy::load(bb, d->strings);
+
             // deserialize triplets
             size_t ntriplets;
             diy::load(bb, ntriplets);
@@ -174,8 +174,6 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         auto* a = new Attribute(name, dt.id, s.id);
         diy::load(bb, a->mem_type);
 
-        {
-        }
         if (a->mem_type.is_var_length_string())
             diy::load(bb, a->strings);
         else if (a->mem_type.dtype_class == DatatypeClass::VarLen)

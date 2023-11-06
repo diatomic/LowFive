@@ -70,6 +70,7 @@ struct IndexedDataset
         diy::MemoryBuffer queue;
 
         size_t count_calls = 0;
+        bool is_var_length_string = ds->type.is_var_length_string();
         for (auto& y : ds->data)
         {
             if (y.file.intersects(fs))
@@ -78,11 +79,26 @@ struct IndexedDataset
                 Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, fs.id), true);
                 CALI_MARK_BEGIN("diy::save");
                 diy::save(queue, file_src);
-                Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                if (is_var_length_string)
                 {
-                  diy::save(queue, (char*) y.data + loc, len);
-                  ++count_calls;
-                });
+                    Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                    {
+                      size_t length = len / sizeof(intptr_t);
+                      intptr_t* from = (intptr_t*) ((char*) y.data + loc);
+                      for (size_t i = 0; i < length; ++i)
+                      {
+                        diy::save(queue, ds->strings[from[i]]);
+                        ++count_calls;
+                      }
+                    });
+                } else
+                {
+                    Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
+                    {
+                      diy::save(queue, (char*) y.data + loc, len);
+                      ++count_calls;
+                    });
+                }
                 CALI_MARK_END("diy::save");
             }
         }

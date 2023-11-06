@@ -98,7 +98,6 @@ struct Dataset : public Object
             {
                 Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
                 {
-                  std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
                   char** to = (char**) ((char*) buf + loc1);
                   intptr_t* from = (intptr_t*) ((char*) dt.data + loc2);
                   for (size_t i = 0; i < len / sizeof(intptr_t); ++i)
