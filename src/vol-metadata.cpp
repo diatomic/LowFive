@@ -2,33 +2,30 @@
 #include "metadata.hpp"
 #include "vol-metadata-private.hpp"
 
-LowFive::ObjectPointers*
+void
 LowFive::MetadataVOL::
-wrap(void* p)
+wrap(LowFive::Object* mdata_obj, void* h5_obj)
 {
-    ObjectPointers* op = new ObjectPointers;
-    op->h5_obj = p;
-
-    our_objects.insert(op);
-
-    return op;
+    mdata_obj->h5_obj = h5_obj;
+    our_objects.insert(mdata_obj);
 }
 
 void*
 LowFive::MetadataVOL::
-unwrap(void* p)
+unwrap(LowFive::Object* p)
 {
-    ObjectPointers* op = static_cast<ObjectPointers*>(p);
-    return op->h5_obj;
+    return p->h5_obj;
 }
 
 void
 LowFive::MetadataVOL::
 drop(void* p)
 {
-    our_objects.erase(p);
-    ObjectPointers* op = static_cast<ObjectPointers*>(p);
-    delete op;
+    auto log = get_logger();
+//    log->trace("MetadataVOL drop, p = {}", fmt::ptr(p));
+//    our_objects.erase(p);
+//    Object* op = static_cast<Object*>(p);
+//    delete op;
 }
 
 LowFive::MetadataVOL::

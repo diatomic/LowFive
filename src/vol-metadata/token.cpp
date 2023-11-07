@@ -7,9 +7,9 @@ LowFive::MetadataVOL::
 token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *cmp_value)
 {
     auto log = get_logger();
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    log->trace("token_compare: {} ({} {}) {} {}", fmt::ptr(obj), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_->mdata_obj), fmt::ptr(token1), fmt::ptr(token2));
-    if (!unwrap(obj))           // look up in memory
+    Object* obj_ = (Object*) obj;
+    log->trace("token_compare: {} ({} {}) {} {}", fmt::ptr(obj), fmt::ptr(obj_->h5_obj), fmt::ptr(obj_), fmt::ptr(token1), fmt::ptr(token2));
+    if (!unwrap(obj_))           // look up in memory
     {
         std::uintptr_t p1;
         std::uintptr_t p2;
@@ -22,7 +22,7 @@ token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *
         return 0;
     } else
     {
-        auto res = VOLBase::token_cmp(unwrap(obj), token1, token2, cmp_value);
+        auto res = VOLBase::token_cmp(unwrap(obj_), token1, token2, cmp_value);
         log->trace("token_compare: result = {}", *cmp_value);
         return res;
     }

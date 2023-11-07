@@ -98,7 +98,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     long int        file_close_counter_ {0};  // increment after each call to file_close
 
     private:
-        void        make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath);
+        void        make_remote_dataset(Object*& result, std::pair<std::string, std::string> filepath);
 };
 
 }

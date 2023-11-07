@@ -26,7 +26,6 @@ inline std::ostream& operator<<(std::ostream& out, const LocationPattern& p)
 }
 
 struct Object;              // forward declaration for Files
-struct ObjectPointers;      // forward declaration for wrap
 
 // custom VOL object
 // only need to specialize those functions that are custom
@@ -73,8 +72,8 @@ struct MetadataVOL: public LowFive::VOLBase
     std::unordered_set<void*>   our_objects;
     bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }
 
-    ObjectPointers* wrap(void* p);
-    void*           unwrap(void* p);
+    void            wrap(Object* mdata_obj, void* h5_obj);
+    void*           unwrap(Object* mdata_obj);
     void            drop(void* p) override;
 
     void            drop(std::string filename);

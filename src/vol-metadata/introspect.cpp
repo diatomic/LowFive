@@ -30,6 +30,6 @@ herr_t
 LowFive::MetadataVOL::
 introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported, uint64_t *flags)
 {
-    return VOLBase::introspect_opt_query(unwrap(obj), cls, opt_type, supported, flags);
+    return VOLBase::introspect_opt_query(unwrap((Object*)obj), cls, opt_type, supported, flags);
 }
 

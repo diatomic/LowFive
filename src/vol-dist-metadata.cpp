@@ -106,9 +106,9 @@ broadcast_files(int root)
 
 void
 DistMetadataVOL::
-make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath)
+make_remote_dataset(Object*& result, std::pair<std::string, std::string> filepath)
 {
-    Object* mdata_obj = (Object*) result->mdata_obj;
+    Object* mdata_obj = result;
     Dataset* dset = dynamic_cast<Dataset*>(mdata_obj);
 
     auto log = get_logger();
@@ -131,7 +131,7 @@ make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string>
     ds->parent = mdata_obj->parent;
     mdata_obj->parent = nullptr;
     ds->move_children(mdata_obj);
-    result->mdata_obj = ds;
+    result = ds;
     delete mdata_obj;
 }
 
@@ -142,16 +142,15 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     auto log = get_logger();
     log->trace("enter DistMetadataVOL::object_open");
 
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = (ObjectPointers*) MetadataVOL::object_open(obj, loc_params, opened_type, dxpl_id, req);
+    Object* obj_ = (Object*) obj;
+    Object* result = (Object*) MetadataVOL::object_open(obj, loc_params, opened_type, dxpl_id, req);
 
-    Object* mdata_obj = (Object*) result->mdata_obj;
-    if (mdata_obj)
+    if (result)
     {
-        auto filepath = mdata_obj->fullname();
+        auto filepath = result->fullname();
         if (match_any(filepath,memory))
         {
-            if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
+            if (dynamic_cast<Dataset*>(result) && RemoteObject::query(result))
                 make_remote_dataset(result, filepath);
         }
     }
@@ -166,24 +165,22 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_open");
 
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
-    log->trace("Opening dataset (dist): {} {} {}", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
+    Object* obj_ = (Object*) obj;
+    Object* result = (Object*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
+    log->trace("Opening dataset (dist): {} {} {}", name, fmt::ptr(result), fmt::ptr(result->h5_obj));
 
     // trace object back to root to build full path and file name
-    Object* parent = static_cast<Object*>(obj_->mdata_obj);
+    Object* parent = static_cast<Object*>(obj_);
     auto filepath = parent->fullname(name);
 
     log->trace("Opening dataset: {} {} {}", name, filepath.first, filepath.second);
 
     if (match_any(filepath,memory))
     {
-        Object* mdata_obj = (Object*) result->mdata_obj;
-
-        log->trace("Checking if Dataset: {}", fmt::ptr(mdata_obj));
+        log->trace("Checking if Dataset: {}", fmt::ptr(obj_));
 
         // Dataset that really should be RemoteDataset
-        if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
+        if (dynamic_cast<Dataset*>(obj_) && RemoteObject::query(obj_))
             make_remote_dataset(result, filepath);
 
         //log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");
@@ -199,9 +196,9 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     CALI_CXX_MARK_FUNCTION;
     auto log = get_logger();
     log->trace("enter DistMetadataVOL::dataset_read");
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
+    Object* dset_ = (Object*) dset;
 
-    RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj);
+    RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_);
     if (ds)
     {
         //  TODO: support H5S_ALL, need to get file_space_id, mem_space_id with H5Dget_space
@@ -211,7 +208,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         CALI_MARK_BEGIN("dist_metadata_vol_dataset_read_query");
         ds->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         CALI_MARK_END("dist_metadata_vol_dataset_read_query");
-    } else if (dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
+    } else if (dynamic_cast<Dataset*>((Object*) dset_))
     {
         return MetadataVOL::dataset_read(dset_, mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
     } else if (unwrap(dset_) && buf)        // TODO: why are we checking buf?
@@ -297,11 +294,9 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         delete hf;
     }
 
-    ObjectPointers* result = (ObjectPointers*)MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
+    Object* result = (Object*)MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
     // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
-    delete dynamic_cast<DummyFile*>((Object*)result->mdata_obj);
-
-    result->mdata_obj = result_mdata;
+//    delete dynamic_cast<DummyFile*>((Object*)result);
 
     return result;
 }
@@ -312,14 +307,14 @@ file_close(void *file, hid_t dxpl_id, void **req)
 {
     ++file_close_counter_;
 
-    ObjectPointers* file_ = (ObjectPointers*) file;
+    Object* file_ = (Object*) file;
 
     auto log = get_logger();
-    log->trace("Enter DistMetadataVOL::file_close, mdata_obj = {}", fmt::ptr(file_->mdata_obj));
-    if (file_->tmp) {
-        log->trace("DistMetadataVOL::file_close, temporary reference, skipping close");
-        return 0;
-    }
+    log->trace("Enter DistMetadataVOL::file_close, mdata_obj = {}", fmt::ptr(file_));
+//    if (file_->tmp) {
+//        log->trace("DistMetadataVOL::file_close, temporary reference, skipping close");
+//        return 0;
+//    }
     // this is a little too closely coupled to MetadataVOL::file_close(), but
     // it closes the file before starting to serve, which may be useful in some
     // scenarios
@@ -331,7 +326,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
         file_->h5_obj = nullptr;    // this makes sure that the recursive call below won't trigger VOLBase::file_close() again
     }
 
-    if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_->mdata_obj))
+    if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_))
     {
         log->trace("DistMetadataVOL::file_close, remote file {}", f->name);
         f->obj.call<void>("file_close");
@@ -344,9 +339,8 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
         files.erase(f->name);
         log->trace("DistMetadataVOL::file_close delete {}", fmt::ptr(f));
-        delete f;       // erases all the children too
-        file_->mdata_obj = nullptr;
-    } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
+//        delete f;       // erases all the children too
+    } else if (File* f = dynamic_cast<File*>((Object*) file_))
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
         f->print();

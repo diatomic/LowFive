@@ -20,6 +20,7 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, b
         for (auto& f : *(idx_srv.files))
         {
             auto datasets = find_datasets(dynamic_cast<File*>(f.second));
+            log->trace("Index ctor, f.first = {}, datasets = {}", f.first, datasets.size());
             for (auto& x : datasets)
             {
                 auto* ds = x.second;
@@ -31,6 +32,7 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, b
             }
         }
     }
+    log->trace("Index ctor, perform_indexing = {}, indexed_datasets = {}", perform_indexing, indexed_datasets);
 }
 
 Index::~Index()
@@ -191,10 +193,19 @@ void
 Index::
 find_datasets(Object* o, std::string name, Datasets& result)
 {
+    auto log = get_logger();
+    log->trace("find_dataset: o = {}, type = {}, name = {}", fmt::ptr(o), o->type, name);
     name += "/" + o->name;
     Dataset* ds = dynamic_cast<Dataset*>(o);
     if (ds)
+    {
+        log->trace("find_dataset: found ds = {}", fmt::ptr(ds));
         result.emplace(name, ds);
+    }
+    else
+    {
+        log->trace("find_dataset: not a Dataset, recurse into {} children", o->children.size());
+    }
 
     for (Object* child : o->children)
         find_datasets(child, name, result);

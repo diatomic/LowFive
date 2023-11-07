@@ -34,7 +34,7 @@ struct VOLBase
         pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, under_vol_id, vol); return x; }
         static void         destroy(pass_through_t* x)
         {
-            x->vol->drop(x->under_object);
+//            x->vol->drop(x->under_object);
             destroy_wrapper(x);
         }
         static void         destroy_wrapper(pass_through_t* x)

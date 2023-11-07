@@ -6,25 +6,25 @@
 namespace LowFive
 {
 
-struct ObjectPointers
-{
-    void*           h5_obj = nullptr;             // HDF5 object (e.g., dset)
-    void*           mdata_obj = nullptr;          // metadata object (tree node)
-    bool            tmp = false;
-
-    ObjectPointers() = default;
-    ObjectPointers(void* h5_obj_): h5_obj(h5_obj_)     {}
-
-    friend
-    std::ostream&   operator<<(std::ostream& out, const ObjectPointers& obj)
-    {
-        fmt::print(out, "[{}: h5 = {}, mdata = {}, tmp = {}", fmt::ptr(&obj), fmt::ptr(obj.h5_obj), fmt::ptr(obj.mdata_obj), obj.tmp);
-        if (obj.mdata_obj)
-            fmt::print(out, ", name = {}", static_cast<Object*>(obj.mdata_obj)->name);
-        fmt::print(out, "]");
-        return out;
-    }
-};
+//struct ObjectPointers
+//{
+//    void*           h5_obj = nullptr;             // HDF5 object (e.g., dset)
+//    void*           mdata_obj = nullptr;          // metadata object (tree node)
+//    bool            tmp = false;
+//
+//    ObjectPointers() = default;
+//    ObjectPointers(void* h5_obj_): h5_obj(h5_obj_)     {}
+//
+//    friend
+//    std::ostream&   operator<<(std::ostream& out, const ObjectPointers& obj)
+//    {
+//        fmt::print(out, "[{}: h5 = {}, mdata = {}, tmp = {}", fmt::ptr(&obj), fmt::ptr(obj.h5_obj), fmt::ptr(obj.mdata_obj), obj.tmp);
+//        if (obj.mdata_obj)
+//            fmt::print(out, ", name = {}", static_cast<Object*>(obj.mdata_obj)->name);
+//        fmt::print(out, "]");
+//        return out;
+//    }
+//};
 
 inline H5I_type_t   get_identifier_type(Object* o)
 {

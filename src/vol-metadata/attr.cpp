@@ -7,27 +7,27 @@ void*
 LowFive::MetadataVOL::
 attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    Object* parent_obj = (Object*) obj;
 
     auto log = get_logger();
     log->trace("Attr Create");
     log->trace("loc type = {}, name = {}", loc_params->type, name);
 
     // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
+    auto filepath = static_cast<Object*>(parent_obj)->fullname(name);
 
-    ObjectPointers* result = nullptr;
-    if (unwrap(obj_) && match_any(filepath,passthru))
+    // add atttribute to our metadata
+    Object* result = static_cast<Object*>(parent_obj)->add_child(new Attribute(name, type_id, space_id));
+
+    if (unwrap(parent_obj) && match_any(filepath,passthru))
     {
-        result = wrap(VOLBase::attr_create(unwrap(obj_), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
+        // if necessary, create real HDF5 attribute in file
+        wrap(result, VOLBase::attr_create(unwrap(parent_obj), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
         log->trace("created attribute named {} in passthru object {}", name, *result);
     }
-    else
-        result = wrap(nullptr);
 
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
-    log->trace("created attribute named {} in metadata, new object {} under parent object {} named {}",
-            name, *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
+    log->trace("created attribute named {} in metadata, new object {} under parent object {}",
+            name, *result, *parent_obj);
 
     return result;
 }
@@ -36,36 +36,33 @@ void*
 LowFive::MetadataVOL::
 attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = nullptr;
+    Object* parent_obj = (Object*) obj;
+    assert(parent_obj != nullptr);
+
 
     auto log = get_logger();
     log->trace("Attr Open");
-    log->trace("attr_open obj = {} name {}", *obj_, name);
+    log->trace("attr_open obj = {} name {}", *parent_obj, name);
 
-    if (unwrap(obj_))
-        result = wrap(VOLBase::attr_open(unwrap(obj_), loc_params, name, aapl_id, dxpl_id, req));
-    else
-        result = wrap(nullptr);
+    // trace object back to root to build full path and file name
+    auto filepath = parent_obj->fullname(name);
 
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-    if (mdata_obj)
-    {
-        // trace object back to root to build full path and file name
-        auto filepath = mdata_obj->fullname(name);
+    log->trace("attr_open filepath first {} second {} name {}", filepath.first, filepath.second, name);
 
-        // debug
-        log->trace("attr_open filepath first {} second {} name {}", filepath.first, filepath.second, name);
+    // find the attribute in our file metadata
+    std::string name_(name);
 
-        // find the attribute in our file metadata
-        std::string name_(name);
-        if (match_any(filepath, memory))
-            result->mdata_obj = mdata_obj->locate(*loc_params).exact()->search(name_).exact();
-        // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
+    Object* result = parent_obj->locate(*loc_params).exact()->search(name_).exact();
+
+    // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
+
+    if (unwrap(parent_obj)) {
+        // if mdata_obj has underlying
+        wrap(result, VOLBase::attr_open(unwrap(parent_obj), loc_params, name, aapl_id, dxpl_id, req));
     }
 
-    log->trace("attr_open search result = {} = [h5_obj {} mdata_obj {}] name {}",
-            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);
+    log->trace("attr_open search result = {} = [h5_obj {}] name {}",
+            fmt::ptr(result), fmt::ptr(result->h5_obj), name);
 
     return (void*)result;
 }
@@ -75,7 +72,7 @@ LowFive::MetadataVOL::
 attr_read(void *attr, hid_t mem_type_id, void *buf,
         hid_t dxpl_id, void **req)
 {
-    ObjectPointers* attr_ = (ObjectPointers*) attr;
+    Object* attr_ = (Object*) attr;
 
     auto log = get_logger();
     log->trace("Attr Read");
@@ -83,11 +80,11 @@ attr_read(void *attr, hid_t mem_type_id, void *buf,
     log->trace("attr = {}, mem_type_id = {}, mem type = {}", *attr_, mem_type_id, mem_type);
 
     if (unwrap(attr_))
-        return VOLBase::attr_read(unwrap(attr), mem_type_id, buf, dxpl_id, req);
+        return VOLBase::attr_read(unwrap(attr_), mem_type_id, buf, dxpl_id, req);
     else
     {
-        log_assert(attr_->mdata_obj, "mdata_obj must be set in metadata mode");
-        Attribute* a = (Attribute*) attr_->mdata_obj;
+        Attribute* a = dynamic_cast<Attribute*>(attr_);
+        log_assert(a, "mdata obj must be set in metadata mode");
         log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
         a->read(Datatype(mem_type), buf);
     }
@@ -99,7 +96,7 @@ herr_t
 LowFive::MetadataVOL::
 attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    Object* obj_ = (Object*) obj;
 
     auto get_type = args->op_type;
 
@@ -111,13 +108,16 @@ attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
 
     // TODO: again, why do we prefer passthru?
     if (unwrap(obj_))
-        return VOLBase::attr_get(unwrap(obj), args, dxpl_id, req);
-    else if (obj_->mdata_obj)
+        return VOLBase::attr_get(unwrap(obj_), args, dxpl_id, req);
+    else
     {
+        Attribute* attr = dynamic_cast<Attribute*>(obj_);
+        log_assert(attr, "mdata obj must be set in metadata mode");
+        // metadata mode
         if (get_type == H5VL_ATTR_GET_SPACE)
         {
             log->trace("GET_SPACE");
-            auto& dataspace = static_cast<Attribute*>(obj_->mdata_obj)->space;
+            auto& dataspace = attr->space;
 
             hid_t space_id = dataspace.copy();
             log->trace("copied space id = {}, space = {}", space_id, Dataspace(space_id));
@@ -127,14 +127,12 @@ attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
         } else if (get_type == H5VL_ATTR_GET_TYPE)
         {
             log->trace("GET_TYPE");
-            auto& datatype = static_cast<Attribute*>(obj_->mdata_obj)->type;
+            auto& datatype = attr->type;
 
-            log->trace("dataset data type id = {}, datatype = {}",
-                    datatype.id, datatype);
+            log->trace("dataset data type id = {}, datatype = {}", datatype.id, datatype);
 
             hid_t dtype_id = datatype.copy();
-            log->trace("copied data type id = {}, datatype = {}",
-                    dtype_id, Datatype(dtype_id));
+            log->trace("copied data type id = {}, datatype = {}", dtype_id, Datatype(dtype_id));
 
             args->args.get_type.type_id = dtype_id;
             log->trace("arguments = {} -> {}", "args->args.get_type.type_id", args->args.get_type.type_id);
@@ -175,21 +173,18 @@ herr_t
 LowFive::MetadataVOL::
 attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data)
 {
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
-    Object* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+    Object* mdata_obj = (Object*)obj;
 
     mdata_obj = mdata_obj->locate(*loc_params).exact();
 
     // get object type in HDF format and use that to get an HDF hid_t to the object
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
     int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-    ObjectPointers* obj_tmp = wrap(nullptr);
-    *obj_tmp = *obj_;
-    obj_tmp->tmp = true;
-    auto log = get_logger();
-    log->trace("attr_iter: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
 
-    hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
+    auto log = get_logger();
+    log->trace("attr_iter: wrapping {} object type {}", *mdata_obj, mdata_obj->type);
+
+    hid_t obj_loc_id = H5VLwrap_register(obj, static_cast<H5I_type_t>(obj_type));
     //log->trace("wrap_object = {}", fmt::ptr(H5VLobject(obj_loc_id)));
     //log->trace("dec_ref, refcount = {}", H5Idec_ref(obj_loc_id));
 
@@ -233,7 +228,10 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
         }   // child is type attribute
     }   // for all children
 
-//     log->trace("refcount = {}", H5Idec_ref(obj_loc_id));
+    // Update: no longer relevant, we do not create tmp object
+//    auto refcount = H5Idec_ref(obj_loc_id);
+//    log->trace("refcount = {}", refcount);
+
     // NB: don't need to delete obj_tmp; it gets deleted (via
     //     MetadataVOL::drop()) automagically, when refcount reaches 0,
     //     i.e., this part works as expected
@@ -248,42 +246,38 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
 
 herr_t
 LowFive::MetadataVOL::
-attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req)
+attr_write(void *attr_, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* attr_ = (ObjectPointers*) attr;
+    Attribute* attr = (Attribute*) attr_;
 
     auto log = get_logger();
     log->trace("Attr Write");
     log->trace("attr = {}, mem_type_id = {}, mem type = {}",
-            *attr_, mem_type_id, Datatype(mem_type_id));
+            *attr, mem_type_id, Datatype(mem_type_id));
 
-    if (attr_->mdata_obj)
-    {
-        Attribute* a = (Attribute*) attr_->mdata_obj;
-        a->write(Datatype(mem_type_id), buf);
-        log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
-    }
+    attr->write(Datatype(mem_type_id), buf);
+    log->trace("type = {}, space = {}, mem_type = {}", attr->type, attr->space, attr->mem_type);
 
-    if (unwrap(attr_))
-        return VOLBase::attr_write(unwrap(attr_), mem_type_id, buf, dxpl_id, req);
+    if (unwrap(attr))
+        return VOLBase::attr_write(unwrap(attr), mem_type_id, buf, dxpl_id, req);
 
     return 0;
 }
 
 herr_t
 LowFive::MetadataVOL::
-attr_close(void *attr, hid_t dxpl_id, void **req)
+attr_close(void *attr_, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* attr_ = (ObjectPointers*) attr;
+    Attribute* attr = (Attribute*) attr_;
 
     auto log = get_logger();
     log->trace("Attr Close");
-    log->trace("close: {}, dxpl_id = {}", *attr_, dxpl_id);
+    log->trace("close: {}, dxpl_id = {}", *attr, dxpl_id);
 
     herr_t retval = 0;
 
-    if (unwrap(attr_))
-        retval = VOLBase::attr_close(unwrap(attr_), dxpl_id, req);
+    if (unwrap(attr))
+        retval = VOLBase::attr_close(unwrap(attr), dxpl_id, req);
 
     return retval;
 }
@@ -292,21 +286,20 @@ herr_t
 LowFive::MetadataVOL::
 attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    Object* mdata_obj = (Object*) obj;
 
     auto specific_type = args->op_type;
 
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-
     auto log = get_logger();
-    log->trace("attr_specific obj = {} specific_type = {}", *obj_, specific_type);
+    log->trace("attr_specific obj = {} specific_type = {}", *mdata_obj, specific_type);
     log->trace("specific types H5VL_ATTR_DELETE = {} H5VL_ATTR_EXISTS = {} H5VL_ATTR_ITER = {} H5VL_ATTR_RENAME = {}",
             H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
 
     herr_t result = 0;
-    if (unwrap(obj_))
-        result = VOLBase::attr_specific(unwrap(obj_), loc_params, args, dxpl_id, req);
-
+    if (unwrap(mdata_obj))
+    {
+        result = VOLBase::attr_specific(unwrap(mdata_obj), loc_params, args, dxpl_id, req);
+    }
     else // if (match_any(filepath, memory))
     {
         switch(specific_type)
@@ -407,6 +400,6 @@ herr_t
 LowFive::MetadataVOL::
 attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
-    return VOLBase::attr_optional(unwrap(obj), args, dxpl_id, req);
+    return VOLBase::attr_optional(unwrap((Object*)obj), args, dxpl_id, req);
 }
 

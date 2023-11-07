@@ -6,7 +6,7 @@
 herr_t
 LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void** req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
+    Object* obj_ = (Object*)obj;
 
     auto log = get_logger();
     log->trace("link_create: obj = {}, create_type = {}", *obj_, args->op_type);
@@ -15,7 +15,7 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
 
     // see hdf5 src/H5VLnative_link.c, H5VL__native_link_create()
 
-    if (obj_->mdata_obj)
+    if (obj_)
     {
         if(H5VL_LINK_CREATE_HARD == args->op_type)
         {
@@ -23,21 +23,21 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
             assert(loc_params->type == H5VL_OBJECT_BY_NAME);
             std::string name = loc_params->loc_data.loc_by_name.name;
             assert(args->args.hard.curr_obj);
-            ObjectPointers* cur_obj_ = (ObjectPointers*) args->args.hard.curr_obj;
+            Object* cur_obj_ = (Object*) args->args.hard.curr_obj;
             log->trace("  cur_obj = {}", *cur_obj_);
 
             if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_SELF)
             {
                 // TODO: probably should handle the path, in case it can be given
                 assert(name.find("/") == std::string::npos);      // expecting just a name, not a path
-                static_cast<Object*>(cur_obj_->mdata_obj)->name = name;
+                cur_obj_->name = name;
             } else if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_NAME)
             {
                 // (obj, loc_params) -> (cur_obj, cur_params)
-                auto obj_path = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
+                auto obj_path = obj_->locate(*loc_params);
                 assert(obj_path.is_name());
 
-                auto cur_obj_path = static_cast<Object*>(cur_obj_->mdata_obj)->locate(args->args.hard.curr_loc_params);
+                auto cur_obj_path = cur_obj_->locate(args->args.hard.curr_loc_params);
                 Object* cur_obj = cur_obj_path.exact();     // assert that we found it
                 obj_path.obj->add_child(new HardLink(obj_path.path, cur_obj));
             } else if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_TOKEN)
@@ -53,7 +53,7 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
         } else if(H5VL_LINK_CREATE_SOFT == args->op_type)
         {
                 // (obj, loc_params) -> target_name
-                auto obj_path = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
+                auto obj_path = obj_->locate(*loc_params);
                 assert(obj_path.is_name());
                 obj_path.obj->add_child(new SoftLink(obj_path.path, args->args.soft.target));
         } else
@@ -68,15 +68,12 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
         {
             // AN: modifying the args given to us to call trampoline, hopefully copying is not necessary
             if (args->args.hard.curr_obj)
-                args->args.hard.curr_obj = unwrap(args->args.hard.curr_obj);
+                args->args.hard.curr_obj = unwrap((Object*)args->args.hard.curr_obj);
 
-            res = link_create_trampoline(args, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
-        } else if(H5VL_LINK_CREATE_SOFT == args->op_type)
-        {
-            // in 1.14, no need to keep this and next call separate
             res = link_create_trampoline(args, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
         } else
         {
+            // in 1.14, no need to check anything else
             res = link_create_trampoline(args, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
         }
     }
@@ -96,8 +93,11 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
         void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
         hid_t lapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* src_obj_ = (ObjectPointers*)src_obj;
-    ObjectPointers* dst_obj_ = (ObjectPointers*)dst_obj;
+    Object* src_obj_ = (Object*)src_obj;
+    Object* dst_obj_ = (Object*)dst_obj;
+
+    if (!src_obj_ || !dst_obj_)
+        throw MetadataError(fmt::format("link_copy(): got null pointers"));
 
     auto log = get_logger();
     log->trace("link_copy: src_obj = {}, dst_obj = {}", *src_obj_, *dst_obj_);
@@ -105,10 +105,8 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     herr_t res = 0;
     if (unwrap(src_obj_) && unwrap(dst_obj_))
         res = VOLBase::link_copy(unwrap(src_obj_), loc_params1, unwrap(dst_obj_), loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
-    else if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
-        log->warn("Warning: link_copy not implemented in metadata yet");
     else
-        throw MetadataError(fmt::format("link_copy(): either passthru or metadata must be specified"));
+        throw MetadataError(fmt::format("link_copy(): not implemented in metadata yet"));
 
     return res;
 }
@@ -119,19 +117,23 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
         void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
         hid_t lapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* src_obj_ = (ObjectPointers*)src_obj;
-    ObjectPointers* dst_obj_ = (ObjectPointers*)dst_obj;
+    Object* src_obj_ = (Object*)src_obj;
+    Object* dst_obj_ = (Object*)dst_obj;
 
     auto log = get_logger();
     log->trace("link_move: src_obj = {}, dst_obj = {}", *src_obj_, *dst_obj_);
 
+    if ((src_obj == nullptr) || (dst_obj == nullptr))
+        throw MetadataError(fmt::format("link_copy(): got null pointers"));
+
     herr_t res = 0;
     if (unwrap(src_obj_) && unwrap(dst_obj_))
         res = VOLBase::link_move(unwrap(src_obj_), loc_params1, unwrap(dst_obj_), loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
-    else if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
-        log->warn("Warning: link_move not implemented in metadata yet");
     else
-        throw MetadataError(fmt::format("link_move(): either passthru or metadata must be specified"));
+    {
+        log->warn("Warning: link_move not implemented in metadata yet");
+        throw MetadataError(fmt::format("link_move(): not implemented in metadata yet"));
+    }
 
     return res;
 }
@@ -139,7 +141,7 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
 herr_t
 LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, H5VL_link_get_args_t* args, hid_t dxpl_id, void** req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
+    Object* obj_ = (Object*)obj;
 
     auto log = get_logger();
     log->trace("link_get: obj = {}, get_type = {}", *obj_, args->op_type);
@@ -147,12 +149,11 @@ LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, h
     herr_t res = 0;
     if (unwrap(obj_))
         res = VOLBase::link_get(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
-    else if (obj_->mdata_obj)
+    else
     {
-        auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
         if (args->op_type == H5VL_LINK_GET_NAME)
         {
-            auto* o = mdata_obj->locate(*loc_params).exact();
+            auto* o = obj_->locate(*loc_params).exact();
             auto name_size = o->name.size();
             if (args->args.get_name.name && args->args.get_name.name_size >= name_size)
                 memcpy(args->args.get_name.name, o->name.c_str(), name_size + 1);
@@ -162,8 +163,9 @@ LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, h
             log->warn("Warning: link_get not implemented in metadata yet");
             throw MetadataError(fmt::format("link_get not implemented in metadata yet"));
         }
-    } else
-        throw MetadataError(fmt::format("link_get(): either passthru or metadata must be specified"));
+    }
+//    else
+//        throw MetadataError(fmt::format("link_get(): either passthru or metadata must be specified"));
 
     return res;
 }
@@ -176,22 +178,17 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
     if (args->op_type != H5VL_LINK_ITER)
         throw MetadataError("called link_iter, but op_type is not H5VL_LINK_ITER");
 
-    ObjectPointers* obj_        = (ObjectPointers*) obj;
-    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+    Object* obj_ = (Object*) obj;
 
     auto log = get_logger();
 
     // get object type in HDF format and use that to get an HDF hid_t to the object
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
-    if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-        throw MetadataError(fmt::format("link_iter(): mdata_obj->type {} > H5I_DATATYPE, the last element of h5_types", mdata_obj->type));
-    int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-    ObjectPointers* obj_tmp = wrap(nullptr);
-    *obj_tmp = *obj_;
-    obj_tmp->tmp = true;
-    log->trace("link_iter: wrapping object type mdata_obj->type {} h5 obj_type {}", *obj_tmp, mdata_obj->type, obj_type);
+    if (static_cast<int>(obj_->type) >= h5_types.size())     // sanity check
+        throw MetadataError(fmt::format("link_iter(): mdata_obj->type {} > H5I_DATATYPE, the last element of h5_types", obj_->type));
+    int obj_type = h5_types[static_cast<int>(obj_->type)];
 
-    hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
+    hid_t obj_loc_id = H5VLwrap_register(obj_, static_cast<H5I_type_t>(obj_type));
 
     // info for link, defined in HDF5 H5Apublic.h  TODO: assigned with some defaults, not sure if they're corrent
     H5L_info_t linfo;
@@ -201,7 +198,7 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
     linfo.u.val_size    = 0;                        // union of either token or val_size
 
     log->trace("link_iter: iterating over direct children of object name {} in order children were created (ignoring itration order and index)",
-            mdata_obj->name);
+            obj_->name);
     if (args->args.iterate.idx_p)
         log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", args->args.iterate.order, *args->args.iterate.idx_p);
     else
@@ -215,13 +212,13 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
     // TODO: currently ignores the iteration order and current index
     // just blindly goes through all the links in the order they were created
     // also ignoring recursive flag (controls whether to iterate / visit, see H5VL__native_link_specific)
-    for (auto c : mdata_obj->children)
+    for (auto c : obj_->children)
     {
         // top-level attributes cannot be objects, skip over them
         if (c->type == ObjectType::Attribute &&
-                (mdata_obj->type != ObjectType::Group && mdata_obj->type != ObjectType::Dataset && mdata_obj->type != ObjectType::NamedDtype))
+                (obj_->type != ObjectType::Group && obj_->type != ObjectType::Dataset && obj_->type != ObjectType::NamedDtype))
         {
-            log->trace("link_iter: skipping mdata object named {} type {}", mdata_obj->name, mdata_obj->type);
+            log->trace("link_iter: skipping mdata object named {} type {}", obj_->name, obj_->type);
             continue;
         }
 
@@ -252,8 +249,7 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
     // see hdf5 src/H5VLnative_link.c, H5VL__native_link_specific()
     // enum of specific types is in H5VLconnector.h
 
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+    Object* obj_ = (Object*)obj;
 
     auto log = get_logger();
     log->trace("link_specific: obj = {}, specific_type = {}", *obj_, args->op_type);
@@ -261,7 +257,7 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
     herr_t res = 0;
     if (unwrap(obj_))
         res = VOLBase::link_specific(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
-    else if (mdata_obj)
+    else
     {
         if (args->op_type == H5VL_LINK_DELETE)               // H5Ldelete(_by_name/idx)
         {
@@ -272,7 +268,7 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
         {
             log->trace("link_specific: specific_type H5VL_LINK_EXISTS");
 
-            auto op = static_cast<Object*>(mdata_obj)->locate(*loc_params);
+            auto op = obj_->locate(*loc_params);
             *(args->args.exists.exists) = op.path.empty();
             res = op.path.empty();
         }
@@ -282,7 +278,7 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
 
             // sanity check that the provided object matches the location parameters
             // ie,  we're not supposed to operate on one of the children instead of the parent (which we don't support)
-            if (mdata_obj != mdata_obj->locate(*loc_params).exact())
+            if (obj_ != obj_->locate(*loc_params).exact())
                 throw MetadataError(fmt::format("link_specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
 
             res = link_iter(obj, args);
@@ -290,8 +286,6 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
         else
             throw MetadataError(fmt::format("link_specific unrecognized specific_type = {}", args->op_type));
     }
-    else
-        throw MetadataError(fmt::format("link_specific(): either passthru or metadata must be specified"));
 
     return res;
 }
@@ -299,18 +293,22 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
 herr_t
 LowFive::MetadataVOL::link_optional(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, H5VL_optional_args_t* args, hid_t dxpl_id, void** req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
+    Object* obj_ = (Object*)obj;
 
     auto log = get_logger();
     log->trace("link_optional: obj = {}, optional_type = {}", *obj_, args->op_type);
 
+    if (!obj)
+        throw MetadataError(fmt::format("link_optional(): either passthru or metadata must be specified"));
+
     herr_t res = 0;
     if (unwrap(obj_))
         res = VOLBase::link_optional(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
-    else if (obj_->mdata_obj)
-        log->warn("Warning: link_optional not implemented in metadata yet");
     else
-        throw MetadataError(fmt::format("link_optional(): either passthru or metadata must be specified"));
+    {
+        log->warn("Warning: link_optional not implemented in metadata yet");
+        throw MetadataError(fmt::format("link_optional(): not implemented in metadata yet"));
+    }
 
     return res;
 }

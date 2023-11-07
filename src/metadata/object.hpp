@@ -18,6 +18,8 @@ struct Object
     std::string                     name;
 
     void*                           extra = nullptr;        // currently only used to store IndexedDataset for each Dataset
+//    void*                           h5_obj = reinterpret_cast<void*>(0xBADC0FFEE0DDF00D);        // pointer to true HDF5 object, if any
+    void*                           h5_obj = nullptr;        // pointer to true HDF5 object, if any
 
     struct ObjectPath
     {
@@ -220,6 +222,13 @@ struct Object
         while (cur->parent)
             cur = cur->parent;
         return cur;
+    }
+
+    friend
+    std::ostream&   operator<<(std::ostream& out, const Object& obj)
+    {
+        fmt::print(out, "[{}: h5 = {}, name = {}, n_children= {}]", fmt::ptr(&obj), fmt::ptr(obj.h5_obj), obj.name, obj.children.size());
+        return out;
     }
 };
 

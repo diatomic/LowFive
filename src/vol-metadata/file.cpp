@@ -9,30 +9,24 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
 {
     auto log = get_logger();
     log->trace("enter MetadataVOL::file_create, name ={}", name);
-    ObjectPointers* obj_ptrs = nullptr;
 
     // create our file metadata; NB: we build the in-memory hierarchy regardless of whether we match memory
-    void* mdata = nullptr;
     std::string name_(name);
     File* f = new File(name_, fcpl_id, fapl_id);
     files.emplace(name_, f);
-    mdata = f;
 
     log->trace("MetadataVOL::file_create, name ={}, created File f= {}", name, fmt::ptr(f));
 
     if (match_any(name, "", passthru, true)) {
         log->trace("MetadataVOL::file_create, name ={}, calling VOLBase for passthru", name);
-        obj_ptrs = wrap(VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req));
+        wrap(f, VOLBase::file_create(name, flags, fcpl_id, fapl_id, dxpl_id, req));
     } else {
-        log->trace("MetadataVOL::file_create, name ={}, wrapping nullptr", name);
-        obj_ptrs = wrap(nullptr);
+        log->trace("MetadataVOL::file_create, name ={}, in-memory only, not wrapping h5_obj", name);
     }
 
-    obj_ptrs->mdata_obj = mdata;
+    log->trace("file_create: f = {}, dxpl_id = {}", *f, dxpl_id);
 
-    log->trace("file_create: obj_ptr = {}, dxpl_id = {}", *obj_ptrs, dxpl_id);
-
-    return obj_ptrs;
+    return f;
 }
 
 
@@ -45,36 +39,31 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
     auto log = get_logger();
     log->trace("file_open()");
-    ObjectPointers* obj_ptrs = nullptr;
 
     // find the file in the VOL
-    void* mdata = nullptr;
+    Object* result = nullptr;
     std::string name_(name);
     auto it = files.find(name_);
     if (it != files.end())
     {
         log->trace("Found file {}", name_);
-        mdata = it->second;
+        result = it->second;
     }
     else
     {
         log->trace("Didn't find file {}, creating DummyFile", name_);
         auto* f = new DummyFile(name);
         files.emplace(name, f);
-        mdata = f;
+        result = f;
     }
 
 //    if (match_any(name, "", passthru, true) && !match_any(name, "", memory, true))
     if (match_any(name, "", passthru, true))
-        obj_ptrs = wrap(VOLBase::file_open(name, flags, fapl_id, dxpl_id, req));
-    else
-        obj_ptrs = wrap(nullptr);
+        wrap(result, VOLBase::file_open(name, flags, fapl_id, dxpl_id, req));
 
-    obj_ptrs->mdata_obj = mdata;
+    log->trace("Opened file {}: {}", name, *result);
 
-    log->trace("Opened file {}: {}", name, *obj_ptrs);
-
-    return obj_ptrs;
+    return result;
 }
 
 
@@ -82,23 +71,26 @@ herr_t
 LowFive::MetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* file_ = (ObjectPointers*) file;
+    Object* file_ = (Object*) file;
     auto log = get_logger();
     log->trace("MetadataVOL::file_close: {}", *file_);
 
-    if (file_->tmp)
-    {
-        log->trace("temporary reference, skipping close");
-        return 0;
-    }
+//    if (file_->tmp)
+//    {
+//        log->trace("temporary reference, skipping close");
+//        return 0;
+//    }
 
     herr_t res = 0;
 
     if (unwrap(file_))
+    {
+        log->trace("h5_obj not zero, calling VOLBase::file_close");
         res = VOLBase::file_close(unwrap(file_), dxpl_id, req);
+    }
 
     // TODO: add DummyFile condition
-    if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
+    if (File* f = dynamic_cast<File*>(file_))
     {
         log->trace("mdata_obj is File*");
         // we created this file
@@ -107,13 +99,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
         if (!keep)
         {
-            log->trace("keep not set, deleting file");
+            log->trace("keep not set, deleting file f = {}", fmt::ptr(f));
             files.erase(f->name);
-            delete f;       // erases all the children too
+            // do not delete: will be called by drop in _file_close
+//            delete f;       // erases all the children too
         } else
             log->trace("Keeping file metadata in memory");
     }
-
 
     if (after_file_close)
         after_file_close();
@@ -131,7 +123,7 @@ herr_t
 LowFive::MetadataVOL::
 file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* file_ = (ObjectPointers*) file;
+    Object* file_ = (Object*) file;
     auto log = get_logger();
 
     // special case, when checking for accessibility
@@ -171,9 +163,10 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
         log->trace("file_specific(): specific_type = H5VL_FILE_FLUSH");
 
     if (unwrap(file_))
+    {
         return VOLBase::file_specific(unwrap(file_), args, dxpl_id, req);
-
-    else if (file_->mdata_obj)
+    }
+    else
     {
         if (args->op_type == H5VL_FILE_FLUSH)
         {
@@ -183,9 +176,6 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
         else
             throw MetadataError(fmt::format("file_specific(): specific_type {} not implemented for in-memory regime", args->op_type));
     }
-
-    else
-        throw MetadataError(fmt::format("file_specific(): neither passthru nor metadata are active"));
 }
 
 
@@ -193,7 +183,7 @@ herr_t
 LowFive::MetadataVOL::
 file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* file_ = (ObjectPointers*) file;
+    Object* file_ = (Object*) file;
 
     auto get_type = args->op_type;
 
@@ -225,11 +215,11 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
         }
         else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
         {
-            args->args.get_fapl.fapl_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
+            args->args.get_fapl.fapl_id = dynamic_cast<File*>(file_)->fapl.id;
         }
         else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
         {
-            args->args.get_fcpl.fcpl_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
+            args->args.get_fcpl.fcpl_id = dynamic_cast<File*>(file_)->fapl.id;
         }
             // TODO
         else if (get_type == H5VL_FILE_GET_FILENO)          // file number
@@ -246,7 +236,7 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
             char *     name = args->args.get_name.buf;
             size_t*    len  = args->args.get_name.file_name_len;
 
-            auto* name_c = static_cast<File*>(file_->mdata_obj)->name.c_str();
+            auto* name_c = dynamic_cast<File*>(file_)->name.c_str();
             *len = std::strlen(name_c);
 
             if (args->args.get_name.buf) {
@@ -332,7 +322,7 @@ herr_t
 LowFive::MetadataVOL::
 file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* file_ = (ObjectPointers*) file;
+    Object* file_ = (Object*) file;
 
     auto log = get_logger();
     log->trace("file_optional: file = {}, opt_type = {}", *file_, args->op_type);

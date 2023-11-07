@@ -223,7 +223,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         diy::load(bb, dt->data);
         o = dt;
     } else
-        MetadataError("unhandled case in deserialization");
+        throw MetadataError("unhandled case in deserialization");
 
     o->token = token;
 

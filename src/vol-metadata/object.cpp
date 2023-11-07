@@ -7,23 +7,24 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_        = (ObjectPointers*) obj;
+    Object* obj_        = (Object*) obj;
 
     auto log = get_logger();
     log->trace("MetadataVOL::object_open: parent obj = {}, loca_params.type = {}", *obj_, loc_params->type);
 
     *opened_type = H5I_BADID;
 
-    ObjectPointers* result;
-    if (!unwrap(obj))           // memory
-        result = wrap(nullptr);
-    else                        // passthru
-        result = wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
-    result->mdata_obj = nullptr;
+    Object* result = nullptr;
+    void* result_h5_obj = nullptr;
+    if (unwrap(obj_))
+    {
+        // passthru
+        result_h5_obj = VOLBase::object_open(unwrap(obj_), loc_params, opened_type, dxpl_id, req);
+    }
 
     log->trace("MetadataVOL::object_open, result = {}", fmt::ptr(result));
 
-    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
+    Object*         mdata_obj   = obj_;
 
     // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
     //       I think locate will return the last parent that has mdata, which is not what we want
@@ -36,7 +37,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
         {
             Object* o = op.obj;
             log->trace("MetadataVOL::object_open, result = {}, mdata_obj = {}", fmt::ptr(result), fmt::ptr(o));
-            result->mdata_obj = o;
+            result = o;
 
             if (*opened_type == H5I_BADID)      // not set by native
             {
@@ -61,7 +62,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
                 // TODO: consider throwing an error if this should never happen?
                 log->trace("MetadataVOL: object_open(): attempting to open object mdata type {}, which is not a group, dataset, or datatype; setting opened_type to H5I_BADID and returning null");
                 *opened_type = H5I_BADID;
-                result = wrap(nullptr);
+                result = nullptr;
             }
         } else
         {
@@ -69,6 +70,10 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
             log_assert(!match_any(fullname, memory), "didn't find an mdata_obj");
         }
     }
+
+    // wrap under h5_obj into ours
+    if (result)
+        wrap(result, result_h5_obj);
 
     log->trace("MetadataVOL::object_open: opened_type = {}", *opened_type);
 
@@ -80,17 +85,18 @@ LowFive::MetadataVOL::
 object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
 {
-    if (!unwrap(src_obj) && !unwrap(dst_obj))   // memory
+    Object* src_obj_        = (Object*) src_obj;
+    Object* dst_obj_        = (Object*) dst_obj;
+
+    if (!unwrap(src_obj_) && !unwrap(dst_obj_))   // memory
     {
-        ObjectPointers* src_obj_        = (ObjectPointers*) src_obj; (void) src_obj_;
-        ObjectPointers* dst_obj_        = (ObjectPointers*) dst_obj;
-        Object*         dst_mdata_obj   = static_cast<Object*>(dst_obj_->mdata_obj); (void) dst_mdata_obj;
+        Object*         dst_mdata_obj   = static_cast<Object*>(dst_obj_); (void) dst_mdata_obj;
 
         // TODO
         throw MetadataError(fmt::format("object_copy(): not implemented in metadata yet"));
     }
     else                                        // passthru
-        return VOLBase::object_copy(unwrap(src_obj), src_loc_params, src_name, unwrap(dst_obj), dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
+        return VOLBase::object_copy(unwrap(src_obj_), src_loc_params, src_name, unwrap(dst_obj_), dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
 }
 
 herr_t
@@ -100,12 +106,11 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
     auto get_type = args->op_type;
     auto log = get_logger();
     log->trace("object_get: get_type {}", get_type);
-    if (!unwrap(obj))           // look up in memory
+    Object*  mdata_obj   = (Object*)obj;
+    if (!unwrap(mdata_obj))           // look up in memory
     {
         // The following is adapted from HDF5's H5VL__native_object_get() in H5VLnative_object.c
 
-        ObjectPointers* obj_        = (ObjectPointers*) obj;
-        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
         // map of our object types to hdf5 object types
         std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
@@ -122,11 +127,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
 
                 Object* res = mdata_obj->find_root();
                 assert(res->type == ObjectType::File);
-                ObjectPointers* res_pair = wrap(nullptr);
-                log->trace("MetadataVOL: res_pair = {}, mdata = {}", fmt::ptr(res_pair), fmt::ptr(res));
-                res_pair->mdata_obj = res;
-                res_pair->tmp = true;
-                *args->args.get_file.file = res_pair;
+                *args->args.get_file.file = res;
             }
             else
                 throw MetadataError("object_get() unrecognized loc_params->type");
@@ -327,7 +328,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             throw MetadataError("object_get(): unrecognized get_type");
         }
     } else                      // passthru
-        return VOLBase::object_get(unwrap(obj), loc_params, args, dxpl_id, req);
+        return VOLBase::object_get(unwrap(mdata_obj), loc_params, args, dxpl_id, req);
 }
 
 herr_t
@@ -339,10 +340,9 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
 
     auto log = get_logger();
     log->trace("object_specific: specific_type = {}", specific_type);
-    if (!unwrap(obj))
+    Object* obj_ = (Object*) obj;
+    if (!unwrap(obj_))
     {
-        ObjectPointers* obj_ = (ObjectPointers*) obj;
-        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
         log->trace("filling token, obj = {}", *obj_);
 
         switch(specific_type)
@@ -350,7 +350,7 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
             /* H5Oexists_by_name */
         case H5VL_OBJECT_EXISTS: {
 
-            if (mdata_obj->locate(*loc_params).path.empty())
+            if (obj_->locate(*loc_params).path.empty())
                 *(args->args.exists.exists) = 1;
             else
                 *(args->args.exists.exists) = 0;
@@ -363,9 +363,9 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
             log->trace("loc_params->type = {}", loc_params->type);
             log->trace("name = {}", loc_params->loc_data.loc_by_name.name);
 
-            Object* o = mdata_obj->locate(*loc_params).exact();
+            Object* o = obj_->locate(*loc_params).exact();
             log->trace("filling token, {} -> {}", fmt::ptr(o), fmt::ptr((void*)args->args.lookup.token_ptr));
-            mdata_obj->fill_token(*args->args.lookup.token_ptr);
+            obj_->fill_token(*args->args.lookup.token_ptr);
             return 0;
 
             break;
@@ -374,7 +374,7 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
             throw MetadataError("object_specific(): unrecognized specific_type");
         }
     } else
-        return VOLBase::object_specific(unwrap(obj), loc_params, args, dxpl_id, req);
+        return VOLBase::object_specific(unwrap(obj_), loc_params, args, dxpl_id, req);
 }
 
 herr_t
@@ -385,10 +385,11 @@ object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_ar
 
     auto op_type = args->op_type;
 
-    if (!unwrap(obj))               // memory
+    Object* obj_        = (Object*) obj;
+
+    if (!unwrap(obj_))               // memory
     {
-        ObjectPointers* obj_        = (ObjectPointers*) obj;
-        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj); (void)mdata_obj;
+        Object*         mdata_obj   = obj_;
 
         // see HDF5's H5VL__native_object_optional() in H5VLnative_object.c
         // TODO: not implemented yet
@@ -451,5 +452,5 @@ object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_ar
 
     }
     else                            // passthru
-        return VOLBase::object_optional(unwrap(obj), loc_params, args, dxpl_id, req);
+        return VOLBase::object_optional(unwrap(obj_), loc_params, args, dxpl_id, req);
 }
