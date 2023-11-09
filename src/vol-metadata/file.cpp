@@ -87,6 +87,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
     {
         log->trace("h5_obj not zero, calling VOLBase::file_close");
         res = VOLBase::file_close(unwrap(file_), dxpl_id, req);
+        log->trace("h5_obj not zero, VOLBase::file_close OK");
     }
 
     // TODO: add DummyFile condition

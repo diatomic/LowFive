@@ -41,6 +41,8 @@ struct Object
         type(type_),
         name(name_)
     {
+        auto log = get_logger();
+        log->trace("Object ctor, this = {}", fmt::ptr(this));
         token = reinterpret_cast<std::uintptr_t>(this);
     }
 
@@ -52,7 +54,9 @@ struct Object
         // might want to switch to shared_ptr<Object> instead
         for (auto* child : children)
         {
+            auto log = get_logger();
             child->parent = nullptr;    // to skip remove() in child
+            log->trace("~Object, deleting child = {}", fmt::ptr(child));
             delete child;
         }
         children.clear();
@@ -227,7 +231,7 @@ struct Object
     friend
     std::ostream&   operator<<(std::ostream& out, const Object& obj)
     {
-        fmt::print(out, "[{}: h5 = {}, name = {}, n_children= {}]", fmt::ptr(&obj), fmt::ptr(obj.h5_obj), obj.name, obj.children.size());
+        fmt::print(out, "Object[this={}: h5_obj = {}, name = {}, n_children= {}]", fmt::ptr(&obj), fmt::ptr(obj.h5_obj), obj.name, obj.children.size());
         return out;
     }
 };

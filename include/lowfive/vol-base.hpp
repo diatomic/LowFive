@@ -5,6 +5,7 @@
 #include <memory>
 
 #include <hdf5.h>
+#include "../../src/log-private.hpp"
 
 static_assert(H5_VERS_MAJOR == 1 and H5_VERS_MINOR == 14, "LowFive supports HDF5 1.14 only");
 
@@ -29,12 +30,26 @@ struct VOLBase
     struct pass_through_t
     {
                             pass_through_t(void* under_object_, hid_t under_vol_id_, VOLBase* vol_):
-                                under_object(under_object_), under_vol_id(under_vol_id_), vol(vol_)      { H5Iinc_ref(under_vol_id_); }
+                                under_object(under_object_), under_vol_id(under_vol_id_), vol(vol_)
+                            {
+                                auto log = get_logger();
+                                log->trace("pass_through_t ctor, under_object = {}, under_vol_id = {}, vol_ = {}, this = {}", fmt::ptr(under_object_), under_vol_id_, fmt::ptr(vol_), fmt::ptr(this));
+                                H5Iinc_ref(under_vol_id_);
+                            }
 
         pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, under_vol_id, vol); return x; }
+        ~pass_through_t()
+        {
+            auto log = get_logger();
+            log->trace("pass_through_t dtor, this = {}", fmt::ptr(this));
+        }
+
         static void         destroy(pass_through_t* x)
         {
-//            x->vol->drop(x->under_object);
+
+            auto log = get_logger();
+            log->trace("pass_through_t destroy, under_object = {}, under_vol_id = {}, vol_ = {}, x = {}", fmt::ptr(x->under_object), x->under_vol_id, fmt::ptr(x->vol), fmt::ptr(x));
+            x->vol->drop(x->under_object);
             destroy_wrapper(x);
         }
         static void         destroy_wrapper(pass_through_t* x)

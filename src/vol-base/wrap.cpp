@@ -98,7 +98,7 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     pass_through_t *new_obj;
     void *under;
 
-    log->debug("------- PASS THROUGH VOL WRAP Object");
+    log->debug("------- PASS THROUGH VOL WRAP Object obj = {}", fmt::ptr(obj));
 
     /* Wrap the object with the underlying VOL */
     under = wrap_ctx->vol->wrap_object(obj, obj_type, wrap_ctx->under_wrap_ctx);
@@ -114,7 +114,10 @@ void *
 LowFive::VOLBase::
 wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
 {
+    auto log = get_logger();
+    log->trace("VOLBase::wrap_object, obj = {}, obj_type = {}, info->under_vol_id = {}, wrap_ctx = {}", fmt::ptr(obj), obj_type, info->under_vol_id, fmt::ptr(wrap_ctx));
     void* res = H5VLwrap_object(obj, obj_type, info->under_vol_id, wrap_ctx);
+    log->trace("VOLBase::wrap_object, returning res = {}", fmt::ptr(res));
     return res;
 }
 
@@ -137,7 +140,7 @@ _unwrap_object(void *obj)
     pass_through_t *o = (pass_through_t *)obj;
     void *under;
 
-    log->debug("------- PASS THROUGH VOL UNWRAP Object");
+    log->debug("------- PASS THROUGH VOL UNWRAP Object obj ={}, under_object = {}", fmt::ptr(obj), fmt::ptr(o->under_object));
 
     /* Unwrap the object with the underlying VOL */
     under = o->vol->unwrap_object(o->under_object);
@@ -152,6 +155,8 @@ void *
 LowFive::VOLBase::
 unwrap_object(void *obj)
 {
+    auto log = get_logger();
+    if (log) log->debug("VOLBase::unwrap_object, obj = {}", fmt::ptr(obj));
     return H5VLunwrap_object(obj, info->under_vol_id);
 }
 

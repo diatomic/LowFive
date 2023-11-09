@@ -69,8 +69,23 @@ struct MetadataVOL: public LowFive::VOLBase
     static MetadataVOL&         create_MetadataVOL();
 
     //bool dont_wrap = false;
-    std::unordered_set<void*>   our_objects;
-    bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }
+    std::unordered_set<void*>          our_mdata_objects;   // pointers to all our Objects that we created; the underlying native HDF5, if any, is in h5_obj member
+    std::unordered_map<void*, void*>   our_h5_to_our_mdata; // map native HDF5 void* that we created to our Object that has it as h5_obj
+    // given native HDF5 void*, return our Object containing it. If there is none, return nullptr
+    void*           our_by_h5(void* p) const
+    {
+        auto iter = our_h5_to_our_mdata.find(p);
+        if (iter == our_h5_to_our_mdata.end())
+            return nullptr;
+        else
+            return iter->second;
+    }
+
+    bool is_ours(void* p) const
+    {
+        return our_mdata_objects.count(p) == 1;
+    }
+
 
     void            wrap(Object* mdata_obj, void* h5_obj);
     void*           unwrap(Object* mdata_obj);

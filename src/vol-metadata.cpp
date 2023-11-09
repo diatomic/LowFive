@@ -6,8 +6,11 @@ void
 LowFive::MetadataVOL::
 wrap(LowFive::Object* mdata_obj, void* h5_obj)
 {
+    auto log = get_logger();
+    log->trace("MetadataVOL::wrap, mdata_obj = {}, h5_obj = {}", *mdata_obj, fmt::ptr(h5_obj));
     mdata_obj->h5_obj = h5_obj;
-    our_objects.insert(mdata_obj);
+    our_mdata_objects.insert(mdata_obj);
+    our_h5_to_our_mdata[h5_obj] = mdata_obj;
 }
 
 void*
@@ -22,10 +25,13 @@ LowFive::MetadataVOL::
 drop(void* p)
 {
     auto log = get_logger();
-//    log->trace("MetadataVOL drop, p = {}", fmt::ptr(p));
-//    our_objects.erase(p);
-//    Object* op = static_cast<Object*>(p);
-//    delete op;
+    log->trace("MetadataVOL drop, p = {}", fmt::ptr(p));
+    Object* op = static_cast<Object*>(p);
+    if (op->type == ObjectType::Wrapper)
+    {
+        log->trace("MetadataVOL drop, p = {} is a temporary Wrapper, delete it", fmt::ptr(p));
+        delete op;
+    }
 }
 
 LowFive::MetadataVOL::

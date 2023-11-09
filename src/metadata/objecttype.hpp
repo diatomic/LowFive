@@ -14,7 +14,8 @@ enum class ObjectType
     NamedDtype,
     HardLink,
     SoftLink,
-    CommittedDatatype
+    CommittedDatatype,
+    Wrapper
 };
 
 }

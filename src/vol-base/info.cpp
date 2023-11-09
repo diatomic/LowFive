@@ -40,9 +40,12 @@ _info_copy(const void *_info)
     new_info->under_vol_id = info->under_vol_id;
     H5Iinc_ref(new_info->under_vol_id);
     log->trace("VOLBase:_info_copy, inc_ref hid = {}", new_info->under_vol_id);
-    if(info->under_vol_info)
+    if(info->under_vol_info) {
+        log->trace("VOLBase:_info_copy, calling H5VLcopy_connector_info, new_info->under_vol_id = {}", new_info->under_vol_id);
         H5VLcopy_connector_info(new_info->under_vol_id, &(new_info->under_vol_info), info->under_vol_info);
+    }
 
+    log->trace("VOLBase:_info_copy, return new_info = {}, new_info->under_vol_id = {}, new_info->under_vol_info = {}", fmt::ptr(new_info), new_info->under_vol_id, fmt::ptr(new_info->under_vol_info));
     return new_info;
 } /* end info_copy() */
 
@@ -68,20 +71,22 @@ _info_free(void *_info)
     info_t *info = (info_t *)_info;
     hid_t err_id;
 
-    log->debug("------- PASS THROUGH VOL INFO Free");
+    log->debug("------- PASS THROUGH VOL INFO Free info = {}", fmt::ptr(info));
 
     err_id = H5Eget_current_stack();
 
     /* Release underlying VOL ID and info */
     if(info->under_vol_info)
         H5VLfree_connector_info(info->under_vol_id, info->under_vol_info);
+    auto ref_cnt = H5Iget_ref(info->under_vol_id);
     H5Idec_ref(info->under_vol_id);
-    log->trace("VOLBase::_info_free, dec ref hid = {}", info->under_vol_id);
+    log->trace("VOLBase::_info_free, dec ref hid = {}, ref_cnt was = {}, now ref_cnt = {}", info->under_vol_id, ref_cnt, H5Iget_ref(info->under_vol_id));
 
     H5Eset_current_stack(err_id);
 
+    log->trace("VOLBase::_info_free, VOLBase::info = {}, info = {}, info->under_vol_info = {}", fmt::ptr(VOLBase::info), fmt::ptr(info), fmt::ptr(info->under_vol_info));
     /* Free pass through info object itself */
-    //if (info != VOLBase::info)
+    if (info != VOLBase::info)
         free(info);
 
     return 0;
