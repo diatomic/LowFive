@@ -41,7 +41,10 @@ LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     if (before_file_open)
-        before_file_open();
+    {
+        std::string name_(name);
+        before_file_open(name_);
+    }
 
     auto log = get_logger();
     log->trace("file_open()");
@@ -116,7 +119,10 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
 
     if (after_file_close)
-        after_file_close();
+    {
+        std::string name_(name);
+        after_file_close(name_);
+    }
 
     log->trace("after_file_close callback done");
 

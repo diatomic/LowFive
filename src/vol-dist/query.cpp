@@ -77,6 +77,8 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
             queue.reset();      // move position to 0
             log->trace("Received queue of size: {}", queue.size());
 
+            bool is_var_length_string = type.is_var_length_string();
+
             CALI_MARK_BEGIN("load_from_queue");
             while (queue)
             {
@@ -89,10 +91,38 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
                     throw MetadataError(fmt::format("Error: query(): received dataspace {}\ndoes not intersect file space {}\n", ds, file_space));
 
                 Dataspace mem_dst(Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
-                Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
+                if (is_var_length_string)
                 {
-                  std::memcpy((char*)buf + loc, queue.advance(len), len);
-                });
+                    Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
+                    {
+                      char** to = (char**) ((char*) buf + loc);
+                      for (size_t i = 0; i < len / sizeof(intptr_t); ++i)
+                      {
+                        std::string s;
+                        diy::load(queue, s);
+                        if (!s.empty())
+                        {
+                            // presumably HDF5 will manage this string and reclaim the
+                            // memory; I'm unclear on how this works, so it's a potential
+                            // memory leak
+                            //
+                            // We could save an extra copy here by copying
+                            // directly from the queue, but this keeps things
+                            // simpler
+                            char *cstr = new char[s.length() + 1];
+                            strcpy(cstr, s.c_str());
+                            to[i] = cstr;
+                        } else
+                            to[i] = NULL;
+                      }
+                    });
+                } else
+                {
+                    Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
+                    {
+                      std::memcpy((char*)buf + loc, queue.advance(len), len);
+                    });
+                }
             }
             CALI_MARK_END("load_from_queue");
         }

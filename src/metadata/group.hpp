@@ -12,8 +12,7 @@ struct Group : public Object
 
     void print(int depth) const override
     {
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "---- Group ----\n");
         Object::print(depth);
         // TODO: print group

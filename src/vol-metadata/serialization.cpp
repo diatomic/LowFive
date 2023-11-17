@@ -1,4 +1,5 @@
 #include "../vol-metadata-private.hpp"
+#include "../metadata/remote.hpp"       // DM: I don't remember why remote.hpp wasn't included in metadata.hpp
 
 void
 LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
@@ -13,6 +14,13 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
 
     if (o->type == ObjectType::File)
     {
+        if (dynamic_cast<DummyFile*>(o) || dynamic_cast<RemoteFile*>(o))
+        {
+            diy::save(bb, false);
+            return;
+        }
+        diy::save(bb, true);       // real_file = true
+
         include_data = static_cast<File*>(o)->copy_whole;
         diy::save(bb, include_data);
     }
@@ -27,6 +35,7 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
 
         if (include_data)
         {
+            diy::save(bb, d->strings);
             diy::save(bb, d->data.size());
 
             // serialize triplets
@@ -114,6 +123,11 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
     Object* o;
     if (type == ObjectType::File)
     {
+        bool real_file;
+        diy::load(bb, real_file);
+        if (!real_file)
+            return new DummyFile(name);     // this is potentially problematic for RemoteFile, but we shouldn't be broadcasting those in the first place
+
         diy::load(bb, include_data);
         File* f = new File(name, H5Pcreate(H5P_FILE_CREATE), H5Pcreate(H5P_FILE_ACCESS));
         f->copy_whole = include_data;
@@ -140,6 +154,8 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         // load triplets
         if (include_data)
         {
+            diy::load(bb, d->strings);
+
             // deserialize triplets
             size_t ntriplets;
             diy::load(bb, ntriplets);
@@ -171,8 +187,6 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         auto* a = new Attribute(name, dt.id, s.id);
         diy::load(bb, a->mem_type);
 
-        {
-        }
         if (a->mem_type.is_var_length_string())
             diy::load(bb, a->strings);
         else if (a->mem_type.dtype_class == DatatypeClass::VarLen)

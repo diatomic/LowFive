@@ -50,7 +50,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id, dapl_id, is_passthru, is_memory));
 
     log->trace("created dataset in metadata, new object {} under parent object {} named {}",
-            *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
+            *result, fmt::ptr(obj_path.obj), static_cast<Object*>(obj_path.obj)->name);
 
     return (void*)result;
 }
@@ -148,26 +148,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         if (file_space_id != H5S_ALL && Dataspace(file_space_id).dim != ds->space.dim)
             throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
 
-        for (auto& dt : ds->data)                               // for all the data triples in the metadata dataset
-        {
-            Dataspace& fs = dt.file;
-
-            hid_t file_space_id_1 = (file_space_id == H5S_ALL) ? fs.id : file_space_id;
-            hid_t mem_space_id_1  = (mem_space_id == H5S_ALL)  ? fs.id : mem_space_id;
-            hid_t mem_dst = Dataspace::project_intersection(file_space_id_1, mem_space_id_1, fs.id);
-            hid_t mem_src = Dataspace::project_intersection(fs.id,           dt.memory.id,   file_space_id_1);
-
-            Dataspace dst(mem_dst, true);
-            Dataspace src(mem_src, true);
-
-            Dataspace::iterate(dst, Datatype(mem_type_id).dtype_size, src, ds->type.dtype_size, [&](size_t loc1, size_t loc2, size_t len)
-            {
-              std::memcpy((char*) buf + loc1, (char*) dt.data + loc2, len);
-            });
-
-            log->trace("dataset_read: dst = {}", dst);
-            log->trace("dataset_read: src = {}", src);
-        }   // for all data triples
+        ds->read(mem_type_id, mem_space_id, file_space_id, buf);
     }
 
     return 0;

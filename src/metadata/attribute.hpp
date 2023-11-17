@@ -120,12 +120,10 @@ struct Attribute: public Object
 
     void print(int depth) const override
     {
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "---- Attribute ---\n");
 
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "type = {}, space = {}, data = {}, strings.size() = {}\n", type, space, fmt::ptr(data), strings.size());
 
         Object::print(depth);

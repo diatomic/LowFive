@@ -56,10 +56,15 @@ struct Object
         children.clear();
     }
 
-    virtual void print(int depth) const
+    static void print_depth(int depth)
     {
         for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+            fmt::print(stderr, "   {}|", depth);
+    }
+
+    virtual void print(int depth) const
+    {
+        print_depth(depth);
         fmt::print(stderr, "object type = {} name = {}\n", type, name);
 
         for (auto* child : children)

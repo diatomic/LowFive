@@ -13,12 +13,10 @@ struct HardLink : public Object
 
     void print(int depth) const override
     {
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "---- Hard Link ---\n");
 
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "target = {}\n", target->fullname().second);
 
         Object::print(depth);
@@ -35,12 +33,10 @@ struct SoftLink: public Object
 
     void print(int depth) const override
     {
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "---- Soft Link ---\n");
 
-        for (auto i = 0; i < depth; i++)
-            fmt::print(stderr, "    ");
+        print_depth(depth);
         fmt::print(stderr, "target = {}\n", target);
 
         Object::print(depth);

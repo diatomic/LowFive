@@ -30,7 +30,7 @@ struct Datatype: Hid
 
     bool is_var_length_string() const
     {
-        return H5Tis_variable_str(id) > 0;
+        return id != 0 && H5Tis_variable_str(id) > 0;
     }
 
     bool equal(const Datatype& other) const
