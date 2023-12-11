@@ -26,6 +26,8 @@ struct RemoteObject
 
 struct RemoteFile: public File, public RemoteObject
 {
+    MPI_Comm comm;
+
     RemoteFile(const File& f, rpc::client::object&& obj, std::unique_ptr<Query>&& q):
         File(f),
         RemoteObject(std::move(obj)),
