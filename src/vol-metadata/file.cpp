@@ -40,11 +40,13 @@ void*
 LowFive::MetadataVOL::
 file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    if (before_file_open)
-    {
-        std::string name_(name);
-        before_file_open(name_);
-    }
+    // DM: moved to the beginning of DistMetadataVOL::file_open();
+    //     if there is a reason to have it here, I'd like to know about it
+    //if (before_file_open)
+    //{
+    //    std::string name_(name);
+    //    before_file_open(name_);
+    //}
 
     auto log = get_logger();
     log->trace("file_open()");
