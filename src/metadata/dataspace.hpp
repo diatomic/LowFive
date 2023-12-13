@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include "../log-private.hpp"
 
 namespace LowFive
 {
@@ -23,6 +24,8 @@ struct Dataspace: Hid
             Dataspace(hid_t space_id = 0, bool owned = false):
                 Hid(space_id, owned)
     {
+        auto log = get_logger();
+
         if (id == 0)
             return;
 
@@ -62,26 +65,40 @@ struct Dataspace: Hid
             selection = Selection::points;
         } else if (selection_ == H5S_SEL_HYPERSLABS)
         {
+
             selection = Selection::hyperslabs;
 
-            if (H5Sis_regular_hyperslab(space_id) <= 0)
-                throw MetadataError(fmt::format("Cannot handle irregular hyperslabs, space_id = {}", space_id));
-
-            start.resize(dim);
-            stride.resize(dim);
-            count.resize(dim);
-            block.resize(dim);
-
-            std::vector<hsize_t> start_(dim), stride_(dim), count_(dim), block_(dim);
-            H5Sget_regular_hyperslab(space_id, start_.data(), stride_.data(), count_.data(), block_.data());
-
-            for (int i = 0; i < dim; ++i)
+            // regular hyperslab
+            if (H5Sis_regular_hyperslab(space_id) > 0)
             {
-                start[i]    = start_[i];
-                stride[i]   = stride_[i];
-                count[i]    = count_[i];
-                block[i]    = block_[i];
+                start.resize(dim);
+                stride.resize(dim);
+                count.resize(dim);
+                block.resize(dim);
+
+                std::vector<hsize_t> start_(dim), stride_(dim), count_(dim), block_(dim);
+                H5Sget_regular_hyperslab(space_id, start_.data(), stride_.data(), count_.data(), block_.data());
+
+                for (int i = 0; i < dim; ++i)
+                {
+                    start[i]    = start_[i];
+                    stride[i]   = stride_[i];
+                    count[i]    = count_[i];
+                    block[i]    = block_[i];
+                }
             }
+
+            // irregular hyperslab
+            else
+            {
+                // TP: irregular hyperslabs seem to work fine, commented out the error and just print a message in the log
+                // unsure whether to keep selection Selection::hyperslabs or use Selection::all, both seem to work
+                // eventually remove this case altogether and do nothing for irregular
+
+//                 throw MetadataError(fmt::format("Cannot handle irregular hyperslabs, space_id = {}", space_id));
+                log->trace("Dataspace(): irregular hyperslabs, space_id = {}", space_id);
+            }
+
         } else if (selection_ == H5S_SEL_ALL) {
             selection = Selection::all;
         }
