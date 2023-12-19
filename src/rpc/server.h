@@ -84,11 +84,19 @@ process(int source)
         log->trace("Destructor");
         m_.destroy(in);
     } else if (op == ops::finish)
-        return true;
+    {
+        log->debug("Received finish");
+    }
     else
         throw std::runtime_error("Uknown operation");
 
     send(comm_, source, tags::producer, out);
+
+    if (op == ops::finish)
+    {
+        log->debug("Finishing: returning true");
+        return true;
+    }
 
     return false;
 }

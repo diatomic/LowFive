@@ -171,5 +171,6 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
         H5Fclose(file2);
     }
     H5Pclose(plist);
-}
 
+    sleep(5);
+}

@@ -50,7 +50,7 @@ struct client
     inline void     destroy(int target, size_t id);
 
     inline size_t&  ref_count(int target, size_t obj_id)    { return ref_count_[std::make_tuple(target, obj_id)]; }
-    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); send(comm_, target, tags::consumer, out); }
+    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); send(comm_, target, tags::consumer, out); recv(comm_, target, tags::producer, out); }
 
     private:
         template<class R>
