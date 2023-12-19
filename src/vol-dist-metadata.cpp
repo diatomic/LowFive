@@ -299,9 +299,13 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         files.emplace(name, f);
         result_mdata = f;
 
-        MPI_Comm comm; MPI_Info info;
-        H5Pget_fapl_mpio(fapl_id, &comm, &info);
-        f->comm = comm;
+        f->comm = MPI_COMM_NULL;
+        if (H5Pget_driver(fapl_id) == H5FD_MPIO)
+        {
+            MPI_Comm comm; MPI_Info info;
+            H5Pget_fapl_mpio(fapl_id, &comm, &info);
+            f->comm = comm;
+        }
 
         // move the hierarchy over and delete the plain File object hf
         f->move_children(hf);
@@ -347,12 +351,19 @@ file_close(void *file, hid_t dxpl_id, void **req)
         log->trace("DistMetadataVOL::file_close, remote file {}", f->name);
         f->obj.call<void>("file_close");
 
-        MPI_Comm local = f->comm;
-        MPI_Barrier(local);
-        int rank; MPI_Comm_rank(local, &rank);
+        MPI_Comm local_;
+        if (f->comm != MPI_COMM_NULL)
+            local_ = f->comm;
+        else
+            local_ = local;
+        MPI_Barrier(local_);
+        int rank; MPI_Comm_rank(local_, &rank);
         bool root = rank == 0;
         if (root)
+        {
+            log->debug("Calling finish");
             f->obj.self_->finish(0);
+        }
 
         files.erase(f->name);
         log->trace("DistMetadataVOL::file_close delete {}", fmt::ptr(f));
