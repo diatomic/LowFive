@@ -86,17 +86,12 @@ process(int source)
     } else if (op == ops::finish)
     {
         log->debug("Received finish");
+        return true;
     }
     else
         throw std::runtime_error("Uknown operation");
 
     send(comm_, source, tags::producer, out);
-
-    if (op == ops::finish)
-    {
-        log->debug("Finishing: returning true");
-        return true;
-    }
 
     return false;
 }
