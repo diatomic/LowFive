@@ -32,19 +32,34 @@ struct IndexedDataset
         Bounds domain { dim };
         domain.max = ds->space.dims;
 
+        // TODO: perhaps check for the size(domain) vs #ranks condition explcitly, instead of this try-catch yoga
+        auto log = get_logger();
         try {
+            log->trace("Creating decomposer: dim = {}, domain = [{},{}], comm.size() = {}",
+                    dim, domain.min, domain.max, comm.size());
             decomposer = Decomposer(dim, domain, comm.size());
         } catch (std::runtime_error&) {
             // assume we are in size(domain) < #ranks
-            // for now just give all data to rank 0, other ranks get nothing
-            if (comm.rank() == 0) {
-                // give nblocks = 1 so that this rank takes the whole domain
-                decomposer = Decomposer(dim, domain, 1);
-            } else {
-                decomposer = Decomposer(1, Bounds({0}, {1}), 1);
-                // to signal that this decomposer is dummy
-                decomposer.dim = decomposer.nblocks = 0;
-            } ;
+            log->warn("{} = size(domain) < #ranks = {}", domain.max, comm.size());
+
+            // DM (2024-01-23): this used to set the correct decomposer on rank
+            // 0 and return a dummy everywhere else. This broke logic for
+            // consumers that received a dummy. Now we return the simple
+            // decomposer everywhere, which will redirect everybody to rank 0.
+            // This seems like reasonable logic, but leaving the old code in
+            // place (commented out), just in case we have to revert.
+
+            decomposer = Decomposer(dim, domain, 1);
+
+            //// for now just give all data to rank 0, other ranks get nothing
+            //if (comm.rank() == 0) {
+            //    // give nblocks = 1 so that this rank takes the whole domain
+            //    decomposer = Decomposer(dim, domain, 1);
+            //} else {
+            //    decomposer = Decomposer(1, Bounds({0}, {1}), 1);
+            //    // to signal that this decomposer is dummy
+            //    decomposer.dim = decomposer.nblocks = 0;
+            //} ;
         }
 
     }
