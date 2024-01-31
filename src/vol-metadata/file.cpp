@@ -151,6 +151,8 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
         {
             log->trace("file_specific: looking up {}", args->args.is_accessible.filename);
 
+            std::string name = args->args.is_accessible.filename;
+
             hbool_t result = true;
             if (match_any(name, "", passthru, true))
             {
