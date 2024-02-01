@@ -46,8 +46,15 @@ struct Attribute: public Object
                 std::memcpy(data_hvl[i].p, buf_hvl[i].p, count);
 
                 // This assumes new references H5R_ref_t, but HL library uses old deprecated references, namely hobj_ref_t (= haddr_t)
-                //if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
-                //    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
+                if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
+                {
+                    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
+                    H5R_ref_t* dest = (H5R_ref_t*) data_hvl[i].p;
+                    for (size_t j = 0; j < len; ++j)
+                    {
+                        H5Rcopy((H5R_ref_t*) buf_hvl[i].p + j, dest + j);
+                    }
+                }
             }
         } else if (!mem_type.is_var_length_string())
         {
@@ -92,6 +99,17 @@ struct Attribute: public Object
 
                 buf_hvl[i].p = new char[count];
                 std::memcpy(buf_hvl[i].p, data_hvl[i].p, count);
+
+                // This assumes new references H5R_ref_t, but HL library uses old deprecated references, namely hobj_ref_t (= haddr_t)
+                if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
+                {
+                    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
+                    H5R_ref_t* dest = (H5R_ref_t*) buf_hvl[i].p;
+                    for (size_t j = 0; j < len; ++j)
+                    {
+                        H5Rcopy((H5R_ref_t*) data_hvl[i].p + j, dest + j);
+                    }
+                }
             }
         } else
         if (!mem_type.is_var_length_string())
