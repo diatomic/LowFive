@@ -58,8 +58,10 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     }
 
 //    if (match_any(name, "", passthru, true) && !match_any(name, "", memory, true))
-    if (match_any(name, "", passthru, true))
+    if (match_any(name, "", passthru, true)) {
+        log->trace("MetadataVOL::file_open, passthru set, opening with VOLBase and wrapping");
         wrap(result, VOLBase::file_open(name, flags, fapl_id, dxpl_id, req));
+    }
 
     log->trace("Opened file {}: {}", name, *result);
 
@@ -195,12 +197,16 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
 
     herr_t result = 0;
     if (unwrap(file_))
+    {
         // NB: The case of H5VL_FILE_GET_OBJ_IDS requires that we augment the
         //     output with mdata_obj pointers.  The native implementation seems to
         //     do this automagically.
+        log->trace("MetadataVOL::file_get: fall through to VOLBase::file_get");
         result = VOLBase::file_get(unwrap(file_), args, dxpl_id, req);
+    }
     else
     {
+        log->trace("MetadataVOL::file_get: no fall through to VOLBase::file_get");
         // see hdf5 H5VLnative_file.c, H5VL__native_file_get()
         if (get_type == H5VL_FILE_GET_CONT_INFO)            // file container info
         {

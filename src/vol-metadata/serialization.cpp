@@ -171,8 +171,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
         auto* a = new Attribute(name, dt.id, s.id);
         diy::load(bb, a->mem_type);
 
-        {
-        }
+
         if (a->mem_type.is_var_length_string())
             diy::load(bb, a->strings);
         else if (a->mem_type.dtype_class == DatatypeClass::VarLen)

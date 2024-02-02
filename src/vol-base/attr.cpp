@@ -141,7 +141,7 @@ _attr_create(void *obj, const H5VL_loc_params_t *loc_params,
 
     log->debug("------- PASS THROUGH VOL ATTRIBUTE Create");
 
-    under = o->vol->attr_create(o->under_object, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
+    under = o->vol->attr_create(o->under_object, loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req, (pass_through_t*) obj);
 
     if(under) {
         attr = o->create(under);
@@ -161,7 +161,7 @@ void*
 LowFive::VOLBase::
 attr_create(void *obj, const H5VL_loc_params_t *loc_params,
     const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id,
-    hid_t aapl_id, hid_t dxpl_id, void **req)
+    hid_t aapl_id, hid_t dxpl_id, void **req, pass_through_t* pto)
 {
     return H5VLattr_create(obj, loc_params, info->under_vol_id, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
 }
@@ -240,6 +240,8 @@ _attr_read(void *attr, hid_t mem_type_id, void *buf,
     /* Check for async request */
     if(req && *req)
         *req = o->create(*req);
+
+    log->debug("------- PASS THROUGH VOL ATTRIBUTE Read EXIT");
 
     return ret_value;
 } /* end attr_read() */

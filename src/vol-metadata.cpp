@@ -8,8 +8,11 @@ wrap(LowFive::Object* mdata_obj, void* h5_obj)
 {
     auto log = get_logger();
     log->trace("MetadataVOL::wrap, mdata_obj = {}, h5_obj = {}", *mdata_obj, fmt::ptr(h5_obj));
+
     mdata_obj->h5_obj = h5_obj;
+
     our_mdata_objects.insert(mdata_obj);
+
     our_h5_to_our_mdata[h5_obj] = mdata_obj;
 }
 

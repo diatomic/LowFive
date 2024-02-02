@@ -3,15 +3,64 @@
 #include "../log-private.hpp"
 #include <cassert>
 
+#include <hdf5.h>
+
+hid_t
+LowFive::MetadataVOL::file_hid_by_mdata_obj(Object* obj)
+{
+    auto log = get_logger();
+
+    log->warn("MetadataVOL::file_hid_by_mdata_obj, obj = {}", fmt::ptr(obj));
+
+
+    File* under = (File*) obj->find_root();
+
+    log->warn("MetadataVOL::file_hid_by_mdata_obj, obj = {}, under = {}", fmt::ptr(obj), fmt::ptr(under));
+
+    if (!under)
+        throw MetadataError(fmt::format("File not found in file_hid_by_mdata_obj, obj_ = {}", fmt::ptr(obj)));
+
+    hid_t fapl_id = under->fapl.id;
+
+    info_t *info;
+    H5Pget_vol_info(fapl_id, (void **)&info);
+
+    log->warn("MetadataVOL::file_hid_by_mdata_obj get_vol_info OK");
+    log->warn("MetadataVOL::file_hid_by_mdata_obj get_vol_info OK, info->inder_vol_id = {}, vol = {}", info->under_vol_id, fmt::ptr(info->vol));
+
+//    hid_t under_fapl_id = H5Pcopy(fapl_id);
+//
+//    log->warn("MetadataVOL::file_hid_by_mdata_obj H5Pcopy OK");
+//
+//    H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
+//
+//    log->warn("MetadataVOL::file_hid_by_mdata_obj H5Pset_vol OK");
+
+    pass_through_t* file = new pass_through_t(under, info->under_vol_id, info->vol);
+
+    log->warn("MetadataVOL::file_hid_by_mdata_obj new pass_through_t OK");
+
+    hid_t file_hid = H5VLwrap_register(file, H5I_FILE);
+
+    log->warn("MetadataVOL::file_hid_by_mdata_obj, file_hid = {}", file_hid);
+
+    return file_hid;
+}
+
 void*
 LowFive::MetadataVOL::
-attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req)
+attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id,
+        hid_t aapl_id, hid_t dxpl_id, void **req, pass_through_t* pto)
 {
     Object* parent_obj = (Object*) obj;
 
     auto log = get_logger();
     log->trace("Attr Create");
-    log->trace("loc type = {}, name = {}", loc_params->type, name);
+
+//    bool is_ref = H5Tdetect_class(type_id, H5T_REFERENCE) == 1;
+//    this will return true, if any subcomponent of attribute is reference
+
+    log->trace("MetadataVOL::attr_create, loc type = {}, name = {}, type_id ={}", loc_params->type, name, type_id);
 
     // trace object back to root to build full path and file name
     auto filepath = static_cast<Object*>(parent_obj)->fullname(name);
@@ -22,8 +71,8 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     if (unwrap(parent_obj) && match_any(filepath,passthru))
     {
         // if necessary, create real HDF5 attribute in file
-        wrap(result, VOLBase::attr_create(unwrap(parent_obj), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
-        log->trace("created attribute named {} in passthru object {}", name, *result);
+        wrap(result, VOLBase::attr_create(unwrap(parent_obj), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req, pto));
+        log->trace("created attribute named {} in passthru object {}, unwrap(parent_obj) = {}, parent_obj = {}", name, *result, fmt::ptr(unwrap(parent_obj)), fmt::ptr(parent_obj));
     }
 
     log->trace("created attribute named {} in metadata, new object {} under parent object {}",
@@ -76,18 +125,21 @@ attr_read(void *attr, hid_t mem_type_id, void *buf,
 
     auto log = get_logger();
     log->trace("Attr Read");
-    auto mem_type = Datatype(mem_type_id);
-    log->trace("attr = {}, mem_type_id = {}, mem type = {}", *attr_, mem_type_id, mem_type);
+    log->trace("attr = {}, mem_type_id = {}", *attr_, mem_type_id);
 
     if (unwrap(attr_))
+    {
+        log->trace("attr = {}, mem_type_id = {}", *attr_, mem_type_id);
         return VOLBase::attr_read(unwrap(attr_), mem_type_id, buf, dxpl_id, req);
+    }
     else
     {
         Attribute* a = dynamic_cast<Attribute*>(attr_);
         log_assert(a, "mdata obj must be set in metadata mode");
         log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
-        a->read(Datatype(mem_type), buf);
+        a->read(Datatype(a->mem_type), buf);
     }
+
 
     return 0;
 }
@@ -108,7 +160,9 @@ attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
 
     // TODO: again, why do we prefer passthru?
     if (unwrap(obj_))
+    {
         return VOLBase::attr_get(unwrap(obj_), args, dxpl_id, req);
+    }
     else
     {
         Attribute* attr = dynamic_cast<Attribute*>(obj_);
@@ -255,11 +309,13 @@ attr_write(void *attr_, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void 
     log->trace("attr = {}, mem_type_id = {}, mem type = {}",
             *attr, mem_type_id, Datatype(mem_type_id));
 
+    if (unwrap(attr)) {
+        log->trace("MetadataVOL::attr_write, fall through to VOLBase, unwrap(attr) = {}", fmt::ptr(unwrap(attr)));
+        return VOLBase::attr_write(unwrap(attr), mem_type_id, buf, dxpl_id, req);
+    }
+
     attr->write(Datatype(mem_type_id), buf);
     log->trace("type = {}, space = {}, mem_type = {}", attr->type, attr->space, attr->mem_type);
-
-    if (unwrap(attr))
-        return VOLBase::attr_write(unwrap(attr), mem_type_id, buf, dxpl_id, req);
 
     return 0;
 }

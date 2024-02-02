@@ -114,13 +114,15 @@ _object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args
     pass_through_t *o = (pass_through_t *)obj;
     herr_t ret_value;
 
-    log->debug("------- PASS THROUGH VOL OBJECT Get");
+    log->debug("------- PASS THROUGH VOL OBJECT Get, obj = {}", fmt::ptr(obj));
 
     ret_value = o->vol->object_get(o->under_object, loc_params, args, dxpl_id, req);
 
     /* Check for async request */
     if(req && *req)
         *req = o->create(*req);
+
+    log->debug("------- PASS THROUGH VOL OBJECT Get EXIT");
 
     return ret_value;
 } /* end _object_get() */

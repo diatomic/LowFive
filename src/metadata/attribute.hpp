@@ -47,7 +47,7 @@ struct Attribute: public Object
 
                 // This assumes new references H5R_ref_t, but HL library uses old deprecated references, namely hobj_ref_t (= haddr_t)
                 //if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
-                //    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
+//                    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
             }
         } else if (!mem_type.is_var_length_string())
         {
@@ -75,7 +75,6 @@ struct Attribute: public Object
 
         if (mem_type.dtype_class == DatatypeClass::VarLen)
         {
-            log->warn("Attribute::read VarLen");
             log_assert(sizeof(hvl_t) == mem_type.dtype_size, "dtype_size must match sizeof(hvl_t); otherwise read will be incorrect");
 
             hvl_t* buf_hvl = (hvl_t*) buf;
@@ -84,14 +83,32 @@ struct Attribute: public Object
             hvl_t* data_hvl = (hvl_t*) data.get();
             auto base_type = Datatype(H5Tget_super(mem_type.id));
 
+
             for (size_t i = 0; i < space.size(); ++i)
             {
                 auto len = data_hvl[i].len;
+
+
+                log->trace("Attribute::read VarLen, space.size() = {}, base_type = {}, H5T_STD_REF = {}, i = {}, len = {}", space.size(), H5Tget_super(mem_type.id), H5T_STD_REF, i, len);
                 buf_hvl[i].len = len;
                 size_t count = len * base_type.dtype_size;
 
                 buf_hvl[i].p = new char[count];
                 std::memcpy(buf_hvl[i].p, data_hvl[i].p, count);
+
+                if (base_type.dtype_class == DatatypeClass::Reference && len > 0) {
+                    H5R_ref_t* ref = (H5R_ref_t*) buf_hvl[i].p;
+                    if (H5Rget_type(ref) == H5R_OBJECT2) {
+                        hid_t h = H5Ropen_object(ref, H5P_DEFAULT, H5P_DEFAULT);
+                        hid_t file_h = H5Iget_file_id(h);
+                        H5Oclose(h);
+                        log->trace("Attribute::read: h = {} (this hid is closed), file_h = {} (keeping this hid open to increase ref count)", h, file_h);
+//                        log->trace("Attribute::read: after H5Ropen_object file ref count = {}, h = {}, file_h = {}", H5Iget_ref(72057594037927936), h, file_h);
+                    }
+                }
+//                if (is_ref && len > 0) {
+//                    H5Iinc_ref(72057594037927936);
+//                }
             }
         } else
         if (!mem_type.is_var_length_string())

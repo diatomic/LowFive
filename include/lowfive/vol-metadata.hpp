@@ -71,6 +71,8 @@ struct MetadataVOL: public LowFive::VOLBase
     //bool dont_wrap = false;
     std::unordered_set<void*>          our_mdata_objects;   // pointers to all our Objects that we created; the underlying native HDF5, if any, is in h5_obj member
     std::unordered_map<void*, void*>   our_h5_to_our_mdata; // map native HDF5 void* that we created to our Object that has it as h5_obj
+//    std::unordered_map<void*, void*>   our_mdata_to_pass_through_t; // map our Object to pass_through_t* that we return to HDF5
+
     // given native HDF5 void*, return our Object containing it. If there is none, return nullptr
     void*           our_by_h5(void* p) const
     {
@@ -80,6 +82,19 @@ struct MetadataVOL: public LowFive::VOLBase
         else
             return iter->second;
     }
+
+//    void*           pass_through_t_by_our(void* under) const
+//    {
+//        auto iter = our_mdata_to_pass_through_t.find(under);
+//        if (iter == our_mdata_to_pass_through_t.end())
+//            return nullptr;
+//        else
+//            return iter->second;
+//    }
+//
+//    void           map_our_to_pass_through_t(void* under, pass_through_t* pass_through) const
+//    {
+//    }
 
     bool is_ours(void* p) const
     {
@@ -200,6 +215,9 @@ struct MetadataVOL: public LowFive::VOLBase
         }
         return result;
     }
+
+    hid_t           file_hid_by_mdata_obj(Object* obj);
+
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
     herr_t          file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req) override;
     herr_t          file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req) override;
@@ -241,7 +259,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          link_create_trampoline(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
 
 
-    void*           attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req) override;
+    void*           attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req, pass_through_t* pto) override;
     void*           attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req) override;
     herr_t          attr_read(void *attr, hid_t mem_type_id, void *buf, hid_t dxpl_id, void **req) override;
     herr_t          attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req) override;

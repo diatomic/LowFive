@@ -1,4 +1,5 @@
 #include <lowfive/vol-base.hpp>
+#include <lowfive/vol-metadata.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include "../log-private.hpp"
@@ -44,6 +45,10 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     if(under) {
         file = new pass_through_t(under, info->under_vol_id, info->vol);
 
+//        if (LowFive::MetadataVOL* mvol = dynamic_cast<LowFive::MetadataVOL*>(info->vol)) {
+//            mvol->map_our_to_pass_through_t(under, file);
+//        }
+
         /* Check for async request */
         if(req && *req)
             *req = new pass_through_t(*req, info->under_vol_id, info->vol);
@@ -57,6 +62,8 @@ _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid
     /* Release copy of our VOL info */
     _info_free(info);
 
+
+    log->trace("_file_create, returning file as pass_through_t = {}", fmt::ptr(file));
     return (void *)file;
 } /* end file_create() */
 
@@ -104,6 +111,10 @@ _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void 
     under = info->vol->file_open(name, flags, under_fapl_id, dxpl_id, req);
     if(under) {
         file = new pass_through_t(under, info->under_vol_id, info->vol);
+
+//        if (LowFive::MetadataVOL* mvol = dynamic_cast<LowFive::MetadataVOL*>(info->vol)) {
+//            mvol->map_our_to_pass_through_t(under, file);
+//        }
 
         /* Check for async request */
         if(req && *req)
@@ -155,6 +166,7 @@ _file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void 
     // file can be 0, in which case need to be a little careful
     ret_value = info->vol->file_specific(o ? o->under_object : o, args, dxpl_id, req);
 
+    log->debug("------- PASS THROUGH VOL FILE Specific EXIT");
     // DM: not sure why any of this is needed or was here, so commenting it out (also removed file_specific_reissue)
 #if 0
     /* Unpack arguments to get at the child file pointer when mounting a file */
@@ -335,6 +347,8 @@ _file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
     /* Check for async request */
     if(req && *req)
         *req = o->create(*req);
+
+    log->debug("------- PASS THROUGH VOL FILE Get EXIT");
 
     return ret_value;
 } /* end file_get() */

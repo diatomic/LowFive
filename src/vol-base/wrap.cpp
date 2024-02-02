@@ -19,9 +19,13 @@ _wrap_get_object(const void *obj)
 
     const pass_through_t *o = (const pass_through_t *)obj;
 
-    log->debug("------- PASS THROUGH VOL WRAP Get object");
+    log->debug("------- PASS THROUGH VOL WRAP Get object, obj = {}", fmt::ptr(obj));
 
-    return o->vol->wrap_get_object(o->under_object);
+    void* res =  o->vol->wrap_get_object(o->under_object);
+
+    log->debug("------- PASS THROUGH VOL WRAP Get object EXIT, res = {}", fmt::ptr(res));
+
+    return res;
 } /* end wrap_get_object() */
 
 void *

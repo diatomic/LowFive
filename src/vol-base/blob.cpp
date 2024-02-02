@@ -48,6 +48,8 @@ _blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args)
 
     ret_value = o->vol->blob_specific(o->under_object, blob_id, args);
 
+    log->debug("------- EXT PASS THROUGH VOL BLOB Specific EXIT");
+
     return ret_value;
 }
 
@@ -71,6 +73,8 @@ _blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx)
     log->debug("------- EXT PASS THROUGH VOL BLOB Get");
 
     ret_value = o->vol->blob_get(o->under_object, blob_id, buf, size, ctx);
+
+    log->debug("------- EXT PASS THROUGH VOL BLOB Get EXIT");
 
     return ret_value;
 } /* end H5VL_pass_through_ext_blob_get() */

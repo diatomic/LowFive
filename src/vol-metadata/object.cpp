@@ -107,10 +107,11 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
     auto log = get_logger();
     log->trace("object_get: get_type {}", get_type);
     Object*  mdata_obj   = (Object*)obj;
-    if (!unwrap(mdata_obj))           // look up in memory
+    if (!unwrap(mdata_obj) || H5VL_OBJECT_GET_FILE == get_type)           // look up in memory
     {
         // The following is adapted from HDF5's H5VL__native_object_get() in H5VLnative_object.c
 
+        log->trace("MetadataVOL::object_get: get_type {}, no fall through, unwrap = {}", get_type, fmt::ptr(unwrap(mdata_obj)));
 
         // map of our object types to hdf5 object types
         std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
@@ -328,7 +329,10 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             throw MetadataError("object_get(): unrecognized get_type");
         }
     } else                      // passthru
+    {
+        log->trace("MetadataVOL::object_get: falling through to VOLBase");
         return VOLBase::object_get(unwrap(mdata_obj), loc_params, args, dxpl_id, req);
+    }
 }
 
 herr_t
@@ -373,8 +377,10 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
         default:
             throw MetadataError("object_specific(): unrecognized specific_type");
         }
-    } else
+    } else {
+        log->trace("MetadataVOL::object_speecific, falling through to VOLBase, unwrap(obj_) = {}", fmt::ptr(unwrap(obj_)));
         return VOLBase::object_specific(unwrap(obj_), loc_params, args, dxpl_id, req);
+    }
 }
 
 herr_t

@@ -5,6 +5,7 @@
 
 #include    "../prod-con-multidata/prod-con-multidata.hpp"
 
+#include    <hdf5.h>
 #include    <H5DSpublic.h>
 
 using communicator = diy::mpi::communicator;
@@ -16,7 +17,7 @@ herr_t fail_on_hdf5_error(hid_t stack_id, void*)
     exit(1);
 }
 
-void nonneg(herr_t retval, char* msg)
+void nonneg(herr_t retval, const char* msg)
 {
     if (retval < 0)
     {
@@ -25,7 +26,7 @@ void nonneg(herr_t retval, char* msg)
     }
 }
 
-void zero(herr_t retval, char* msg)
+void zero(herr_t retval, const char* msg)
 {
     if (retval)
     {
@@ -111,6 +112,9 @@ int main(int argc, char**argv)
         vol_plugin.set_memory(outfile, "*");
     if (passthru)
         vol_plugin.set_passthru(outfile, "*");
+
+//    l5::VOLBase& vol_plugin = l5::VOLBase::create_vol_base();
+
     communicator local;
     local.duplicate(world);
 
@@ -146,7 +150,9 @@ int main(int argc, char**argv)
 
     // create a new file and group using default properties
     hid_t file = H5Fcreate(outfile.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist);
+    std::cerr << "H5Fcreate OK" << std::endl;
     hid_t group = H5Gcreate(file, "/group1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    std::cerr << "H5Gcreate OK" << std::endl;
 
     std::vector<hsize_t> domain_cnts(DIM);
     for (auto i = 0; i < dim; i++)
@@ -155,9 +161,11 @@ int main(int argc, char**argv)
     // create the file data space for the global grid
     hid_t filespace = H5Screate_simple(DIM, &domain_cnts[0], NULL);
 
+    std::cerr << "H5Screate_simple OK" << std::endl;
     // create the grid dataset with default properties
     hid_t dset = H5Dcreate(group, "grid", H5T_IEEE_F32LE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
+    std::cerr << "H5Dcreate OK" << std::endl;
     // write the grid data
     prod_master.foreach([&](Block* b, const diy::Master::ProxyWithLink& cp)
             { b->write_block_grid(cp, dset); });
@@ -173,18 +181,22 @@ int main(int argc, char**argv)
     char dset_name[256];
     char dim_name[256];
     herr_t retval;
-    for (int i = 0; i < DIM; i++)      // for all dimensions
+    const int loop_iters = 2;
+    for (int i = 0; i < loop_iters; i++)      // for all dimensions
     {
         // dataspace for the scale dataset
         scale_spaces[i] = H5Screate_simple(1, &domain_cnts[i], NULL);
 
+        std::cerr << "H5Screate_simple for scale dataset OK" << std::endl;
         // dataset for the scale
         snprintf(dset_name, 256, "grid_scale%d", i);
         scale_dsets[i] = H5Dcreate(group, dset_name, H5T_NATIVE_FLOAT, scale_spaces[i], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        std::cerr << "H5Dcreate_simple for scale dataset OK" << std::endl;
         scale_data[i].resize(domain_cnts[i]);
         for (int j = 0; j < domain_cnts[i]; j++)
             scale_data[i][j] = j;
         retval = H5Dwrite(scale_dsets[i], H5T_NATIVE_FLOAT, scale_spaces[i], scale_spaces[i], H5P_DEFAULT, &scale_data[i][0]); nonneg(retval, "H5Dwrite");
+        std::cerr << "H5Dwrite OK" << std::endl;
 
         // create a dimension scale out of a dataset
         snprintf(dim_name, 256, "dim%d", i);
@@ -196,6 +208,9 @@ int main(int argc, char**argv)
         // attach a dimension scale to the grid dataset
         retval = H5DSattach_scale(dset, scale_dsets[i], i); zero(retval, "H5DSattach_scale");
 
+        auto file_cnt = H5Iget_ref(72057594037927936);
+        std::cerr << "After attach_scale, file_cnt = " << file_cnt << std::endl;
+
         // check the scale attaching
         fmt::print(stderr, "After attaching scale, checking how many scales are attached to grid dimension {}: {}\n",
                 i, H5DSget_num_scales(dset, i));
@@ -204,16 +219,24 @@ int main(int argc, char**argv)
 //                 dim_name, i, H5DSis_attached(dset, scale_dsets[i], i));
     }
 
+
+    auto file_cnt = H5Iget_ref(72057594037927936);
+    std::cerr << "Attach scale LOOP DONE file_cnt = " << file_cnt << std::endl;
+
     // clean up
-    for (int i = 0; i < DIM; i++)
+    for (int i = 0; i < loop_iters; i++)
     {
         H5Dclose(scale_dsets[i]);
         H5Sclose(scale_spaces[i]);
     }
+    std::cerr << "CLOSELOOP DONE" << std::endl;
+
     H5Dclose(dset);
     H5Sclose(filespace);
     H5Gclose(group);
+    std::cerr << "CLOSING FILE..." << std::endl;
     H5Fclose(file);
+    std::cerr << "CLOSING FILE OK" << std::endl;
     H5Pclose(plist);
 
     return 0;
