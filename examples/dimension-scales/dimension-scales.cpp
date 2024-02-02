@@ -215,8 +215,8 @@ int main(int argc, char**argv)
         fmt::print(stderr, "After attaching scale, checking how many scales are attached to grid dimension {}: {}\n",
                 i, H5DSget_num_scales(dset, i));
         // for some reason the following seg-faults in passthru mode
-//         fmt::print(stderr, "After attaching scale, checking if {} is attached to grid dimension {}: {}\n",
-//                 dim_name, i, H5DSis_attached(dset, scale_dsets[i], i));
+         fmt::print(stderr, "After attaching scale, checking if {} is attached to grid dimension {}: {}\n",
+                 dim_name, i, H5DSis_attached(dset, scale_dsets[i], i));
     }
 
 
