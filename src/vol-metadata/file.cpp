@@ -167,6 +167,11 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
                 log->trace("file_specific: memory result = {}", result);
             }
 
+            // DM (2024-02-13): temporary "fix" for moab. Assume that if we are
+            // asked, the file should be there. The proper fix requires remote
+            // querying in DistMetadataVOL. (FIXME)
+            result = true;
+
             *args->args.is_accessible.accessible = result;
 
             return 0;
