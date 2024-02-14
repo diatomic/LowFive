@@ -1,4 +1,4 @@
-set                         (targets    dimension-scales)
+set                         (targets    dimension-scales dimension-scales-no-lowfive simple-test)
 
 foreach                     (t ${targets})
   add_executable            (${t} ${t}.cpp)

@@ -73,8 +73,6 @@ int main(int argc, char**argv)
         >> Option('t', "thread",    threads,        "number of threads")
         >> Option(     "memblks",   mem_blocks,     "number of blocks to keep in memory")
         >> Option(     "prefix",    prefix,         "prefix for external storage")
-        >> Option('m', "memory",    metadata,       "build and use in-memory metadata")
-        >> Option('f', "file",      passthru,       "write file to disk")
         >> Option('l', "log",       log_level,      "level for the log output (trace, debug, info, ...)")
         ;
     ops
@@ -107,13 +105,7 @@ int main(int argc, char**argv)
     H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
     // create the vol plugin
-    l5::MetadataVOL& vol_plugin = l5::MetadataVOL::create_MetadataVOL();
-    if (metadata)
-        vol_plugin.set_memory(outfile, "*");
-    if (passthru)
-        vol_plugin.set_passthru(outfile, "*");
-
-//    l5::VOLBase& vol_plugin = l5::VOLBase::create_vol_base();
+    l5::VOLBase& vol_plugin = l5::VOLBase::create_vol_base();
 
     communicator local;
     local.duplicate(world);
