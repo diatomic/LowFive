@@ -30,7 +30,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     if (mdata_obj)
     {
         auto op = mdata_obj->locate(*loc_params);
-        auto fullname = op.obj->fullname(op.path);
+        auto fullname = op.obj ? op.obj->fullname(op.path) : std::make_pair<std::string, std::string>("", "");
         log->trace("MetadataVOL::object_open: fullname = ({},{}), locate = ({}, {})", fullname.first, fullname.second, fmt::ptr(op.obj), op.path);
         if (op.path.empty())
         {

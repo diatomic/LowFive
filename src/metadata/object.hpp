@@ -135,9 +135,13 @@ struct Object
             log->trace("locating by token: {}", t);
 
             Object* o = find_root()->find_token(t);
-            assert(o);
+//            assert(o);
 
-            log->trace("located by token: {} name = {}", fmt::ptr(o), o->name);
+            if (o)
+                log->trace("located by token: {} name = {}", fmt::ptr(o), o->name);
+            else
+                log->trace("NOT FOUND by token");
+
             return ObjectPath { o, "" };
         }
         else
