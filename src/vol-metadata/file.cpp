@@ -188,16 +188,8 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
 
     if (unwrap(file_))
     {
-//        if (args->op_type == H5VL_FILE_IS_EQUAL)
-//        {
-//            // need to unwrap the pointer to another file in args
-//            ObjectPointers* other = (ObjectPointers*)args->args.is_equal.obj2;
-//            log->trace("MetadataVOL::file_specific: H5VL_FILE_IS_EQUAL, other = {}", fmt::ptr(other));
-//            args->args.is_equal.obj2 = other;
-//        }
         return VOLBase::file_specific(unwrap(file_), args, dxpl_id, req);
     }
-
     else if (file_->mdata_obj)
     {
         if (args->op_type == H5VL_FILE_FLUSH)

@@ -33,14 +33,7 @@ struct Attribute: public Object
             auto nmembers = H5Tget_nmembers(type_id);
             log->trace("Attribute::write nmembers = {}", nmembers);
 
-            size_t total_size = 0;
-            for(int member_idx = 0; member_idx < nmembers; ++member_idx) {
-                total_size += H5Tget_size(H5Tget_member_type(type_id, member_idx));
-            }
-
-            log->trace("Attribute::write Compound total_size = {}, type size = {}", total_size, H5Tget_size(type_id));
-
-            data = std::unique_ptr<char>(new char[total_size]);
+            data = std::unique_ptr<char>(new char[H5Tget_size(type_id)]);
 
             for(int member_idx = 0; member_idx < nmembers; ++member_idx)
             {
