@@ -102,10 +102,14 @@ file_close(void *file, hid_t dxpl_id, void **req)
     if (unwrap(file_))
         res = VOLBase::file_close(unwrap(file_), dxpl_id, req);
 
+    std::string filename;
+
     // TODO: add DummyFile condition
     if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
         log->trace("mdata_obj is File*");
+        filename = f->name;
+
         // we created this file
         if (LowFive::get_log_level() <= spdlog::level::info)
             f->print();
@@ -121,12 +125,9 @@ file_close(void *file, hid_t dxpl_id, void **req)
 
 
     if (after_file_close)
-    {
-        std::string name_(name);
-        after_file_close(name_);
-    }
+        after_file_close(filename);
 
-    log->trace("after_file_close callback done");
+    log->trace("after_file_close callback done, filename = {}", filename);
 
     // deliberately verbose, to emphasize checking of res
     if (res == 0)
