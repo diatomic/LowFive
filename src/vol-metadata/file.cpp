@@ -15,6 +15,8 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     void* mdata = nullptr;
     std::string name_(name);
     File* f = new File(name_, fcpl_id, fapl_id);
+    log->trace("MetadataVOL::file_create, name ={}, created File f= {}, argument fapl_id = {}, fapl_id on file = {}", name, fmt::ptr(f), fapl_id, f->fapl.id);
+
     files.emplace(name_, f);
     mdata = f;
 
@@ -221,10 +223,13 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
 
     herr_t result = 0;
     if (unwrap(file_))
+    {
         // NB: The case of H5VL_FILE_GET_OBJ_IDS requires that we augment the
         //     output with mdata_obj pointers.  The native implementation seems to
         //     do this automagically.
+        log->trace("file_get(): fall through to VOLBase");
         result = VOLBase::file_get(unwrap(file_), args, dxpl_id, req);
+    }
     else
     {
         // see hdf5 H5VLnative_file.c, H5VL__native_file_get()
@@ -242,11 +247,13 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
         }
         else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
         {
+            log->trace("file_get(): H5VL_FILE_GET_FAPL, writing {} into args", static_cast<File*>(file_->mdata_obj)->fapl.id);
             args->args.get_fapl.fapl_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
         }
         else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
         {
-            args->args.get_fcpl.fcpl_id = static_cast<File*>(file_->mdata_obj)->fapl.id;
+            log->trace("file_get(): H5VL_FILE_GET_FCPL, writing {} into args", static_cast<File*>(file_->mdata_obj)->fcpl.id);
+            args->args.get_fcpl.fcpl_id = static_cast<File*>(file_->mdata_obj)->fcpl.id;
         }
             // TODO
         else if (get_type == H5VL_FILE_GET_FILENO)          // file number

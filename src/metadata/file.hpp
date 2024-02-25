@@ -13,7 +13,7 @@ struct File: public Object
     bool            copy_of_remote = false;
 
     File(std::string filename_, Hid fcpl_, Hid fapl_):
-        Object(ObjectType::File, filename_), fcpl(fcpl_), fapl(fapl_)
+        Object(ObjectType::File, filename_), fcpl(H5Pcopy(fcpl_.id)), fapl(H5Pcopy(fapl_.id))
     {}
 
     // preorder depth-first traversal
