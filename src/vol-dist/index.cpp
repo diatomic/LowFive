@@ -19,6 +19,7 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, b
         // traverse all datasets
         for (auto& f : *(idx_srv.files))
         {
+            if (!dynamic_cast<File*>(f.second)) continue;   // skip DummyFile
             auto datasets = find_datasets(dynamic_cast<File*>(f.second));
             for (auto& x : datasets)
             {
@@ -38,6 +39,7 @@ Index::~Index()
     // TODO: traverse and destroy all IndexedData
     for (auto& f : *(idx_srv.files))
     {
+        if (!dynamic_cast<File*>(f.second)) continue;       // skip DummyFile
         auto datasets = find_datasets(dynamic_cast<File*>(f.second));
         for (auto& x : datasets)
         {
