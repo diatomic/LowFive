@@ -188,6 +188,31 @@ struct MetadataVOL: public LowFive::VOLBase
         }
         return result;
     }
+
+    // checks whether the object identified by pattern in file filename is set to zerocopy mode
+    bool is_zerocopy(const std::string& filename, const std::string& pattern)
+    {
+        if (find_match(filename, pattern, zerocopy) >= 0)
+            return true;
+        return false;
+    }
+
+    // checks whether the object identified by pattern in file filename is set to passthru mode
+    bool is_passthru(const std::string& filename, const std::string& pattern)
+    {
+        if (find_match(filename, pattern, passthru) >= 0)
+            return true;
+        return false;
+    }
+
+    // checks whether the object identified by pattern in file filename is set to memory mode
+    bool is_memory(const std::string& filename, const std::string& pattern)
+    {
+        if (find_match(filename, pattern, memory) >= 0)
+            return true;
+        return false;
+    }
+
     void*           file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req) override;
     herr_t          file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req) override;
     herr_t          file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req) override;
