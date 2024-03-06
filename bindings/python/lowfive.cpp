@@ -138,7 +138,7 @@ PYBIND11_MODULE(_lowfive, m)
         .def_readonly("file_close_counter",           &LowFive::DistMetadataVOL::file_close_counter_)
         .def("set_intercomm",   &LowFive::DistMetadataVOL::set_intercomm,           "filename"_a, "pattern"_a, "index"_a,
                                                                                     "set (filename,pattern) -> intercomm index")
-        .def("serve_all",       &LowFive::DistMetadataVOL::serve_all,               "serve all datasets")
+        .def("serve_all",       &LowFive::DistMetadataVOL::serve_all,               "delete_data"_a=true, "perform_indexing"_a=true, "serve all datasets")
         .def("get_filenames",   &LowFive::DistMetadataVOL::get_filenames,           "intercomm_index"_a,
                                                                                     "get filenames produced by producer at intercomm")
         .def("send_done",       &LowFive::DistMetadataVOL::send_done,               "intercomm_index"_a,
