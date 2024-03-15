@@ -2,7 +2,7 @@
 #include "../metadata/remote.hpp"       // DM: I don't remember why remote.hpp wasn't included in metadata.hpp
 
 void
-LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
+LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool include_data)
 {
     diy::save(bb, o->token);
     diy::save(bb, o->type);
@@ -62,15 +62,47 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
         {
             hvl_t* data_hvl = (hvl_t*) a->data.get();
             auto base_type = Datatype(H5Tget_super(a->mem_type.id));
+            if (base_type.dtype_class == DatatypeClass::Reference)
+                diy::save(bb, true);
+            else
+                diy::save(bb, false);
             for (size_t i = 0; i < a->space.size(); ++i)
             {
                 auto len = data_hvl[i].len;
-                size_t count = len * base_type.dtype_size;
-                diy::save(bb, len);
-                diy::save(bb, (char*) data_hvl[i].p, count);
+                if (base_type.dtype_class == DatatypeClass::Reference)
+                {
+                    auto* ref = (H5R_ref_t*) data_hvl[i].p;
+                    //auto type = H5Rget_type(ref);
+                    //log->info("Got reference type: {}", type);
+                    auto size = H5Rget_obj_name(ref, H5P_DEFAULT, NULL, 0);
+                    log->info("Reference path is {} long", size);
+                    std::string path(size, ' ');
+                    size = H5Rget_obj_name(ref, H5P_DEFAULT, path.data(), path.size() + 1);
+                    diy::save(bb, path);
+
+                    log->info("Saving reference to path: {}", path);
+                } else
+                {
+                    size_t count = len * base_type.dtype_size;
+                    diy::save(bb, len);
+                    diy::save(bb, (char*) data_hvl[i].p, count);
+                }
             }
         } else
             diy::save(bb, a->data.get(), a->mem_type.dtype_size);
+
+        // TODO
+        // add support for serializing compound types
+        // in VarLen and Compound, check if a member is a reference (dtype knows this via data class)
+        // if it is, save an appropriate flag and then full path to the target in a map<H5R_ref_t*, string>
+        // after hardlinks are resolved, register the file:
+        //      ObjectPointers* op = wrap(nullptr);
+        //      op->mdata_obj = o;
+        //      hid_t fid = H5VLwrap_register(op, H5I_FILE));
+        // resolve references by calling:
+        //      ref, target = *it;
+        //      ret = H5Rcreate(ref, fid, target, H5R_OBJECT, -1);
+        //  The point being that H5Rcreate will resolve the path given by target.
     }
     else if (o->type == ObjectType::HardLink)
         diy::save(bb, static_cast<HardLink*>(o)->target->fullname().second);
@@ -80,31 +112,48 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, bool include_data)
         diy::save(bb, static_cast<CommittedDatatype*>(o)->data);
 
     for (Object* child : o->children)
-        serialize(bb, child, include_data);
+        serialize(bb, child, vol, include_data);
 }
 
 namespace LowFive
 {
 using HardLinks = std::unordered_map<HardLink*, std::string>;
-Object* deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_data);
+using References = std::unordered_map<H5R_ref_t*, std::string>;
+Object* deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, References& references, bool include_data);
 }
 
 // top-level call
 LowFive::Object*
-LowFive::deserialize(diy::MemoryBuffer& bb)
+LowFive::deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol)
 {
     HardLinks hard_links;
-    auto* o = deserialize(bb, hard_links, false);
+    References references;
+    auto* o = deserialize(bb, hard_links, references, false);
 
     // link the hard links
     for (auto& x : hard_links)
         x.first->target = o->search(x.second).exact();
 
+    // resolve references
+    File* f = dynamic_cast<File*>(o);
+    assert(f);
+    ObjectPointers* fop = vol.wrap(nullptr);
+    fop->mdata_obj = f;
+
+    hid_t fid = H5VLwrap_register(fop, H5I_FILE);
+
+    for (auto& x : references)
+        auto ret = H5Rcreate(x.first, fid, x.second.c_str(), H5R_OBJECT, -1);
+
+    // It might be dangerous to decrement this, if HDF5 decides to start
+    // collecting garbage and such; the object hasn't been really created yet
+    //H5Idec_ref(fid);
+
     return o;
 }
 
 LowFive::Object*
-LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_data)
+LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, References& references, bool include_data)
 {
     std::uintptr_t token;
     ObjectType type;
@@ -197,14 +246,26 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
             hvl_t* data_hvl = (hvl_t*) a->data.get();
             auto base_type = Datatype(H5Tget_super(a->mem_type.id));
 
+            bool is_reference;
+            diy::load(bb, is_reference);
+
             for (size_t i = 0; i < a->space.size(); ++i)
             {
-                decltype(data_hvl[i].len) len;
-                diy::load(bb, len);
-                data_hvl[i].len = len;
-                size_t count = len * base_type.dtype_size;
-                data_hvl[i].p = new char[count];
-                diy::load(bb, (char*) data_hvl[i].p, count);
+                if (is_reference)
+                {
+                    std::string path;
+                    diy::load(bb, path);
+                    log->info("Loaded a reference to {}", path);
+                    references.emplace((H5R_ref_t*) data_hvl[i].p, path);
+                } else
+                {
+                    decltype(data_hvl[i].len) len;
+                    diy::load(bb, len);
+                    data_hvl[i].len = len;
+                    size_t count = len * base_type.dtype_size;
+                    data_hvl[i].p = new char[count];
+                    diy::load(bb, (char*) data_hvl[i].p, count);
+                }
             }
         }
         else
@@ -242,7 +303,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, bool include_
     o->token = token;
 
     for (size_t i = 0; i < n_children; ++i)
-        o->add_child(deserialize(bb, hard_links, include_data));
+        o->add_child(deserialize(bb, hard_links, references, include_data));
 
     return o;
 }
