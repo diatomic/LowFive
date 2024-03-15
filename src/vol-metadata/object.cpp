@@ -144,7 +144,15 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             size_t size     = args->args.get_name.buf_size;
 
             Object* obj = mdata_obj->locate(*loc_params).exact();
-            strncpy(name, obj->name.c_str(), size);
+            if (name == NULL)
+            {
+                *ret = obj->name.size();
+            } else
+            {
+                auto len = std::min(size, obj->name.size());
+                *ret = len;
+                strncpy(name, obj->name.c_str(), len);
+            }
 
             return 0;
         }
