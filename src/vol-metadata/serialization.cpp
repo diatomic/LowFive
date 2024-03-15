@@ -135,15 +135,18 @@ LowFive::deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol)
         x.first->target = o->search(x.second).exact();
 
     // resolve references
-    File* f = dynamic_cast<File*>(o);
-    assert(f);
-    ObjectPointers* fop = vol.wrap(nullptr);
-    fop->mdata_obj = f;
+    if (references.size() > 0)
+    {
+        File* f = dynamic_cast<File*>(o);
+        assert(f);
+        ObjectPointers* fop = vol.wrap(nullptr);
+        fop->mdata_obj = f;
 
-    hid_t fid = H5VLwrap_register(fop, H5I_FILE);
+        hid_t fid = H5VLwrap_register(fop, H5I_FILE);
 
-    for (auto& x : references)
-        auto ret = H5Rcreate(x.first, fid, x.second.c_str(), H5R_OBJECT, -1);
+        for (auto& x : references)
+            auto ret = H5Rcreate(x.first, fid, x.second.c_str(), H5R_OBJECT, -1);
+    }
 
     // It might be dangerous to decrement this, if HDF5 decides to start
     // collecting garbage and such; the object hasn't been really created yet
