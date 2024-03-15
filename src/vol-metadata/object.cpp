@@ -143,17 +143,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             char *name      = args->args.get_name.buf;
             size_t size     = args->args.get_name.buf_size;
 
-            if (loc_params->type == H5VL_OBJECT_BY_SELF)
-                strncpy(name, mdata_obj->name.c_str(), size);
-            else if (loc_params->type == H5VL_OBJECT_BY_TOKEN)
-            {
-                log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_TOKEN");
-
-                // TODO: ignoring the token and just getting the name of the current object
-                strncpy(name, mdata_obj->name.c_str(), size);
-            }
-            else
-                throw MetadataError("object_get() unrecognized loc_params->type");
+            Object* mdata_obj = mdata_obj->locate(*loc_params).exact();
+            strncpy(name, mdata_obj->name.c_str(), size);
 
             return 0;
         }
@@ -164,23 +155,17 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
 
             H5O_type_t *obj_type = args->args.get_type.obj_type;
 
-            if (loc_params->type == H5VL_OBJECT_BY_TOKEN)
-            {
-                log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_TOKEN");
+            Object* mdata_obj = mdata_obj->locate(*loc_params).exact();
+            if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
+                throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
 
-                if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-                    throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
+            // TODO: ignoring the token and just getting the type of the current object
+            int otype   = h5_types[static_cast<int>(mdata_obj->type)];
+            *obj_type   = static_cast<H5O_type_t>(otype);
+            log->trace("object_get: mdata_obj->type {} hdf5 otype {}", mdata_obj->type, otype);
 
-                // TODO: ignoring the token and just getting the type of the current object
-                int otype   = h5_types[static_cast<int>(mdata_obj->type)];
-                *obj_type   = static_cast<H5O_type_t>(otype);
-                log->trace("object_get: mdata_obj->type {} hdf5 otype {}", mdata_obj->type, otype);
-
-                if (otype == H5O_TYPE_UNKNOWN)
-                    throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
-            }
-            else
-                throw MetadataError("object_get() unrecognized loc_params->type");
+            if (otype == H5O_TYPE_UNKNOWN)
+                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
 
             return 0;
         }
