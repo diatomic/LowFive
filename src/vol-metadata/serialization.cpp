@@ -145,7 +145,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol)
         hid_t fid = H5VLwrap_register(fop, H5I_FILE);
 
         for (auto& x : references)
-            auto ret = H5Rcreate(x.first, fid, x.second.c_str(), H5R_OBJECT, -1);
+            auto ret = H5Rcreate_object(fid, x.second.c_str(), H5P_DEFAULT, x.first);
     }
 
     // It might be dangerous to decrement this, if HDF5 decides to start
