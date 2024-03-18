@@ -102,3 +102,31 @@ create_MetadataVOL()
 
     return *dynamic_cast<MetadataVOL*>(info->vol);
 }
+
+void
+LowFive::MetadataVOL::
+resolve_references(Object* o)
+{
+    File* f = dynamic_cast<File*>(o->find_root());
+    assert(f);
+
+    if (f->references.size() == 0)
+        return;
+
+    ObjectPointers* fop = wrap(nullptr);
+    fop->mdata_obj = f;
+
+    hid_t fid = H5VLwrap_register(fop, H5I_FILE);
+
+    for (auto& x : f->references)
+    {
+        Object* o = f->find_token(x.second);
+        log_assert(o, "Must be able to find object by token");
+        auto path = o->fullname().second;
+        auto ret = H5Rcreate_object(fid, path.c_str(), H5P_DEFAULT, x.first);
+    }
+
+    f->references.clear();
+
+    H5Idec_ref(fid);
+}

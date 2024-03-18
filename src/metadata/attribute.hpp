@@ -1,5 +1,6 @@
 #pragma once
 
+#include "file.hpp"
 #include "../log-private.hpp"
 
 namespace LowFive

@@ -88,6 +88,9 @@ attr_read(void *attr, hid_t mem_type_id, void *buf,
     {
         log_assert(attr_->mdata_obj, "mdata_obj must be set in metadata mode");
         Attribute* a = (Attribute*) attr_->mdata_obj;
+
+        resolve_references(a);
+
         log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
         a->read(Datatype(mem_type), buf);
     }

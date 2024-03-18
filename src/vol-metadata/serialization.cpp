@@ -69,22 +69,26 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
             for (size_t i = 0; i < a->space.size(); ++i)
             {
                 auto len = data_hvl[i].len;
+                diy::save(bb, len);
                 if (base_type.dtype_class == DatatypeClass::Reference)
                 {
-                    auto* ref = (H5R_ref_t*) data_hvl[i].p;
-                    //auto type = H5Rget_type(ref);
-                    //log->info("Got reference type: {}", type);
-                    auto size = H5Rget_obj_name(ref, H5P_DEFAULT, NULL, 0);
-                    log->info("Reference path is {} long", size);
-                    std::string path(size, ' ');
-                    size = H5Rget_obj_name(ref, H5P_DEFAULT, path.data(), path.size() + 1);
-                    diy::save(bb, path);
+                    for (decltype(len) j = 0; j < len; ++j)
+                    {
+                        auto* ref = (H5R_ref_t*) data_hvl[i].p + j;
 
-                    log->info("Saving reference to path: {}", path);
+                        hid_t obj_id = H5Ropen_object(ref, H5P_DEFAULT, H5P_DEFAULT);
+                        H5O_info2_t oinfo;
+                        H5Oget_info(obj_id, &oinfo, H5O_INFO_ALL);
+
+                        std::uintptr_t* token = (std::uintptr_t*) oinfo.token.__data;
+                        diy::save(bb, *token);
+                        log->info("Saving reference token: {}", *token);
+
+                        H5Oclose(obj_id);
+                    }
                 } else
                 {
                     size_t count = len * base_type.dtype_size;
-                    diy::save(bb, len);
                     diy::save(bb, (char*) data_hvl[i].p, count);
                 }
             }
@@ -118,7 +122,7 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
 namespace LowFive
 {
 using HardLinks = std::unordered_map<HardLink*, std::string>;
-using References = std::unordered_map<H5R_ref_t*, std::string>;
+using References = File::References;
 Object* deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, References& references, bool include_data);
 }
 
@@ -134,23 +138,8 @@ LowFive::deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol)
     for (auto& x : hard_links)
         x.first->target = o->search(x.second).exact();
 
-    // resolve references
-    if (references.size() > 0)
-    {
-        File* f = dynamic_cast<File*>(o);
-        assert(f);
-        ObjectPointers* fop = vol.wrap(nullptr);
-        fop->mdata_obj = f;
-
-        hid_t fid = H5VLwrap_register(fop, H5I_FILE);
-
-        for (auto& x : references)
-            auto ret = H5Rcreate_object(fid, x.second.c_str(), H5P_DEFAULT, x.first);
-    }
-
-    // It might be dangerous to decrement this, if HDF5 decides to start
-    // collecting garbage and such; the object hasn't been really created yet
-    //H5Idec_ref(fid);
+    File* f = dynamic_cast<File*>(o);
+    f->references = std::move(references);
 
     return o;
 }
@@ -254,19 +243,24 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, References& r
 
             for (size_t i = 0; i < a->space.size(); ++i)
             {
+                using LenType = decltype(data_hvl[i].len);
+                LenType len;
+                diy::load(bb, len);
+                data_hvl[i].len = len;
+                size_t count = len * base_type.dtype_size;
+                data_hvl[i].p = new char[count];
+
                 if (is_reference)
                 {
-                    std::string path;
-                    diy::load(bb, path);
-                    log->info("Loaded a reference to {}", path);
-                    references.emplace((H5R_ref_t*) data_hvl[i].p, path);
+                    for (LenType j = 0; j < len; ++j)
+                    {
+                        std::uintptr_t token;
+                        diy::load(bb, token);
+                        log->info("Loaded a reference token", token);
+                        references.emplace((H5R_ref_t*) data_hvl[i].p + j, token);
+                    }
                 } else
                 {
-                    decltype(data_hvl[i].len) len;
-                    diy::load(bb, len);
-                    data_hvl[i].len = len;
-                    size_t count = len * base_type.dtype_size;
-                    data_hvl[i].p = new char[count];
                     diy::load(bb, (char*) data_hvl[i].p, count);
                 }
             }
