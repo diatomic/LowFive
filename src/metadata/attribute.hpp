@@ -86,10 +86,10 @@ struct Attribute: public Object
                 // This assumes new references H5R_ref_t, but HL library uses old deprecated references, namely hobj_ref_t (= haddr_t)
                 if (base_type.dtype_class == DatatypeClass::Reference && len > 0)
                 {
-                    log->info("Reference at {}, at 0: {}", i, H5Rget_type((H5R_ref_t*) buf_hvl[i].p));
                     H5R_ref_t* dest = (H5R_ref_t*) data_hvl[i].p;
                     for (size_t j = 0; j < len; ++j)
                     {
+                        log->info("Reference at {}, at {}: {}", i, j, H5Rget_type((H5R_ref_t*) buf_hvl[i].p + j));
                         H5Rcopy((H5R_ref_t*) buf_hvl[i].p + j, dest + j);
                     }
                 }

@@ -114,6 +114,8 @@ resolve_references(Object* o)
         return;
 
     auto log = get_logger();
+    log->debug("Resolving references in {}", f->name);
+
     ObjectPointers* fop = wrap(nullptr);
     fop->mdata_obj = f;
 
