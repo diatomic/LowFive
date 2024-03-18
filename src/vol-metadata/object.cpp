@@ -108,7 +108,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
         Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
         // map of our object types to hdf5 object types
-        std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
+        //std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
+        std::vector<int> h5_types = {H5O_TYPE_GROUP, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
 
         switch (get_type)
         {
