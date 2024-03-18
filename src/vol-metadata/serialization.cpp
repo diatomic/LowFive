@@ -256,7 +256,7 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, References& r
                     {
                         std::uintptr_t token;
                         diy::load(bb, token);
-                        log->info("Loaded a reference token", token);
+                        log->info("Loaded a reference token {}", token);
                         references.emplace((H5R_ref_t*) data_hvl[i].p + j, token);
                     }
                 } else

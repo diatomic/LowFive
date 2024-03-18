@@ -113,6 +113,7 @@ resolve_references(Object* o)
     if (f->references.size() == 0)
         return;
 
+    auto log = get_logger();
     ObjectPointers* fop = wrap(nullptr);
     fop->mdata_obj = f;
 
@@ -124,9 +125,10 @@ resolve_references(Object* o)
         log_assert(o, "Must be able to find object by token");
         auto path = o->fullname().second;
         auto ret = H5Rcreate_object(fid, path.c_str(), H5P_DEFAULT, x.first);
+        log->debug("Created reference to {} using token {}", path, x.second);
     }
 
     f->references.clear();
 
-    H5Idec_ref(fid);
+    //H5Idec_ref(fid);
 }
