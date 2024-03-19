@@ -193,7 +193,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             // get object type in HDF format
             int otype   = h5_types[static_cast<int>(obj->type)];
             oinfo->type = static_cast<H5O_type_t>(otype);
-            log->trace("object_get: obj->type {} hdf5 otype {}", obj->type, otype);
+            log->trace("object_get: name={} obj->type {} hdf5 otype {}", obj->name, obj->type, otype);
 
             if (otype == H5O_TYPE_UNKNOWN)
                 throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
@@ -202,7 +202,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
 
             // count number of attributes
             oinfo->num_attrs = 0;
-            for (auto& c : mdata_obj->children)
+            for (auto& c : obj->children)
             {
                 if (c->type == LowFive::ObjectType::Attribute)
                     oinfo->num_attrs++;

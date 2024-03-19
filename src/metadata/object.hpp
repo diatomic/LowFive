@@ -138,7 +138,7 @@ struct Object
 //            assert(o);
 
             if (o)
-                log->trace("located by token: {} name = {}", fmt::ptr(o), o->name);
+                log->trace("located by token {}: {} name = {}", t, fmt::ptr(o), o->name);
             else
                 log->trace("NOT FOUND by token");
 

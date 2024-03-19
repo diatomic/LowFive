@@ -80,9 +80,12 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
                         H5O_info2_t oinfo;
                         H5Oget_info(obj_id, &oinfo, H5O_INFO_ALL);
 
+                        std::string name(1000, '\0');
+                        H5Rget_obj_name(ref, H5P_DEFAULT, name.data(), name.size());
+
                         std::uintptr_t* token = (std::uintptr_t*) oinfo.token.__data;
                         diy::save(bb, *token);
-                        log->info("Saving reference token: {}", *token);
+                        log->info("Saving reference token: {} -> {}", *token, name);
 
                         H5Oclose(obj_id);
                     }
