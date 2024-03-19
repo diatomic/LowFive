@@ -96,7 +96,7 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
                 }
             }
         } else
-            diy::save(bb, a->data.get(), a->mem_type.dtype_size);
+            diy::save(bb, a->data.get(), a->mem_type.dtype_size * a->space.size());
 
         // TODO
         // add support for serializing compound types
@@ -260,8 +260,9 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, References& r
         }
         else
         {
-            a->data = std::unique_ptr<char>(new char[a->mem_type.dtype_size]);
-            diy::load(bb, a->data.get(), a->mem_type.dtype_size);
+            size_t nbytes = a->mem_type.dtype_size * a->space.size();
+            a->data = std::unique_ptr<char>(new char[nbytes]);
+            diy::load(bb, a->data.get(), nbytes);
         }
 
         o = a;
