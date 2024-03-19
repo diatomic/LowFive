@@ -100,16 +100,6 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
 
         // TODO
         // add support for serializing compound types
-        // in VarLen and Compound, check if a member is a reference (dtype knows this via data class)
-        // if it is, save an appropriate flag and then full path to the target in a map<H5R_ref_t*, string>
-        // after hardlinks are resolved, register the file:
-        //      ObjectPointers* op = wrap(nullptr);
-        //      op->mdata_obj = o;
-        //      hid_t fid = H5VLwrap_register(op, H5I_FILE));
-        // resolve references by calling:
-        //      ref, target = *it;
-        //      ret = H5Rcreate(ref, fid, target, H5R_OBJECT, -1);
-        //  The point being that H5Rcreate will resolve the path given by target.
     }
     else if (o->type == ObjectType::HardLink)
         diy::save(bb, static_cast<HardLink*>(o)->target->fullname().second);
