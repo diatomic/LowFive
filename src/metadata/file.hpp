@@ -6,8 +6,11 @@ namespace LowFive
 // (root of) the tree of metadata for one HDF5 "file"
 struct File: public Object
 {
+    using References = std::unordered_map<H5R_ref_t*, std::uintptr_t>;
+
     Hid             fcpl;                   // hdf5 id of file creation property list
     Hid             fapl;                   // hdf5 id of file access property list
+    References      references;
 
     bool            copy_whole = false;
     bool            copy_of_remote = false;

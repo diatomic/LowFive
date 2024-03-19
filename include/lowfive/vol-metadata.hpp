@@ -83,6 +83,8 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void            print_files();
 
+    void            resolve_references(Object* o);
+
     bool            has_real_file(const char* fname) const; // return true, if fname is in files and
                                                             // it is not a DummyFile
 

@@ -3,6 +3,8 @@
 #include "metadata.hpp"
 #include "metadata/serialization.hpp"
 
+#include <lowfive/vol-metadata.hpp>
+
 namespace LowFive
 {
 
@@ -43,7 +45,7 @@ inline H5I_type_t   get_identifier_type(Object* o)
 }
 
 // using different names to avoid confusion
-void serialize(diy::MemoryBuffer& bb, Object* o, bool include_data = false);
-Object* deserialize(diy::MemoryBuffer& bb);
+void serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool include_data = false);
+Object* deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol);
 
 }

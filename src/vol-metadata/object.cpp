@@ -108,7 +108,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
         Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
         // map of our object types to hdf5 object types
-        std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
+        //std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
+        std::vector<int> h5_types = {H5O_TYPE_GROUP, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
 
         switch (get_type)
         {
@@ -143,17 +144,16 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             char *name      = args->args.get_name.buf;
             size_t size     = args->args.get_name.buf_size;
 
-            if (loc_params->type == H5VL_OBJECT_BY_SELF)
-                strncpy(name, mdata_obj->name.c_str(), size);
-            else if (loc_params->type == H5VL_OBJECT_BY_TOKEN)
+            Object* obj = mdata_obj->locate(*loc_params).exact();
+            if (name == NULL)
             {
-                log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_TOKEN");
-
-                // TODO: ignoring the token and just getting the name of the current object
-                strncpy(name, mdata_obj->name.c_str(), size);
+                *ret = obj->name.size();
+            } else
+            {
+                auto len = std::min(size, obj->name.size());
+                *ret = len;
+                strncpy(name, obj->name.c_str(), len);
             }
-            else
-                throw MetadataError("object_get() unrecognized loc_params->type");
 
             return 0;
         }
@@ -164,23 +164,16 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
 
             H5O_type_t *obj_type = args->args.get_type.obj_type;
 
-            if (loc_params->type == H5VL_OBJECT_BY_TOKEN)
-            {
-                log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_TOKEN");
+            Object* obj = mdata_obj->locate(*loc_params).exact();
+            if (static_cast<int>(obj->type) >= h5_types.size())     // sanity check
+                throw MetadataError(fmt::format("object_get(): obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", obj->type));
 
-                if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-                    throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
+            int otype   = h5_types[static_cast<int>(obj->type)];
+            *obj_type   = static_cast<H5O_type_t>(otype);
+            log->trace("object_get: obj->type {} hdf5 otype {}", obj->type, otype);
 
-                // TODO: ignoring the token and just getting the type of the current object
-                int otype   = h5_types[static_cast<int>(mdata_obj->type)];
-                *obj_type   = static_cast<H5O_type_t>(otype);
-                log->trace("object_get: mdata_obj->type {} hdf5 otype {}", mdata_obj->type, otype);
-
-                if (otype == H5O_TYPE_UNKNOWN)
-                    throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
-            }
-            else
-                throw MetadataError("object_get() unrecognized loc_params->type");
+            if (otype == H5O_TYPE_UNKNOWN)
+                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
 
             return 0;
         }
@@ -192,120 +185,28 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             H5O_info2_t  *oinfo = args->args.get_info.oinfo; // H5O_info2_t defined in H5Opublic.h
             // we don't fill args->args.get_info.fields
 
-            if (loc_params->type == H5VL_OBJECT_BY_SELF)            // H5Oget_info
+            Object* obj = mdata_obj->locate(*loc_params).exact();
+
+            if (static_cast<int>(obj->type) >= h5_types.size())     // sanity check
+                throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
+
+            // get object type in HDF format
+            int otype   = h5_types[static_cast<int>(obj->type)];
+            oinfo->type = static_cast<H5O_type_t>(otype);
+            log->trace("object_get: name={} obj->type {} hdf5 otype {}", obj->name, obj->type, otype);
+
+            if (otype == H5O_TYPE_UNKNOWN)
+                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
+
+            mdata_obj->fill_token(oinfo->token);
+
+            // count number of attributes
+            oinfo->num_attrs = 0;
+            for (auto& c : obj->children)
             {
-                log->trace("object_get: loc_params->type = H5VL_OBJECT_BY_SELF");
-
-                if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-                    throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
-
-                // get object type in HDF format
-                int otype   = h5_types[static_cast<int>(mdata_obj->type)];
-                oinfo->type = static_cast<H5O_type_t>(otype);
-                log->trace("object_get: mdata_obj->type {} hdf5 otype {}", mdata_obj->type, otype);
-
-                if (otype == H5O_TYPE_UNKNOWN)
-                {
-//                         throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
-                    fmt::print(stderr, "object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; returning -1\n");
-                    return -1;
-                }
-
-                mdata_obj->fill_token(oinfo->token);
-
-                // count number of attributes
-                oinfo->num_attrs = 0;
-                for (auto& c : mdata_obj->children)
-                {
-                    if (c->type == LowFive::ObjectType::Attribute)
-                        oinfo->num_attrs++;
-                }
-
+                if (c->type == LowFive::ObjectType::Attribute)
+                    oinfo->num_attrs++;
             }
-            else if (loc_params->type == H5VL_OBJECT_BY_NAME)       // H5Oget_info_by_name
-            {
-                log->trace("loc_params->type = H5VL_OBJECT_BY_NAME");
-
-                // TP: I think this means obj points to the group and we search for the name under direct(?) children of obj?
-                // the name is taken from loc_data.loc_by_name.name
-                bool found = false;
-                for (auto& o : mdata_obj->children)
-                {
-                    if (o->name.c_str() == loc_params->loc_data.loc_by_name.name)
-                    {
-                        found = true;
-
-                        if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-                            throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
-
-                        // get object type in HDF format
-                        int otype   = h5_types[static_cast<int>(o->type)];
-                        oinfo->type = static_cast<H5O_type_t>(otype);
-                        log->trace("object_get: child mdata o->type {} hdf5 otype {}", o->type, otype);
-
-                        if (otype == H5O_TYPE_UNKNOWN)
-                            throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
-
-                        o->fill_token(oinfo->token);
-
-                        // count number of attributes
-                        oinfo->num_attrs = 0;
-                        for (auto& c : o->children)
-                        {
-                            if (c->type == LowFive::ObjectType::Attribute)
-                                oinfo->num_attrs++;
-                        }
-
-                        break;
-                    }
-                }
-
-                if (!found)
-                    throw MetadataError("object_get() info by name did not find matching name");
-            }
-            else if (loc_params->type == H5VL_OBJECT_BY_IDX)        // H5Oget_info_by_idx
-            {
-                log->trace("loc_params->type = H5VL_OBJECT_BY_IDX");
-
-                // TP: I think this means obj points to the group and we search for the name under direct(?) children of obj?
-                // the name is taken from loc_data.loc_by_idx.name
-                bool found = false;
-                for (auto& o : mdata_obj->children)
-                {
-                    if (o->name.c_str() == loc_params->loc_data.loc_by_idx.name)
-                    {
-                        found = true;
-
-                        if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-                            throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
-
-                        // get object type in HDF format
-                        int otype   = h5_types[static_cast<int>(o->type)];
-                        oinfo->type = static_cast<H5O_type_t>(otype);
-                        log->trace("object_get: child mdata o->type {} hdf5 otype {}", o->type, otype);
-
-                        if (otype == H5O_TYPE_UNKNOWN)
-                            throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
-
-                        o->fill_token(oinfo->token);
-
-                        // count number of attributes
-                        oinfo->num_attrs = 0;
-                        for (auto& c : o->children)
-                        {
-                            if (c->type == LowFive::ObjectType::Attribute)
-                                oinfo->num_attrs++;
-                        }
-
-                        break;
-                    }
-                }
-
-                if (!found)
-                    throw MetadataError("object_get() info by name did not find matching name");
-            }
-            else
-                throw MetadataError("object_get() unrecognized loc_params->type");
 
             // TODO: following are uninitialized, unknown, arbitrary
             oinfo->fileno   = 0;                                // TODO

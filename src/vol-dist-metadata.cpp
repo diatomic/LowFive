@@ -54,7 +54,7 @@ serve_all(bool delete_data, bool perform_indexing)
 
     if (!selected_intercomms.empty())
     {
-        Index index(local, selected_intercomms, &files, perform_indexing);
+        Index index(local, selected_intercomms, &files, this, perform_indexing);
         // we only serve if there any datasets; this matched old (pre-RPC)
         // behavior, but is probably not the right universal solution; we should
         // make this behavior user-configurable
@@ -84,7 +84,7 @@ broadcast_files(int root)
         for (auto& x : files)
         {
             diy::save(bb, x.first);     // filename
-            serialize(bb, x.second);    // File*
+            serialize(bb, x.second, *this);    // File*
         }
         diy::mpi::broadcast(local_, bb.buffer, root);
     } else
@@ -98,7 +98,7 @@ broadcast_files(int root)
         {
             std::string filename;
             diy::load(bb, filename);
-            auto* f = deserialize(bb);
+            auto* f = deserialize(bb, *this);
             files.emplace(filename, f);
         }
     }
@@ -284,7 +284,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     std::unique_ptr<Query> query(new Query(local, intercomms, remote_size(intercomm_index), intercomm_index));
     diy::MemoryBuffer hierarchy = query->c.call<diy::MemoryBuffer>("get_file_hierarchy", name_);
     hierarchy.reset();
-    Object* hf = deserialize(hierarchy);
+    Object* hf = deserialize(hierarchy, *this);
 
     auto* hff = static_cast<File*>(hf);
     if (hff->copy_whole) {
@@ -427,7 +427,7 @@ producer_signal_done()
         selected_intercomms.push_back(intercomms[idx]);
 
     Files files;        // empty files
-    Index index(local, selected_intercomms, &files);
+    Index index(local, selected_intercomms, &files, this);
     index.serve();
 }
 

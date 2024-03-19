@@ -138,8 +138,8 @@ struct IndexServe
 {
     using Files = MetadataVOL::Files;
 
-                                IndexServe(Files* files_):
-                                    files(files_)       {}
+                                IndexServe(Files* files_, MetadataVOL* vol_):
+                                    files(files_), vol(vol_)       {}
 
 
     File*                       file_open(std::string name)
@@ -161,7 +161,7 @@ struct IndexServe
     diy::MemoryBuffer           get_file_hierarchy(std::string name)
     {
         diy::MemoryBuffer result;
-        serialize(result, files->at(name));
+        serialize(result, files->at(name), *vol);
         return result;
     }
 
@@ -186,6 +186,7 @@ struct IndexServe
     Files*              files;
     int                 open_files = 0;
     bool                done = false;
+    MetadataVOL*        vol;
 };
 
 // same function for files and groups

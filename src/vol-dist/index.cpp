@@ -8,8 +8,8 @@
 namespace LowFive {
 
 // producer version of the constructor
-Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, bool perform_indexing):
-    IndexQuery(local_, intercomms_), idx_srv(files)
+Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, MetadataVOL* vol, bool perform_indexing):
+    IndexQuery(local_, intercomms_), idx_srv(files, vol)
 {
     auto log = get_logger();
     log->trace("Index ctor, number of intercomms: {}, files.size = {}", intercomms_.size(), files->size());

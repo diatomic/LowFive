@@ -102,3 +102,42 @@ create_MetadataVOL()
 
     return *dynamic_cast<MetadataVOL*>(info->vol);
 }
+
+void
+LowFive::MetadataVOL::
+resolve_references(Object* o)
+{
+    File* f = dynamic_cast<File*>(o->find_root());
+    assert(f);
+
+    if (f->references.size() == 0)
+        return;
+
+    auto log = get_logger();
+    log->debug("Resolving references in {}", f->name);
+
+    //ObjectPointers* fop = wrap(nullptr);
+    //fop->mdata_obj = f;
+    //hid_t fid = H5VLwrap_register(fop, H5I_FILE);
+
+    for (auto& x : f->references)
+    {
+        Object* o = f->find_token(x.second);
+        log_assert(o, "Must be able to find object by token");
+
+        ObjectPointers* oop = wrap(nullptr);
+        oop->mdata_obj = o;
+        std::vector<H5I_type_t> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
+        H5I_type_t obj_type = h5_types[static_cast<int>(o->type)];
+        hid_t oid = H5VLwrap_register(oop, obj_type);
+
+        auto path = o->fullname().second;
+        //auto ret = H5Rcreate_object(fid, path.c_str(), H5P_DEFAULT, x.first);
+        auto ret = H5Rcreate_object(oid, ".", H5P_DEFAULT, x.first);
+        log->debug("Created reference to {} using token {}", path, x.second);
+    }
+
+    f->references.clear();
+
+    //H5Idec_ref(fid);
+}
