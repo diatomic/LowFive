@@ -123,8 +123,12 @@ struct Dataspace: Hid
             return 1;
         else if (cls == Class::simple)
             return H5Sget_simple_extent_npoints(id);
-        else
-            throw MetadataError("Unknown Dataspace class in size()");
+        else // cls == Class::null
+        {
+            auto log = get_logger();
+            log->debug("Getting size of a null class; returning 0");
+            return 0;
+        }
     }
 
     void    set_extent(const hsize_t* size, const hsize_t* maxsize = nullptr)
