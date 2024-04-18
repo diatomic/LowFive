@@ -8,6 +8,8 @@
 
 #include <vector>
 
+#include "fmt/format.h"
+
 namespace diy
 {
 namespace mpi
@@ -56,6 +58,7 @@ namespace detail
   status recv(DIY_MPI_Comm comm, int source, int tag, std::vector<T>& x)
   {
     auto s = probe(comm, source, tag);
+    fmt::print(stderr, "diy recv probe size = {}\n", s.count<T>());
     x.resize(static_cast<size_t>(s.count<T>()));
     return recv(comm, source, tag, address(x), count(x), datatype_of(x));
   }
