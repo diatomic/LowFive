@@ -25,8 +25,11 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, M
             {
                 auto* ds = x.second;
                 fmt::print(stderr, "Index(): ds->name = {} ds->data.size() = {}\n", ds->name, ds->data.size());
-                fmt::print(stderr, "Index(): ds->data[0].file = {}\n", ds->data[0].file);
-                fmt::print(stderr, "Index(): ds->data[0].memory = {}\n", ds->data[0].memory);
+                if (ds->data.size() == 1)
+                {
+                    fmt::print(stderr, "Index(): ds->data[0].file = {}\n", ds->data[0].file);
+                    fmt::print(stderr, "Index(): ds->data[0].memory = {}\n", ds->data[0].memory);
+                }
 
                 // skip empty datasets
                 if (ds->data.empty())
