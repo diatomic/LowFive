@@ -132,7 +132,8 @@ LowFive::deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol)
         x.first->target = o->search(x.second).exact();
 
     File* f = dynamic_cast<File*>(o);
-    f->references = std::move(references);
+    if (f)
+        f->references = std::move(references);
 
     return o;
 }
