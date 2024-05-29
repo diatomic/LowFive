@@ -373,6 +373,13 @@ file_close(void *file, hid_t dxpl_id, void **req)
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
         f->print();
+
+        if (send_filename)
+        {
+            send_filename(f->name);
+            log->trace("send_filename callback is done for file {}", f->name);
+        }
+
         if (f->copy_of_remote)
         {
             log->trace("Local file is a copy of remote, skipping");

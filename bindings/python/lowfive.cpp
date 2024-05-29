@@ -153,16 +153,21 @@ PYBIND11_MODULE(_lowfive, m)
                                           py::gil_scoped_acquire acq;
                                           self->set_serve_indices(si);
                                         },                                                              "set the serve_file_indices callback")
-
-        .def("unset_dist_callbacks",    [](LowFive::DistMetadataVOL* self)
-                                        {
-                                          py::gil_scoped_acquire acq;
-                                          self->unset_dist_callbacks();
-                                        },                                                              "unset DistMetadataVOL callbacks")
         .def("set_consumer_filename",   [](LowFive::DistMetadataVOL* self,  LowFive::DistMetadataVOL::SetFileName& sfn)
                                         {
                                           py::gil_scoped_acquire acq;
                                           self->set_consumer_filename(sfn);
                                         },                                                              "set the consumer_filename callback")
+        .def("set_send_filename",       [](LowFive::DistMetadataVOL* self,  LowFive::DistMetadataVOL::SendFileName& sfn)
+                                        {
+                                          py::gil_scoped_acquire acq;
+                                          self->set_send_filename(sfn);
+                                        },                                                              "set the send_filename callback")
+        .def("unset_dist_callbacks",    [](LowFive::DistMetadataVOL* self)
+                                        {
+                                          py::gil_scoped_acquire acq;
+                                          self->unset_dist_callbacks();
+                                        },                                                              "unset DistMetadataVOL callbacks")
+
     ;
 }

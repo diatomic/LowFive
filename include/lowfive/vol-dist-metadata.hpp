@@ -22,6 +22,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     using ServeIndices = std::function<DataIntercomms()>;
     using SetFileName  = std::function<std::string()>;
+    using SendFileName = std::function<void(const std::string&)>;
 
     communicator    local;
     communicators   intercomms;
@@ -35,6 +36,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     // callbacks
     ServeIndices        serve_indices;
     SetFileName         set_filename;
+    SendFileName        send_filename;
 
     protected:
                     DistMetadataVOL(communicator  local_, communicator  intercomm_);
@@ -72,10 +74,16 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
         set_filename = name;
     }
 
+    void set_send_filename(SendFileName sfn)
+    {
+        send_filename = sfn;
+    }
+
     void unset_dist_callbacks()
     {
         serve_indices = nullptr;
         set_filename = nullptr;
+        send_filename = nullptr;
     }
 
     void            broadcast_files(int root = 0);

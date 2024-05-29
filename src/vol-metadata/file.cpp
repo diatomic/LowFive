@@ -62,6 +62,13 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     {
         log->trace("Found file {}", name_);
         mdata = it->second;
+
+        //there can be updates to fapl which was initially copied at file_create
+        if(File* f = dynamic_cast<File*>(it->second))
+        {
+            f->fapl.id = H5Pcopy(fapl_id);
+            mdata = f;
+        }
     }
     else
     {
