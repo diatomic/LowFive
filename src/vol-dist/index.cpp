@@ -25,12 +25,14 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, M
             {
                 auto* ds = x.second;
 
+                IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
+
                 // skip empty datasets
                 if (ds->data.empty())
-                    continue;
+                    log->warn("Skipping indexing empty dataset: {}", ds->name);
+                else
+                    index(*ids);
 
-                IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
-                index(*ids);
                 ds->extra = ids;
 
                 ++indexed_datasets;
