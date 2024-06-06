@@ -163,6 +163,12 @@ PYBIND11_MODULE(_lowfive, m)
                                           py::gil_scoped_acquire acq;
                                           self->set_send_filename(sfn);
                                         },                                                              "set the send_filename callback")
+        .def("set_noncollective_datasets", [](LowFive::DistMetadataVOL* self,  LowFive::DistMetadataVOL::NoncollectiveDatasets& nd)
+                                        {
+                                          py::gil_scoped_acquire acq;
+                                          self->set_noncollective_datasets(nd);
+                                        },                                                              "set the noncollective_datasets callback")
+
         .def("unset_dist_callbacks",    [](LowFive::DistMetadataVOL* self)
                                         {
                                           py::gil_scoped_acquire acq;

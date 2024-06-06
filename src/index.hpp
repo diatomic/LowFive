@@ -19,7 +19,7 @@ struct Index: public IndexQuery
     using Datasets = std::map<std::string, Dataset*>;
 
     // producer version of the constructor
-                        Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, MetadataVOL* vol, bool perform_indexing=true);
+                        Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, MetadataVOL* vol, bool perform_indexing=true, std::set<std::string> noncollective_datasets = std::set<std::string>());
                         ~Index();
 
     // TODO: index-query are written with the bulk-synchronous assumption;

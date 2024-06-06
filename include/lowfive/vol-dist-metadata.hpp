@@ -20,9 +20,10 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     using DataIntercomms    = std::vector<int>;
     using FileNames         = std::vector<std::string>;
 
-    using ServeIndices = std::function<DataIntercomms()>;
-    using SetFileName  = std::function<std::string()>;
-    using SendFileName = std::function<void(const std::string&)>;
+    using ServeIndices           = std::function<DataIntercomms()>;
+    using SetFileName            = std::function<std::string()>;
+    using SendFileName           = std::function<void(const std::string&)>;
+    using NoncollectiveDatasets  = std::function<std::set<std::string>()>;
 
     communicator    local;
     communicators   intercomms;
@@ -34,9 +35,10 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     bool                serve_on_close {true};
 
     // callbacks
-    ServeIndices        serve_indices;
-    SetFileName         set_filename;
-    SendFileName        send_filename;
+    ServeIndices                 serve_indices;
+    SetFileName                  set_filename;
+    SendFileName                 send_filename;
+    NoncollectiveDatasets        noncollective_dataset_writes;
 
     protected:
                     DistMetadataVOL(communicator  local_, communicator  intercomm_);
@@ -79,11 +81,17 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
         send_filename = sfn;
     }
 
+    void set_noncollective_datasets(NoncollectiveDatasets nd)
+    {
+        noncollective_dataset_writes = nd;
+    }
+
     void unset_dist_callbacks()
     {
         serve_indices = nullptr;
         set_filename = nullptr;
         send_filename = nullptr;
+        noncollective_dataset_writes = nullptr;
     }
 
     void            broadcast_files(int root = 0);

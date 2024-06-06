@@ -8,7 +8,7 @@
 namespace LowFive {
 
 // producer version of the constructor
-Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, MetadataVOL* vol, bool perform_indexing):
+Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, MetadataVOL* vol, bool perform_indexing, std::set<std::string> noncollective_datasets):
     IndexQuery(local_, intercomms_), idx_srv(files, vol)
 {
     auto log = get_logger();
@@ -27,8 +27,8 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, M
 
                 IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
 
-                // skip empty datasets
-                if (ds->data.empty())
+                // skip empty datasets (if they are not indicated by the user as noncollective)
+                if (ds->data.empty() && noncollective_datasets.find(ds->name) == noncollective_datasets.end())
                     log->warn("Skipping indexing empty dataset: {}", ds->name);
                 else
                     index(*ids);

@@ -54,7 +54,12 @@ serve_all(bool delete_data, bool perform_indexing)
 
     if (!selected_intercomms.empty())
     {
-        Index index(local, selected_intercomms, &files, this, perform_indexing);
+        std::set<std::string> noncollective_datasets;
+
+        if (noncollective_dataset_writes)
+            noncollective_datasets = noncollective_dataset_writes();
+
+        Index index(local, selected_intercomms, &files, this, perform_indexing, noncollective_datasets);
         // we only serve if there any datasets; this matched old (pre-RPC)
         // behavior, but is probably not the right universal solution; we should
         // make this behavior user-configurable
