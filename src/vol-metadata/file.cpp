@@ -120,8 +120,8 @@ file_close(void *file, hid_t dxpl_id, void **req)
         filename = f->name;
 
         // we created this file
-        if (LowFive::get_log_level() <= spdlog::level::info)
-            f->print();
+//         if (LowFive::get_log_level() <= spdlog::level::info)
+//             f->print();
 
         if (!keep)
         {

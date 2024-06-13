@@ -330,6 +330,9 @@ herr_t
 DistMetadataVOL::
 file_close(void *file, hid_t dxpl_id, void **req)
 {
+    if (LowFive::get_log_level() <= spdlog::level::info)
+        this->print_files();
+
     ++file_close_counter_;
 
     ObjectPointers* file_ = (ObjectPointers*) file;
@@ -377,7 +380,7 @@ file_close(void *file, hid_t dxpl_id, void **req)
     } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
-        f->print();
+//         f->print();
 
         if (send_filename)
         {
