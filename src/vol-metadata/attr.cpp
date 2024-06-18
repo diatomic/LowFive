@@ -60,7 +60,13 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
         // find the attribute in our file metadata
         std::string name_(name);
         if (match_any(filepath, memory))
+        {
+            auto op = mdata_obj->locate(*loc_params).exact()->search(name_);
+            if (!op.path.empty())
+                return nullptr;     // hopefully this returns -1 from the calling function
+
             result->mdata_obj = mdata_obj->locate(*loc_params).exact()->search(name_).exact();
+        }
         // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
     }
 
