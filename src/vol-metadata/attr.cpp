@@ -44,7 +44,12 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     log->trace("attr_open obj = {} name {}", *obj_, name);
 
     if (unwrap(obj_))
-        result = wrap(VOLBase::attr_open(unwrap(obj_), loc_params, name, aapl_id, dxpl_id, req));
+    {
+        auto* under_result = VOLBase::attr_open(unwrap(obj_), loc_params, name, aapl_id, dxpl_id, req);
+        if (!under_result)      // not found in passthru, return nullptr; NB: if it somehow exists in metadata, this is problematic
+            return under_result;
+        result = wrap(under_result);
+    }
     else
         result = wrap(nullptr);
 
