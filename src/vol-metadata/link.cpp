@@ -230,7 +230,10 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
 
         log->trace("link_iter: visiting object name {}", c->name);
 
-        retval = (args->args.iterate.op)(obj_loc_id, c->name.c_str(), &linfo, args->args.iterate.op_data);
+        std::vector<char> c_name(c->name.size() + 1);
+        strcpy(c_name.data(), c->name.c_str());
+
+        retval = (args->args.iterate.op)(obj_loc_id, c_name.data(), &linfo, args->args.iterate.op_data);
         if (retval > 0)
         {
             log->trace("link_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
