@@ -155,8 +155,12 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
             {
 
                 log->trace("group_optional: found object {} as a child of the parent {}", c->name, mdata_obj->name);
+
+                std::vector<char> c_name(c->name.size() + 1);
+                strcpy(c_name.data(), c->name.c_str());
+
                 // make the application callback, copied from H5Glink.c, H5G__link_iterate_table()
-                res = (opt_args->iterate_old.op)(obj_loc_id, c->name.c_str(), opt_args->iterate_old.op_data);
+                res = (opt_args->iterate_old.op)(obj_loc_id, c_name.data(), opt_args->iterate_old.op_data);
                 if (res > 0)
                 {
                     log->trace("group_optional iteration: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");

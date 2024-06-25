@@ -232,8 +232,11 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
             else
                 log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
 
+            std::vector<char> c_name(c->name.size() + 1);
+            strcpy(c_name.data(), c->name.c_str());
+
             // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
-            retval = (op)(obj_loc_id, c->name.c_str(), &ainfo, op_data);
+            retval = (op)(obj_loc_id, c_name.data(), &ainfo, op_data);
             if (retval > 0)
             {
                 log->trace("attr_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
