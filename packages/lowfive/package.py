@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
-from spack import *
+from spack.package import *
 
 
 class Lowfive(CMakePackage):
@@ -21,7 +21,7 @@ class Lowfive(CMakePackage):
     variant("caliper", default=False, description="Enable profiling with Caliper")
 
     depends_on('mpich')
-    depends_on('hdf5+mpi+hl@1.14 ^mpich', type='link')
+    depends_on('hdf5+mpi+hl@1.14', type='link')
 
     extends("python", when="+python")       # brings pylowfive into PYTHONPATH
     depends_on("py-mpi4py", when="+python", type=("build", "run"))
