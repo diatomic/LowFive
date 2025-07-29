@@ -56,10 +56,16 @@ PYBIND11_MODULE(_lowfive, m)
     // 1. acquire GIL
     // 2. unset callbacks (so they are destroyed with GIL held)
     // and will NOT delete the object (this is done in _term when HDF5 library is closing)
+    using PVOLBase = std::unique_ptr<LowFive::VOLBase>;
     using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, nodelete_unset_cb>;
     using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, nodelete_unset_cb>;
 
     m.def("create_logger", [](std::string lev) { LowFive::create_logger(lev); return 0; }, "Create spdlog logger for LowFive");
+
+    m.def("create_VOLBase", []() -> PVOLBase
+                       {
+                            return PVOLBase(&LowFive::VOLBase::create_vol_base());
+                       }, "Get VOLBase object");
 
     m.def("_create_MetadataVOL", []() -> PMetadataVOL
                        {

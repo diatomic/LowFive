@@ -28,4 +28,4 @@ def unset_vol_callbacks():
 
 atexit.register(unset_vol_callbacks)
 
-__all__ = ["create_DistMetadataVOL", "create_MetadataVOL", "create_logger", "DistMetatadataVOL", "MetadataVOL", "VOLBase"]
+__all__ = ["create_DistMetadataVOL", "create_MetadataVOL", "create_VOLBase", "create_logger", "DistMetatadataVOL", "MetadataVOL", "VOLBase"]
