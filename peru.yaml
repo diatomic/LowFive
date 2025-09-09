@@ -29,4 +29,4 @@ git module spdlog:
 
 git module backward-cpp:
     url: https://github.com/bombela/backward-cpp.git
-    rev: 5ffb2c879ebdbea3bdb8477c671e32b1c984beaa
+    rev: 0bfd0a07a61551413ccd2ab9a9099af3bad40681
