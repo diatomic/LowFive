@@ -16,7 +16,7 @@ git module fmt:
 
 git module diy:
     url: https://github.com/diatomic/diy
-    rev: 72643ee400130c35a0e662560ee09a479a913333
+    rev: 4f79c3d3de028327e27fa9b83ef1fe6ece4b4a8f
     drop: include/diy/thirdparty/fmt
 
 git module pybind11:
