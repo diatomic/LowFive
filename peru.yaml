@@ -16,12 +16,12 @@ git module fmt:
 
 git module diy:
     url: https://github.com/diatomic/diy
-    rev: 72643ee400130c35a0e662560ee09a479a913333
+    rev: 4f79c3d3de028327e27fa9b83ef1fe6ece4b4a8f
     drop: include/diy/thirdparty/fmt
 
 git module pybind11:
     url: https://github.com/pybind/pybind11
-    rev: e8e229fa0b486118bf91321b923f8158055c053c
+    rev: 68cbae6641faceeecf39335135206fb92e4b4e3a
 
 git module spdlog:
     url: https://github.com/gabime/spdlog
@@ -29,4 +29,4 @@ git module spdlog:
 
 git module backward-cpp:
     url: https://github.com/bombela/backward-cpp.git
-    rev: 5ffb2c879ebdbea3bdb8477c671e32b1c984beaa
+    rev: 0bfd0a07a61551413ccd2ab9a9099af3bad40681
