@@ -39,6 +39,7 @@ option                      (build_examples "" OFF)
 option                      (build_tests "" OFF)
 add_subdirectory            (ext/diy)
 set                         (libraries ${libraries} diy)
+add_definitions             ("-DDIY_SYSTEM_FMT")           # tell DIY to use the global (vendored) fmt
 
 # fmt
 option                      (FMT_INSTALL "" OFF)
