@@ -137,24 +137,25 @@ struct MetadataVOL: public LowFive::VOLBase
     void clear_files();
 
     // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
-    // checks if two given strings; the first string may contain wildcard characters
-    static bool match(const char *first, const char * second, bool partial = false)
+    // checks if two given strings match; the first string may contain wildcard characters
+    static bool match(const char *first, const char * second)
     {
         if (*first == '\0' && *second == '\0')
             return true;
 
         if (*first == '*' && *(first+1) != '\0' && *second == '\0')
-            return partial;
+            return false;
 
         if (*first == '?' || *first == *second)
-            return match(first+1, second+1, partial);
+            return match(first+1, second+1);
 
         if (*first == '*')
-            return match(first+1, second, partial) || match(first, second+1, partial);
+            return match(first+1, second) || match(first, second+1);
 
-        return partial;
+        return false;
     }
 
+    // in the next 4 functions, partial means don't check full_path (for dataset)
     bool match_any(std::pair<std::string,std::string> filepath, const LocationPatterns& patterns, bool partial = false) const
     {
         return match_any(filepath.first, filepath.second, patterns, partial);
@@ -171,7 +172,7 @@ struct MetadataVOL: public LowFive::VOLBase
         {
             auto& x = patterns[i];
             if (!match(x.filename.c_str(), filename.c_str())) continue;
-            if (match(x.pattern.c_str(), full_path.c_str(), partial))
+            if (partial || match(x.pattern.c_str(), full_path.c_str())
                 return i;
         }
         return -1;
@@ -185,7 +186,7 @@ struct MetadataVOL: public LowFive::VOLBase
         {
             auto& x = patterns[i];
             if (!match(x.filename.c_str(), filename.c_str())) continue;
-            if (match(x.pattern.c_str(), full_path.c_str(), partial))
+            if (partial || match(x.pattern.c_str(), full_path.c_str()))
                 result.push_back(i);
         }
         return result;
