@@ -94,7 +94,13 @@ attr_read(void *attr, hid_t mem_type_id, void *buf,
     log->trace("attr = {}, mem_type_id = {}, mem type = {}", *attr_, mem_type_id, mem_type);
 
     if (unwrap(attr_))
+    {
+        // warn if metadata are available but won't be used
+        if (attr_->mdata_obj)
+            log->warn("Warning: attr_read: obj = {} metadata are available but won't be used", *attr_);
+
         return VOLBase::attr_read(unwrap(attr), mem_type_id, buf, dxpl_id, req);
+    }
     else
     {
         log_assert(attr_->mdata_obj, "mdata_obj must be set in metadata mode");
@@ -125,7 +131,13 @@ attr_get(void *obj, H5VL_attr_get_args_t* args, hid_t dxpl_id, void **req)
 
     // TODO: again, why do we prefer passthru?
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: attr_get: obj = {} metadata are available but won't be used", *obj_);
+
         return VOLBase::attr_get(unwrap(obj), args, dxpl_id, req);
+    }
     else if (obj_->mdata_obj)
     {
         if (get_type == H5VL_ATTR_GET_SPACE)
@@ -327,8 +339,13 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
 
     herr_t result = 0;
     if (unwrap(obj_))
-        result = VOLBase::attr_specific(unwrap(obj_), loc_params, args, dxpl_id, req);
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: attr_specific: obj = {} metadata are available but won't be used", *obj_);
 
+        result = VOLBase::attr_specific(unwrap(obj_), loc_params, args, dxpl_id, req);
+    }
     else // if (match_any(filepath, memory))
     {
         switch(specific_type)
@@ -429,6 +446,13 @@ herr_t
 LowFive::MetadataVOL::
 attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    auto log = get_logger();
+
+    // warn if metadata are available but won't be used
+    if (obj_->mdata_obj)
+        log->warn("Warning: attr_optional: obj = {} metadata are available but won't be used", *obj_);
+
     return VOLBase::attr_optional(unwrap(obj), args, dxpl_id, req);
 }
 

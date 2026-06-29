@@ -80,6 +80,8 @@ LowFive::MetadataVOL::
 object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
 {
+    auto log = get_logger();
+
     if (!unwrap(src_obj) && !unwrap(dst_obj))   // memory
     {
         ObjectPointers* src_obj_        = (ObjectPointers*) src_obj; (void) src_obj_;
@@ -90,7 +92,16 @@ object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *
         throw MetadataError(fmt::format("object_copy(): not implemented in metadata yet"));
     }
     else                                        // passthru
+    {
+        ObjectPointers* src_obj_        = (ObjectPointers*) src_obj;
+        ObjectPointers* dst_obj_        = (ObjectPointers*) dst_obj;
+
+        // warn if metadata are available but won't be used
+        if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
+            log->warn("Warning: object_copy: src_obj = {} dst_obj = {} metadata are available but won't be used", *src_obj_, *dst_obj_);
+
         return VOLBase::object_copy(unwrap(src_obj), src_loc_params, src_name, unwrap(dst_obj), dst_loc_params, dst_name, ocpypl_id, lcpl_id, dxpl_id, req);
+    }
 }
 
 herr_t
@@ -228,7 +239,15 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             throw MetadataError("object_get(): unrecognized get_type");
         }
     } else                      // passthru
+    {
+        ObjectPointers* obj_        = (ObjectPointers*) obj;
+
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: object_get: obj = {} metadata are available but won't be used", *obj_);
+
         return VOLBase::object_get(unwrap(obj), loc_params, args, dxpl_id, req);
+    }
 }
 
 herr_t
@@ -275,7 +294,15 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
             throw MetadataError("object_specific(): unrecognized specific_type");
         }
     } else
+    {
+        ObjectPointers* obj_        = (ObjectPointers*) obj;
+
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: object_specific: obj = {} metadata are available but won't be used", *obj_);
+
         return VOLBase::object_specific(unwrap(obj), loc_params, args, dxpl_id, req);
+    }
 }
 
 herr_t
@@ -352,5 +379,13 @@ object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_ar
 
     }
     else                            // passthru
+    {
+        ObjectPointers* obj_        = (ObjectPointers*) obj;
+
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: object_optional: obj = {} metadata are available but won't be used", *obj_);
+
         return VOLBase::object_optional(unwrap(obj), loc_params, args, dxpl_id, req);
+    }
 }

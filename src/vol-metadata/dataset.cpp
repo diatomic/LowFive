@@ -134,7 +134,13 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
             file_space_id, Dataspace(file_space_id));
 
     if (unwrap(dset_))
+    {
+        // warn if metadata are available but won't be used
+        if (dset_->mdata_obj)
+            log->warn("Warning: dataset_read: obj = {} metadata are available but won't be used", *dset_);
+
         return VOLBase::dataset_read(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+    }
     else if (dset_->mdata_obj)
     {
         Dataset* ds = (Dataset*) dset_->mdata_obj;              // dataset from our metadata
@@ -214,7 +220,11 @@ dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, v
     herr_t res = 0;
     if (unwrap(obj_))
         res = VOLBase::dataset_specific(unwrap(obj_), args, dxpl_id, req);
-    else if (obj_->mdata_obj)
+
+    // switching from else if to if so that if a file exists on disk, we can still perform dataset
+    // specific operations on the metadata, which were previeously being skipped, TP 6/24/26
+//     else if (obj_->mdata_obj)
+    if (obj_->mdata_obj)
     {
         // specific types are enumerated in H5VLconnector.h
         switch (specific_type)
@@ -258,7 +268,13 @@ dataset_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **re
 
     herr_t res = 0;
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: dataset_optional: obj = {} metadata are available but won't be used", *obj_);
+
         res = VOLBase::dataset_optional(unwrap(obj_), args, dxpl_id, req);
+    }
     else if (obj_->mdata_obj)
     {
         // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_DATASET_* constants)
@@ -287,7 +303,13 @@ dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req
     //       than survive on passthru?
     herr_t result = 0;
     if (unwrap(dset_))
+    {
+        // warn if metadata are available but won't be used
+        if (dset_->mdata_obj)
+            log->warn("Warning: dataset_get: obj = {} metadata are available but won't be used", *dset_);
+
         result = VOLBase::dataset_get(unwrap(dset_), args, dxpl_id, req);
+    }
     else if (dset_->mdata_obj)
     {                                                       // see hdf5 H5VLnative_dataset.c, H5VL__native_dataset_get()
         if (get_type == H5VL_DATASET_GET_SPACE)
