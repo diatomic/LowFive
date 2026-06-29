@@ -118,7 +118,13 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 
     // XXX: this will definitely break if both passthru and memory are on
     if (unwrap(obj_))               // passthru
+    {
+        // warn if metadata are available but won't be used
+        if (mdata_obj)
+            log->warn("Warning: group_optional: obj = {} metadata are available but won't be used", *obj_);
+
         res = VOLBase::group_optional(unwrap(obj_), args, dxpl_id, req);
+    }
     else if (mdata_obj)             // memory
     {
         // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_GROUP_* constants)
@@ -206,7 +212,13 @@ group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req)
 
     herr_t result = 0;
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: group_get: obj = {} metadata are available but won't be used", *obj_);
+
         result = VOLBase::group_get(unwrap(obj_), args, dxpl_id, req);
+    }
     else if (obj_->mdata_obj)
     {                                                       // see hdf5 H5VLnative_group.c, H5VL__native_group_get()
         if (get_type == H5VL_GROUP_GET_GCPL)                // group creation property list
@@ -264,7 +276,13 @@ group_specific(void *obj, H5VL_group_specific_args_t* args, hid_t dxpl_id, void 
 
     herr_t res = 0;
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: group_specific: obj = {} metadata are available but won't be used", *obj_);
+
         res = VOLBase::group_specific(unwrap(obj_), args, dxpl_id, req);
+    }
     else if (obj_->mdata_obj)
     {
         // specific types are enumerated in H5VLconnector.h

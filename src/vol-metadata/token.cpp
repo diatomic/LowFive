@@ -22,6 +22,10 @@ token_cmp(void *obj, const H5O_token_t *token1, const H5O_token_t *token2, int *
         return 0;
     } else
     {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: token_cmp: obj = {} metadata are available but won't be used", *obj_);
+
         auto res = VOLBase::token_cmp(unwrap(obj), token1, token2, cmp_value);
         log->trace("token_compare: result = {}", *cmp_value);
         return res;

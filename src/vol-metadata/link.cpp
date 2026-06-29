@@ -104,7 +104,13 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
 
     herr_t res = 0;
     if (unwrap(src_obj_) && unwrap(dst_obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
+            log->warn("Warning: link_copy: src obj = {} dst obj = {} metadata are available but won't be used", *src_obj_, *dst_obj_);
+
         res = VOLBase::link_copy(unwrap(src_obj_), loc_params1, unwrap(dst_obj_), loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+    }
     else if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
         log->warn("Warning: link_copy not implemented in metadata yet");
     else
@@ -127,7 +133,13 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
 
     herr_t res = 0;
     if (unwrap(src_obj_) && unwrap(dst_obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
+            log->warn("Warning: link_move: src obj = {} dst obj = {} metadata are available but won't be used", *src_obj_, *dst_obj_);
+
         res = VOLBase::link_move(unwrap(src_obj_), loc_params1, unwrap(dst_obj_), loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+    }
     else if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
         log->warn("Warning: link_move not implemented in metadata yet");
     else
@@ -146,7 +158,13 @@ LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, h
 
     herr_t res = 0;
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: link_get: obj = {} metadata are available but won't be used", *obj_);
+
         res = VOLBase::link_get(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
+    }
     else if (obj_->mdata_obj)
     {
         auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
@@ -266,7 +284,13 @@ LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_para
 
     herr_t res = 0;
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (mdata_obj)
+            log->warn("Warning: link_specific: obj = {} metadata are available but won't be used", *obj_);
+
         res = VOLBase::link_specific(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
+    }
     else if (mdata_obj)
     {
         if (args->op_type == H5VL_LINK_DELETE)               // H5Ldelete(_by_name/idx)
@@ -312,7 +336,13 @@ LowFive::MetadataVOL::link_optional(void* obj, const H5VL_loc_params_t* loc_para
 
     herr_t res = 0;
     if (unwrap(obj_))
+    {
+        // warn if metadata are available but won't be used
+        if (obj_->mdata_obj)
+            log->warn("Warning: link_optional: obj = {} metadata are available but won't be used", *obj_);
+
         res = VOLBase::link_optional(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
+    }
     else if (obj_->mdata_obj)
         log->warn("Warning: link_optional not implemented in metadata yet");
     else

@@ -197,6 +197,10 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
 
     if (unwrap(file_))
     {
+        // warn if metadata are available but won't be used
+        if (file_->mdata_obj)
+            log->warn("Warning: file_specific: obj = {} metadata are available but won't be used", *file_);
+
         return VOLBase::file_specific(unwrap(file_), args, dxpl_id, req);
     }
     else if (file_->mdata_obj)
@@ -231,6 +235,10 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
     herr_t result = 0;
     if (unwrap(file_))
     {
+        // warn if metadata are available but won't be used
+        if (file_->mdata_obj)
+            log->warn("Warning: file_get: obj = {} metadata are available but won't be used", *file_);
+
         // NB: The case of H5VL_FILE_GET_OBJ_IDS requires that we augment the
         //     output with mdata_obj pointers.  The native implementation seems to
         //     do this automagically.
@@ -371,7 +379,13 @@ file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 
     herr_t res = 0;
     if (unwrap(file_))
+    {
+        // warn if metadata are available but won't be used
+        if (file_->mdata_obj)
+            log->warn("Warning: file_optional: obj = {} metadata are available but won't be used", *file_);
+
         res = VOLBase::file_optional(unwrap(file_), args, dxpl_id, req);
+    }
 
     return res;
 }

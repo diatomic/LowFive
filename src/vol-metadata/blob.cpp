@@ -5,6 +5,13 @@ herr_t
 LowFive::MetadataVOL::
 blob_put(void *obj, const void *buf, size_t size, void *blob_id, void *ctx)
 {
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    auto log = get_logger();
+
+    // warn if metadata are available but won't be used
+    if (obj_->mdata_obj)
+        log->warn("Warning: blob_put: obj = {} metadata are available but won't be used", *obj_);
+
     if (!unwrap(obj))
         throw MetadataError(fmt::format("blob_put() not implemented in metadata-only mode"));
     return VOLBase::blob_put(unwrap(obj), buf, size, blob_id, ctx);
@@ -15,6 +22,13 @@ herr_t
 LowFive::MetadataVOL::
 blob_get(void *obj, const void *blob_id, void *buf, size_t size, void *ctx)
 {
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    auto log = get_logger();
+
+    // warn if metadata are available but won't be used
+    if (obj_->mdata_obj)
+        log->warn("Warning: blob_get: obj = {} metadata are available but won't be used", *obj_);
+
     if (!unwrap(obj))
         throw MetadataError(fmt::format("blob_get() not implemented in metadata-only mode"));
     return VOLBase::blob_get(unwrap(obj), blob_id, buf, size, ctx);
@@ -24,6 +38,13 @@ herr_t
 LowFive::MetadataVOL::
 blob_specific(void *obj, void *blob_id, H5VL_blob_specific_args_t* args)
 {
+    ObjectPointers* obj_ = (ObjectPointers*) obj;
+    auto log = get_logger();
+
+    // warn if metadata are available but won't be used
+    if (obj_->mdata_obj)
+        log->warn("Warning: blob_specific: obj = {} metadata are available but won't be used", *obj_);
+
     if (!unwrap(obj))
         throw MetadataError(fmt::format("blob_specific() not implemented in metadata-only mode"));
     return VOLBase::blob_specific(unwrap(obj), blob_id, args);
