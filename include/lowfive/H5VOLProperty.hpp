@@ -1,7 +1,6 @@
 #pragma once
 
 #include "vol-base.hpp"
-#include <cassert>
 
 namespace LowFive
 {
@@ -13,12 +12,12 @@ struct H5VOLProperty
     {
         vol_id = vol_plugin.register_plugin();
     }
-            ~H5VOLProperty()
-    {
-//        H5VLterminate(vol_id);
-        H5VLunregister_connector(vol_id);
-        assert(H5VLis_connector_registered_by_name(vol_plugin.name.c_str()) == 0);
-    }
+            ~H5VOLProperty() { H5VLunregister_connector(vol_id); }
+
+            H5VOLProperty(const H5VOLProperty&) = delete;
+            H5VOLProperty& operator=(const H5VOLProperty&) = delete;
+            H5VOLProperty(H5VOLProperty&&) = delete;
+            H5VOLProperty& operator=(H5VOLProperty&&) = delete;
 
     void    apply(const hid_t list) const   { H5Pset_vol(list, vol_id, vol_plugin.info); }
 

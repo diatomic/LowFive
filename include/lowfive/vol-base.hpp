@@ -34,6 +34,9 @@ struct VOLBase
         pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, under_vol_id, vol); return x; }
         static void         destroy(pass_through_t* x)
         {
+            if (x->wrapped_previous || x->wrapped_next ||
+                x->vol->wrapped_objects == x)
+                x->vol->untrack_wrapped_object(x);
             x->vol->drop(x->under_object);
             destroy_wrapper(x);
         }
@@ -48,6 +51,8 @@ struct VOLBase
         void*               under_object;
         hid_t               under_vol_id;
         VOLBase*            vol;                                // pointer to this
+        pass_through_t*     wrapped_previous = nullptr;
+        pass_through_t*     wrapped_next = nullptr;
     };
 
     // The pass through VOL wrapper context
@@ -66,7 +71,8 @@ struct VOLBase
                                                                 //     very unfortunate design, but it's the only way I can find to match HDF5 VOL design
     };
 
-    static info_t* info;     // this needs to be static, since in the environment variable case, we need to configure it from _str_to_info
+    // Independently owned live configuration; decoding connector info never replaces it.
+    static info_t* info;
 
     unsigned                version;
     int                     value;
@@ -77,10 +83,14 @@ struct VOLBase
                              // prohibit copy/move ctor and assignment, make
                             // default ctor private
     protected:
+        pass_through_t*     wrapped_objects = nullptr;
+        void                track_wrapped_object(pass_through_t* object);
+        void                untrack_wrapped_object(pass_through_t* object);
+        void                release_wrapped_objects();
                             VOLBase();
     public:
-                            // we delete VOL objects by delete info->vol, so we
-                            // must have virtual destructor
+                            // HDF5 owns the singleton and deletes it at connector termination.
+                            // Derived connectors therefore need a virtual destructor.
                             virtual ~VOLBase();
 
                             VOLBase(const VOLBase&) = delete;
@@ -90,7 +100,7 @@ struct VOLBase
                             VOLBase& operator=(VOLBase&&) = delete;
 
     // only for debugging purposes; shouldn't every have to be used in real code
-    static VOLBase&         create_vol_base()   { auto vol_base = new VOLBase; info->vol = vol_base; return *vol_base; }
+    static VOLBase&         create_vol_base()   { if (!info_t::vol) new VOLBase; return *info_t::vol; }
 
     virtual void            drop(void* p)       {}
 
@@ -186,7 +196,6 @@ struct VOLBase
     virtual herr_t          file_close(void *file, hid_t dxpl_id, void **req);
     static herr_t          _file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req);
     virtual herr_t          file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req);
-    static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t args, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
     static herr_t          _file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req);
     virtual herr_t          file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req);
     static herr_t          _file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
@@ -206,7 +215,6 @@ struct VOLBase
     static herr_t          _group_close(void *obj, hid_t dxpl_id, void **req);
     virtual herr_t          group_close(void *obj, hid_t dxpl_id, void **req);
 
-    static herr_t          _link_create_reissue(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req); // helper function for link_create()
     static herr_t          _link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     virtual herr_t          link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     static herr_t          _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);

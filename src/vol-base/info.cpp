@@ -1,190 +1,118 @@
 #include <lowfive/vol-base.hpp>
-#include <string.h>
-#include <cassert>
-#include <fmt/core.h>
-#include <fmt/ostream.h>
-#include "../log-private.hpp"
+#include <charconv>
+#include <cstring>
+#include <memory>
+#include <stdexcept>
+#include <string_view>
+#include <fmt/format.h>
 
-LowFive::VOLBase::info_t* LowFive::VOLBase::info = NULL;
-LowFive::VOLBase* LowFive::VOLBase::info_t::vol = NULL;
+LowFive::VOLBase::info_t* LowFive::VOLBase::info = nullptr;
+LowFive::VOLBase* LowFive::VOLBase::info_t::vol = nullptr;
 
-/*---------------------------------------------------------------------------
- * Function:    info_copy
- *
- * Purpose:     Duplicate the connector's info object.
- *
- * Returns:     Success:    New connector info object
- *              Failure:    NULL
- *
- *---------------------------------------------------------------------------
- */
-void *
-LowFive::VOLBase::
-_info_copy(const void *_info)
+void*
+LowFive::VOLBase::_info_copy(const void* source)
 {
-    auto log = get_logger();
+    const auto* original = static_cast<const info_t*>(source);
+    auto copy = std::make_unique<info_t>();
+    copy->under_vol_id = original->under_vol_id;
+    copy->under_vol_info = nullptr;
+    if (H5Iinc_ref(copy->under_vol_id) < 0)
+        return nullptr;
+    if (original->under_vol_info &&
+        H5VLcopy_connector_info(copy->under_vol_id, &copy->under_vol_info, original->under_vol_info) < 0)
+    {
+        H5Idec_ref(copy->under_vol_id);
+        return nullptr;
+    }
+    return copy.release();
+}
 
-    const info_t *info = (const info_t *)_info;
-    info_t *new_info;
-
-    log->debug("------- PASS THROUGH VOL INFO Copy");
-
-    log->trace("_info_copy(), info = {}", fmt::ptr(info));
-
-    /* Allocate new VOL info struct for the pass through connector */
-    new_info = (info_t *)calloc(1, sizeof(info_t));
-    new_info->vol = info->vol;
-    new_info->under_vol_info = NULL;
-
-    /* Increment reference count on underlying VOL ID, and copy the VOL info */
-    new_info->under_vol_id = info->under_vol_id;
-    H5Iinc_ref(new_info->under_vol_id);
-    log->trace("VOLBase:_info_copy, inc_ref hid = {}", new_info->under_vol_id);
-    if(info->under_vol_info)
-        H5VLcopy_connector_info(new_info->under_vol_id, &(new_info->under_vol_info), info->under_vol_info);
-
-    return new_info;
-} /* end info_copy() */
-
-/*---------------------------------------------------------------------------
- * Function:    info_free
- *
- * Purpose:     Release an info object for the connector.
- *
- * Note:        Take care to preserve the current HDF5 error stack
- *              when calling HDF5 API calls.
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *---------------------------------------------------------------------------
- */
 herr_t
-LowFive::VOLBase::
-_info_free(void *_info)
+LowFive::VOLBase::_info_free(void* value)
 {
-    auto log = get_logger();
+    auto* owned = static_cast<info_t*>(value);
+    if (!owned)
+        return 0;
+    const hid_t stack = H5Eget_current_stack();
+    herr_t result = 0;
+    if (owned->under_vol_info)
+        result = H5VLfree_connector_info(owned->under_vol_id, owned->under_vol_info);
+    if (H5Idec_ref(owned->under_vol_id) < 0)
+        result = -1;
+    delete owned;
+    H5Eset_current_stack(stack);
+    return result;
+}
 
-    info_t *info = (info_t *)_info;
-    hid_t err_id;
-
-    log->debug("------- PASS THROUGH VOL INFO Free");
-
-    err_id = H5Eget_current_stack();
-
-    /* Release underlying VOL ID and info */
-    if(info->under_vol_info)
-        H5VLfree_connector_info(info->under_vol_id, info->under_vol_info);
-    H5Idec_ref(info->under_vol_id);
-    log->trace("VOLBase::_info_free, dec ref hid = {}", info->under_vol_id);
-
-    H5Eset_current_stack(err_id);
-
-    /* Free pass through info object itself */
-    //if (info != VOLBase::info)
-        free(info);
-
-    return 0;
-} /* end info_free() */
-
-/*---------------------------------------------------------------------------
- * Function:    info_to_str
- *
- * Purpose:     Serialize an info object for this connector into a string
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *---------------------------------------------------------------------------
- */
 herr_t
-LowFive::VOLBase::
-_info_to_str(const void *_info, char **str)
+LowFive::VOLBase::_info_to_str(const void* value, char** text)
 {
-    auto log = get_logger();
-
-    const info_t *info = (const info_t *)_info;
-    H5VL_class_value_t under_value = (H5VL_class_value_t)-1;
-    char *under_vol_string = NULL;
-    size_t under_vol_str_len = 0;
-
-    log->debug("------- PASS THROUGH VOL INFO To String");
-
-    /* Get value and string for underlying VOL connector */
-    H5VLget_value(info->under_vol_id, &under_value);
-    H5VLconnector_info_to_str(info->under_vol_info, info->under_vol_id, &under_vol_string);
-
-    /* Determine length of underlying VOL info string */
-    if(under_vol_string)
-        under_vol_str_len = strlen(under_vol_string);
-
-    /* Allocate space for our info */
-    *str = (char *)H5allocate_memory(32 + under_vol_str_len, (hbool_t)0);
-    assert(*str);
-
-    /* Encode our info
-     * Normally we'd use snprintf() here for a little extra safety, but that
-     * call had problems on Windows until recently. So, to be as platform-independent
-     * as we can, we're using sprintf() instead.
-     */
-    sprintf(*str, "under_vol=%u;under_info={%s}", (unsigned)under_value, (under_vol_string ? under_vol_string : ""));
-
+    *text = nullptr;
+    const auto* configuration = static_cast<const info_t*>(value);
+    H5VL_class_value_t underlying_value;
+    char* underlying_text = nullptr;
+    if (H5VLget_value(configuration->under_vol_id, &underlying_value) < 0 ||
+        H5VLconnector_info_to_str(configuration->under_vol_info, configuration->under_vol_id, &underlying_text) < 0)
+        return -1;
+    std::unique_ptr<char, decltype(&H5free_memory)> release(underlying_text, H5free_memory);
+    const auto serialized = fmt::format("under_vol={};under_info={{{}}}",
+                                       static_cast<unsigned>(underlying_value), underlying_text ? underlying_text : "");
+    *text = static_cast<char*>(H5allocate_memory(serialized.size() + 1, false));
+    if (!*text)
+        return -1;
+    std::memcpy(*text, serialized.c_str(), serialized.size() + 1);
     return 0;
-} /* end info_to_str() */
+}
 
-/*---------------------------------------------------------------------------
- * Function:    str_to_info
- *
- * Purpose:     Deserialize a string into an info object for this connector.
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *---------------------------------------------------------------------------
- */
 herr_t
-LowFive::VOLBase::
-_str_to_info(const char *str, void **_info)
+LowFive::VOLBase::_str_to_info(const char* text, void** result)
 {
-    auto log = get_logger();
-
-    unsigned under_vol_value;
-    const char *under_vol_info_start, *under_vol_info_end;
-    hid_t under_vol_id;
-    void *under_vol_info = NULL;
-
-    log->debug("------- PASS THROUGH VOL INFO String To Info");
-
-    /* Retrieve the underlying VOL connector value and info */
-    sscanf(str, "under_vol=%u;", &under_vol_value);
-    under_vol_id = H5VLregister_connector_by_value((H5VL_class_value_t)under_vol_value, H5P_DEFAULT);
-    under_vol_info_start = strchr(str, '{');
-    under_vol_info_end = strrchr(str, '}');
-    assert(under_vol_info_end > under_vol_info_start);
-    if(under_vol_info_end != (under_vol_info_start + 1)) {
-        char *under_vol_info_str;
-
-        under_vol_info_str = (char *)malloc((size_t)(under_vol_info_end - under_vol_info_start));
-        memcpy(under_vol_info_str, under_vol_info_start + 1, (size_t)((under_vol_info_end - under_vol_info_start) - 1));
-        *(under_vol_info_str + (under_vol_info_end - under_vol_info_start)) = '\0';
-
-        H5VLconnector_str_to_info(under_vol_info_str, under_vol_id, &under_vol_info);
-
-        free(under_vol_info_str);
-    } /* end else */
-
-    info = new info_t;
-
-    // set the class static info
-    info->under_vol_id = under_vol_id;
-    info->under_vol_info = under_vol_info;
-    // NB: info->vol not set because we don't have it;
-    //     it needs to be set before the info starts being copied around
-
-    /* Set return value */
-    *_info = info;
-
-    log->trace("Returning, NB: info->vol not yet set");
-
+    *result = nullptr;
+    if (!text)
+        throw std::invalid_argument("null LowFive connector configuration");
+    std::string_view encoded(text);
+    if (!encoded.empty() && encoded.back() == ';')
+        encoded.remove_suffix(1); // HDF5_VOL_CONNECTOR configurations may end in ';'.
+    constexpr std::string_view prefix = "under_vol=";
+    constexpr std::string_view separator = ";under_info={";
+    const auto split = encoded.find(separator);
+    if (encoded.substr(0, prefix.size()) != prefix || split == std::string_view::npos ||
+        encoded.empty() || encoded.back() != '}')
+        throw std::invalid_argument("invalid LowFive connector configuration");
+    unsigned underlying_value = 0;
+    const char* number_begin = encoded.data() + prefix.size();
+    const char* number_end = encoded.data() + split;
+    const auto number = std::from_chars(number_begin, number_end, underlying_value);
+    if (number.ec != std::errc{} || number.ptr != number_end)
+        throw std::invalid_argument("invalid underlying connector value");
+    const auto payload = encoded.substr(split + separator.size(), encoded.size() - split - separator.size() - 1);
+    size_t depth = 0;
+    for (char character : payload)
+    {
+        if (character == '{') ++depth;
+        else if (character == '}')
+        {
+            if (depth == 0)
+                throw std::invalid_argument("unbalanced underlying connector configuration");
+            --depth;
+        }
+    }
+    if (depth != 0)
+        throw std::invalid_argument("unbalanced underlying connector configuration");
+    // std::string owns the payload and its terminator, including for nested info.
+    const std::string underlying_text(payload);
+    auto configuration = std::make_unique<info_t>();
+    configuration->under_vol_info = nullptr;
+    configuration->under_vol_id = H5VLregister_connector_by_value(
+        static_cast<H5VL_class_value_t>(underlying_value), H5P_DEFAULT);
+    if (configuration->under_vol_id < 0)
+        return -1;
+    if (!payload.empty() && H5VLconnector_str_to_info(underlying_text.c_str(), configuration->under_vol_id,
+                                                    &configuration->under_vol_info) < 0)
+    {
+        H5Idec_ref(configuration->under_vol_id);
+        return -1;
+    }
+    *result = configuration.release();
     return 0;
-} /* end str_to_info() */
+}

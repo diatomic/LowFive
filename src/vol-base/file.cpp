@@ -2,6 +2,16 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include "../log-private.hpp"
+#include <memory>
+
+namespace
+{
+struct PropertyList
+{
+    hid_t id;
+    ~PropertyList() { if (id >= 0) H5Pclose(id); }
+};
+}
 
 
 /*-------------------------------------------------------------------------
@@ -18,46 +28,20 @@ void*
 LowFive::VOLBase::
 _file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
-    auto log = get_logger();
-
-    info_t *info;
-    pass_through_t *file;
-    hid_t under_fapl_id;
-    void *under;
-
-    log->debug("------- PASS THROUGH VOL FILE Create");
-
-    /* Get copy of our VOL info from FAPL */
-    H5Pget_vol_info(fapl_id, (void **)&info);
-
-    log->trace("got vol info: {} with vol {}", fmt::ptr(info), fmt::ptr(info->vol));
-
-    /* Copy the FAPL */
-    under_fapl_id = H5Pcopy(fapl_id);
-
-    /* Set the VOL ID and info for the underlying FAPL */
-    H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
-
-    /* Open the file with the underlying VOL connector */
-    under = info->vol->file_create(name, flags, fcpl_id, under_fapl_id, dxpl_id, req);
-    if(under) {
-        file = new pass_through_t(under, info->under_vol_id, info->vol);
-
-        /* Check for async request */
-        if(req && *req)
-            *req = new pass_through_t(*req, info->under_vol_id, info->vol);
-    } /* end if */
-    else
-        file = NULL;
-
-    /* Close underlying FAPL */
-    H5Pclose(under_fapl_id);
-
-    /* Release copy of our VOL info */
-    _info_free(info);
-
-    return (void *)file;
+    info_t* configuration = nullptr;
+    if (H5Pget_vol_info(fapl_id, reinterpret_cast<void**>(&configuration)) < 0)
+        return nullptr;
+    std::unique_ptr<info_t, decltype(&_info_free)> owned(configuration, _info_free);
+    PropertyList underlying{H5Pcopy(fapl_id)};
+    if (underlying.id < 0 || H5Pset_vol(underlying.id, configuration->under_vol_id, configuration->under_vol_info) < 0)
+        return nullptr;
+    void* object = configuration->vol->file_create(name, flags, fcpl_id, underlying.id, dxpl_id, req);
+    if (!object)
+        return nullptr;
+    auto* file = new pass_through_t(object, configuration->under_vol_id, configuration->vol);
+    if (req && *req)
+        *req = file->create(*req);
+    return file;
 } /* end file_create() */
 
 void*
@@ -81,44 +65,20 @@ void*
 LowFive::VOLBase::
 _file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
-    CALI_CXX_MARK_FUNCTION;
-    auto log = get_logger();
-
-    info_t *info;
-    pass_through_t *file;
-    hid_t under_fapl_id;
-    void *under;
-
-    log->debug("------- PASS THROUGH VOL FILE Open");
-
-    /* Get copy of our VOL info from FAPL */
-    H5Pget_vol_info(fapl_id, (void **)&info);
-
-    /* Copy the FAPL */
-    under_fapl_id = H5Pcopy(fapl_id);
-
-    /* Set the VOL ID and info for the underlying FAPL */
-    H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
-
-    /* Open the file with the underlying VOL connector */
-    under = info->vol->file_open(name, flags, under_fapl_id, dxpl_id, req);
-    if(under) {
-        file = new pass_through_t(under, info->under_vol_id, info->vol);
-
-        /* Check for async request */
-        if(req && *req)
-            *req = new pass_through_t(*req, info->under_vol_id, info->vol);
-    } /* end if */
-    else
-        file = NULL;
-
-    /* Close underlying FAPL */
-    H5Pclose(under_fapl_id);
-
-    /* Release copy of our VOL info */
-    _info_free(info);
-
-    return (void *)file;
+    info_t* configuration = nullptr;
+    if (H5Pget_vol_info(fapl_id, reinterpret_cast<void**>(&configuration)) < 0)
+        return nullptr;
+    std::unique_ptr<info_t, decltype(&_info_free)> owned(configuration, _info_free);
+    PropertyList underlying{H5Pcopy(fapl_id)};
+    if (underlying.id < 0 || H5Pset_vol(underlying.id, configuration->under_vol_id, configuration->under_vol_info) < 0)
+        return nullptr;
+    void* object = configuration->vol->file_open(name, flags, underlying.id, dxpl_id, req);
+    if (!object)
+        return nullptr;
+    auto* file = new pass_through_t(object, configuration->under_vol_id, configuration->vol);
+    if (req && *req)
+        *req = file->create(*req);
+    return file;
 } /* end file_open() */
 
 void*
@@ -152,92 +112,16 @@ _file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void 
 
     log->debug("------- PASS THROUGH VOL FILE Specific");
 
-    // file can be 0, in which case need to be a little careful
-    ret_value = info->vol->file_specific(o ? o->under_object : o, args, dxpl_id, req);
-
-    // DM: not sure why any of this is needed or was here, so commenting it out (also removed file_specific_reissue)
-#if 0
-    /* Unpack arguments to get at the child file pointer when mounting a file */
-    if(specific_type == H5VL_FILE_MOUNT) {
-        H5I_type_t loc_type;
-        const char *name;
-        pass_through_t *child_file;
-        hid_t plist_id;
-
-        /* Retrieve parameters for 'mount' operation, so we can unwrap the child file */
-        loc_type = (H5I_type_t)va_arg(arguments, int); /* enum work-around */
-        name = va_arg(arguments, const char *);
-        child_file = (pass_through_t *)va_arg(arguments, void *);
-        plist_id = va_arg(arguments, hid_t);
-
-        /* Keep the correct underlying VOL ID for possible async request token */
-        //under_vol_id = o->under_vol_id;
-
-        /* Re-issue 'file specific' call, using the unwrapped pieces */
-        ret_value = _file_specific_reissue(o->under_object, o->under_vol_id, specific_type, dxpl_id, req, (int)loc_type, name, child_file->under_object, plist_id);
-    } /* end if */
-    else if(specific_type == H5VL_FILE_IS_ACCESSIBLE || specific_type == H5VL_FILE_DELETE) {
-        info_t *info;
-        hid_t fapl_id, under_fapl_id;
-        const char *name;
-        htri_t *ret;
-
-        /* Get the arguments for the 'is accessible' check */
-        fapl_id = va_arg(arguments, hid_t);
-        name    = va_arg(arguments, const char *);
-        ret     = va_arg(arguments, htri_t *);
-
-        /* Get copy of our VOL info from FAPL */
-        H5Pget_vol_info(fapl_id, (void **)&info);
-
-        /* Copy the FAPL */
-        under_fapl_id = H5Pcopy(fapl_id);
-
-        /* Set the VOL ID and info for the underlying FAPL */
-        H5Pset_vol(under_fapl_id, info->under_vol_id, info->under_vol_info);
-
-        /* Keep the correct underlying VOL ID for possible async request token */
-        //under_vol_id = info->under_vol_id;
-
-        /* Re-issue 'file specific' call */
-        ret_value = _file_specific_reissue(NULL, info->under_vol_id, specific_type, dxpl_id, req, under_fapl_id, name, ret);
-
-        /* Close underlying FAPL */
-        H5Pclose(under_fapl_id);
-
-        /* Release copy of our VOL info */
-        _info_free(info);
-    } /* end else-if */
-    else {
-        va_list my_arguments;
-
-        /* Make a copy of the argument list for later, if reopening */
-        if(specific_type == H5VL_FILE_REOPEN)
-            va_copy(my_arguments, arguments);
-
-        /* Keep the correct underlying VOL ID for possible async request token */
-        //under_vol_id = o->under_vol_id;
-
-        ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
-
-        /* Wrap file struct pointer, if we reopened one */
-        if(specific_type == H5VL_FILE_REOPEN) {
-            if(ret_value >= 0) {
-                void      **ret = va_arg(my_arguments, void **);
-
-                if(ret && *ret)
-                    *ret = o->create(*ret);
-            } /* end if */
-
-            /* Finish use of copied vararg list */
-            va_end(my_arguments);
-        } /* end if */
-    } /* end else */
-#endif
+    auto* plugin = o ? o->vol : info_t::vol;
+    if (!plugin)
+        return -1;
+    ret_value = plugin->file_specific(o ? o->under_object : nullptr, args, dxpl_id, req);
+    if (ret_value >= 0 && args->op_type == H5VL_FILE_REOPEN && args->args.reopen.file && *args->args.reopen.file)
+        *args->args.reopen.file = o->create(*args->args.reopen.file);
 
     /* Check for async request */
     if(req && *req)
-        *req = o->create(*req);
+        *req = new pass_through_t(*req, o ? o->under_vol_id : info->under_vol_id, plugin);
 
     return ret_value;
 } /* end _file_specific() */
@@ -383,38 +267,4 @@ file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
     return H5VLfile_optional(file, info->under_vol_id, args, dxpl_id, req);
 }
-
-// AN: commented out, as the calling part in file_specific was commented out
-#if 0
-/*-------------------------------------------------------------------------
- * Function:    pass_through_file_specific_reissue
- *
- * Purpose:     Re-wrap vararg arguments into a va_list and reissue the
- *              file specific callback to the underlying VOL connector.
- *
- * Return:      Success:    0
- *              Failure:    -1
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-LowFive::VOLBase::
-_file_specific_reissue(void *obj, hid_t connector_id,
-        H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, ...)
-{
-    throw std::runtime_error("not implemented");
-    // TODO: is this right? making a new object from the reissued one?
-    pass_through_t *o = (pass_through_t *)obj;
-
-    va_list arguments;
-    herr_t ret_value;
-
-    va_start(arguments, req);
-    // TODO: is this right? making a new object from the reissued one?
-//    ret_value = o->vol->file_specific(o->under_object, specific_type, dxpl_id, req, arguments);
-    va_end(arguments);
-
-    return ret_value;
-} /* end _file_specific_reissue() */
-#endif
 

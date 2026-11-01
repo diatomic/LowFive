@@ -10,6 +10,10 @@ function(lowfive_test target source)
 endfunction()
 
 lowfive_test(lowfive-api api.cpp memory file dual native)
+lowfive_test(lowfive-base base.cpp
+    hard hard-same-dst hard-same-src copy-same-dst copy-same-src move-same-dst move-same-src
+    reopen-native exceptions property-lifetime info-independent
+    info-nested info-malformed singleton)
 
 add_library                 (producer-multidata-test SHARED ../examples/prod-con-multidata/producer-multidata.cpp)
 target_link_libraries       (producer-multidata-test ${libraries})

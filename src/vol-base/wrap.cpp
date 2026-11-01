@@ -103,7 +103,11 @@ _wrap_object(void *obj, H5I_type_t obj_type, void *_wrap_ctx)
     /* Wrap the object with the underlying VOL */
     under = wrap_ctx->vol->wrap_object(obj, obj_type, wrap_ctx->under_wrap_ctx);
     if(under)
-        new_obj = new pass_through_t(under, wrap_ctx->under_vol_id, wrap_ctx->vol);
+    {
+        new_obj = new pass_through_t(
+            under, wrap_ctx->under_vol_id, wrap_ctx->vol);
+        wrap_ctx->vol->track_wrapped_object(new_obj);
+    }
     else
         new_obj = NULL;
 
@@ -143,7 +147,10 @@ _unwrap_object(void *obj)
     under = o->vol->unwrap_object(o->under_object);
 
     if(under)
+    {
+        o->vol->untrack_wrapped_object(o);
         pass_through_t::destroy_wrapper(o);
+    }
 
     return under;
 } /* end unwrap_object() */
