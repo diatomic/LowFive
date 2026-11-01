@@ -118,21 +118,21 @@ target_link_libraries       (prod-con-multidata-test    ${libraries})
 foreach                     (p 6 7 8)
     add_test                (NAME prod-con-multidata-no-shared-metadata-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
-                            consumer-multidata-test.hx 1 0 0) # 1 0 0: memory file shared
+                            consumer-multidata-test.hx 1 0 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 1 0 0: memory file shared
 endforeach()
 
 # space partitioning communicating through a file
 foreach                     (p 6 7 8)
     add_test                (NAME prod-con-multidata-no-shared-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
-                            consumer-multidata-test.hx 0 1 0) # 0 1 0: memory file shared
+                            consumer-multidata-test.hx 0 1 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 0 1 0: memory file shared
 endforeach()
 
 # space partitioning communicating through metadata but also writing a file
 foreach                     (p 6 7 8)
     add_test                (NAME prod-con-multidata-no-shared-metadata-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p} producer-multidata-test.hx
-                            consumer-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
+                            consumer-multidata-test.hx 1 1 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 1 1 0: memory file shared
 endforeach()
 
 # Space sharing currently broken everywhere
@@ -171,21 +171,21 @@ target_link_libraries       (prod-2cons-multidata-test    ${libraries})
 foreach                     (p 6 7 8)
     add_test                (NAME prod-2cons-multidata-no-shared-metadata-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 0 0) # 1 0 0: memory file shared
+                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 0 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 1 0 0: memory file shared
 endforeach()
 
 # space partitioning communicating through a file
 foreach                     (p 6 7 8)
     add_test                (NAME prod-2cons-multidata-no-shared-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 0 1 0) # 0 1 0: memory file shared
+                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 0 1 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 0 1 0: memory file shared
 endforeach()
 
 # space partitioning communicating through metadata but also writing a file
 foreach                     (p 6 7 8)
     add_test                (NAME prod-2cons-multidata-no-shared-metadata-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-prod-2cons.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
+                            producer-multidata-test.hx consumer1-multidata-test.hx consumer2-multidata-test.hx 1 1 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 1 1 0: memory file shared
 endforeach()
 
 # Space sharing currently broken everywhere
@@ -224,21 +224,21 @@ target_link_libraries       (2prods-con-multidata-test    ${libraries})
 foreach                     (p 6 7 8)
     add_test                (NAME 2prods-con-multidata-no-shared-metadata-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 0 0) # 1 0 0: memory file shared
+                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 0 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 1 0 0: memory file shared
 endforeach()
 
 # space partitioning communicating through a file
 foreach                     (p 6 7 8)
     add_test                (NAME 2prods-con-multidata-no-shared-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 0 1 0) # 0 1 0: memory file shared
+                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 0 1 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 0 1 0: memory file shared
 endforeach()
 
 # space partitioning communicating through metadata but also writing a file
 foreach                     (p 6 7 8)
     add_test                (NAME 2prods-con-multidata-no-shared-metadata-file-p${p}
                             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test-2prods-con.sh ${CMAKE_CURRENT_BINARY_DIR} ${p}
-                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 1 0) # 1 1 0: memory file shared
+                            producer1-multidata-test.hx producer2-multidata-test.hx consumer-multidata-test.hx 1 1 0 ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_PREFLAGS}) # 1 1 0: memory file shared
 endforeach()
 
 # Space sharing currently broken everywhere

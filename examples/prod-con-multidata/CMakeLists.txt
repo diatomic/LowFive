@@ -41,9 +41,7 @@ if                          (lowfive_install_examples)
                             producer-multidata producer1-multidata producer2-multidata
                             consumer-multidata consumer1-multidata consumer2-multidata
                             DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/prod-con-multidata/
-                            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                            GROUP_READ GROUP_WRITE GROUP_EXECUTE
-                            WORLD_READ WORLD_WRITE WORLD_EXECUTE)
+                            )
 endif                       ()
 
 add_executable              (prod-metadata-only prod-metadata-only.cpp)

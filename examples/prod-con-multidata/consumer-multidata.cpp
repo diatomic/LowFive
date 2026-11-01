@@ -128,9 +128,11 @@ void consumer_f (communicator& local, const std::vector<communicator>& intercomm
     // get global number of particles
     size_t global_num_points;
     {
-        std::vector<hsize_t> min_(1), max_(1);
-        H5Sget_select_bounds(dspace_particles, min_.data(), max_.data());
-        global_num_points = max_[0] + 1;
+        hsize_t dims[2];
+        if (H5Sget_simple_extent_ndims(dspace_particles) != 2 ||
+            H5Sget_simple_extent_dims(dspace_particles, dims, nullptr) < 0)
+            throw std::runtime_error("Invalid particle dataspace");
+        global_num_points = dims[0];
     }
     fmt::print(stderr, "Global num points: {}\n", global_num_points);
 

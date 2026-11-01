@@ -2,6 +2,8 @@
 
 #include    <vector>
 #include    <cassert>
+#include    <stdexcept>
+#include    <string>
 #include    <diy/types.hpp>
 #include    <diy/point.hpp>
 #include    <diy/log.hpp>
@@ -256,31 +258,32 @@ struct PointBlock
 
         if (status < 0)
             fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+        bool success = status >= 0;
 
         // memspace = simple count from bounds
         hid_t memspace = H5Screate_simple (DIM, &bounds_cnts[0], NULL);
-        status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_grid[0]);
+        status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, read_grid.data());
 
         if (status < 0)
             fmt::print("Error in H5Dread: status = {}", status);
 
         // check that the values match
-        bool success = true;
-        for (size_t i = 0; i < grid.size(); ++i)
+        success = status >= 0 && success;
+        for (size_t i = 0; success && i < grid.size(); ++i)
         {
             if (grid[i] != read_grid[i])
             {
                 success = false;
                 fmt::print(stderr, "Error: grid[{}] = {} but does not match read_grid[{}] = {}\n", i, grid[i], i, read_grid[i]);
-//                 exit(0);
             }
         }
 
-        status = H5Sclose(filespace);
-        status = H5Sclose(memspace);
+        success = H5Sclose(filespace) >= 0 && success;
+        success = H5Sclose(memspace) >= 0 && success;
 
-        if (success)
-            fmt::print(stderr, "read_block_grid() gid {} success.\n", cp.gid());
+        if (!success)
+            throw std::runtime_error("read_block_grid() failed for gid " + std::to_string(cp.gid()));
+        fmt::print(stderr, "read_block_grid() gid {} success.\n", cp.gid());
     }
 
     // read the block particle data in parallel to an HDF5 file using native HDF5 API
@@ -311,39 +314,37 @@ struct PointBlock
 
         if (status < 0)
             fmt::print("Error in H5Sselect_hyperslab: status = {}", status);
+        bool success = status >= 0;
 
         // memspace = simple local number of particles
         hid_t memspace = H5Screate_simple (2, &core_cnts[0], NULL);
-        status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, &read_points[0]);
+        status = H5Dread(dset, H5T_NATIVE_FLOAT, memspace, filespace, H5P_DEFAULT, read_points.data());
 
         if (status < 0)
             fmt::print("Error in H5Dread: status = {}", status);
 
         // check that the values match
-        bool success = true;
-        for (size_t i = 0; i < read_points.size(); ++i)
+        success = status >= 0 && success;
+        for (size_t i = 0; success && i < read_points.size(); ++i)
         {
             for (auto j = 0; j < static_cast<decltype(j)>(DIM); j++)
             {
-                float min_val = cp.gid() * (global_num_pts / global_num_blks);
-                float max_val = min_val + read_points.size() - 1;
-                if (read_points[i][j] < min_val || read_points[i][j] > max_val)
+                const float expected = static_cast<float>(ofst[0] + i);
+                if (read_points[i][j] != expected)
                 {
-                    fmt::print(stderr, "Error: for gid {}, read_points[{}] = {} < {} or > {}\n", cp.gid(), i, read_points[i], min_val, max_val);
+                    fmt::print(stderr, "Error: for gid {}, read_points[{}][{}] = {} but expected {}\n",
+                               cp.gid(), i, j, read_points[i][j], expected);
                     success = false;
-//                     exit(0);
                 }
             }
         }
 
-        status = H5Sclose(filespace);
-        status = H5Sclose(memspace);
+        success = H5Sclose(filespace) >= 0 && success;
+        success = H5Sclose(memspace) >= 0 && success;
 
-        if (status < 0)
-            fmt::print("Error in H5Sclose: status = {}", status);
-
-        if (success)
-            fmt::print("read_block_points() gid {} success.\n", cp.gid());
+        if (!success)
+            throw std::runtime_error("read_block_points() failed for gid " + std::to_string(cp.gid()));
+        fmt::print("read_block_points() gid {} success.\n", cp.gid());
     }
 
     // block data
