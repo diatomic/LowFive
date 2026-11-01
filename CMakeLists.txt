@@ -26,7 +26,23 @@ if                          (NOT CMAKE_BUILD_TYPE)
 endif                       (NOT CMAKE_BUILD_TYPE)
 
 # MPI
-if                          (NOT wrapped_mpi)
+if                          (wrapped_mpi)
+    if                      (NOT MPIEXEC_EXECUTABLE)
+        get_filename_component (_mpi_wrapper_dir "${CMAKE_C_COMPILER}" DIRECTORY)
+        find_program        (_mpi_wrapper_launcher NAMES mpiexec mpirun
+                             PATHS "${_mpi_wrapper_dir}" NO_DEFAULT_PATH)
+        if                  (_mpi_wrapper_launcher)
+            set             (MPIEXEC_EXECUTABLE "${_mpi_wrapper_launcher}" CACHE FILEPATH
+                             "Executable for running MPI programs")
+        else                ()
+            find_program    (MPIEXEC_EXECUTABLE NAMES mpiexec mpirun REQUIRED)
+        endif               ()
+    endif                   ()
+    if                      (NOT MPIEXEC_NUMPROC_FLAG)
+        set                 (MPIEXEC_NUMPROC_FLAG "-n" CACHE STRING
+                             "Flag used by MPI to specify the number of processes")
+    endif                   ()
+else                        ()
     find_package            (MPI REQUIRED)
     set                     (libraries MPI::MPI_C)
 endif                       ()

@@ -192,4 +192,6 @@ LowFive::rpc::client::destroy(int target, size_t id)
     diy::save(out, id);
 
     send(comm_, target, tags::consumer, out);
+    diy::MemoryBuffer in;
+    recv(comm_, target, tags::producer, in);
 }

@@ -91,6 +91,8 @@ struct IndexedDataset
             if (y.file.intersects(fs))
             {
                 Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   fs.id), true);
+                if (H5Sget_select_npoints(file_src.id) == 0)
+                    continue;
                 Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, fs.id), true);
                 CALI_MARK_BEGIN("diy::save");
                 diy::save(queue, file_src);

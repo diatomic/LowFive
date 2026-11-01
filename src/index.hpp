@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <unordered_set>
 
 #include "index-query.hpp"
 
@@ -17,6 +18,7 @@ struct Index: public IndexQuery
 {
     using Files = MetadataVOL::Files;
     using Datasets = std::map<std::string, Dataset*>;
+    using Objects = std::unordered_set<Object*>;
 
     // producer version of the constructor
                         Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, MetadataVOL* vol, bool perform_indexing=true, std::set<std::string> noncollective_datasets = std::set<std::string>());
@@ -34,7 +36,8 @@ struct Index: public IndexQuery
     static void         print(int rank, const BoxLocations& boxes);
 
     Datasets            find_datasets(File* f);
-    void                find_datasets(Object* o, std::string name, Datasets& result);
+    void                find_datasets(Object* o, std::string name, Datasets& result,
+                                      Objects& visited);
 
     IndexServe          idx_srv;
     size_t              indexed_datasets = 0;

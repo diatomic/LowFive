@@ -10,6 +10,51 @@
 
 namespace LowFive {
 
+RemoteFile::RemoteFile(DistMetadataVOL& vol_, const File& f,
+                       rpc::client::object&& remote, std::unique_ptr<Query>&& q):
+    File(f),
+    RemoteObject(std::move(remote)),
+    vol(vol_),
+    query_(std::move(q))
+{
+    ++vol.remote_file_counts_[query_->intercomm_index];
+}
+
+RemoteFile::~RemoteFile()
+{
+    // Child RPC objects must be released while this file still owns their client.
+    auto release = [](std::vector<Object*>& objects)
+    {
+        for (auto* object : objects)
+        {
+            object->parent = nullptr;
+            delete object;
+        }
+        objects.clear();
+    };
+    release(children);
+    release(unlinked);
+
+    obj.call<void>("file_close");
+    MPI_Comm connection = comm != MPI_COMM_NULL ? comm : vol.local;
+    MPI_Barrier(connection);
+
+    auto session = vol.remote_file_counts_.find(query_->intercomm_index);
+    assert(session != vol.remote_file_counts_.end() && session->second > 0);
+    if (--session->second == 0)
+    {
+        vol.remote_file_counts_.erase(session);
+        int rank;
+        MPI_Comm_rank(connection, &rank);
+        if (rank == 0)
+            query_->c.finish(0);
+    }
+
+    obj.destroy();
+    if (comm != MPI_COMM_NULL)
+        MPI_Comm_free(&comm);
+}
+
 DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_):
     DistMetadataVOL(local_, communicators { std::move(intercomm_) })
 {
@@ -113,31 +158,66 @@ void
 DistMetadataVOL::
 make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath)
 {
-    Object* mdata_obj = (Object*) result->mdata_obj;
-    Dataset* dset = dynamic_cast<Dataset*>(mdata_obj);
+    auto* original = static_cast<Object*>(result->mdata_obj);
+    if (dynamic_cast<RemoteDataset*>(original))
+        return;
+    auto* dset = dynamic_cast<Dataset*>(original);
+    log_assert(dset, "Object ({},{}) must be a dataset", filepath.first, original->name);
 
     auto log = get_logger();
     log->trace("Changing Dataset to RemoteDataset");
 
-    Object* f = mdata_obj->find_root();
-    RemoteFile* rf = dynamic_cast<RemoteFile*>(f);
-    log_assert(rf, "Root ({},{}) must be a remote file", filepath.first, f->name);
+    auto* rf = dynamic_cast<RemoteFile*>(original->find_root());
+    log_assert(rf, "Root ({},{}) must be a remote file", filepath.first,
+               original->find_root()->name);
 
     auto ds_obj = rf->obj.call<rpc::client::object>("dataset_open", filepath.second);
 
-    // assume we are the consumer, since nothing stored in memory (open also implies that)
-    auto* ds = new RemoteDataset(mdata_obj->name, std::move(ds_obj));     // build and record the index to be used in read
+    // Assume we are the consumer, since nothing is stored in memory.
+    auto* ds = new RemoteDataset(original->name, std::move(ds_obj), std::move(filepath));
     ds->token = dset->token;
     ds->dcpl = dset->dcpl;
     ds->dapl = dset->dapl;
-    auto it = std::find(mdata_obj->parent->children.begin(), mdata_obj->parent->children.end(), dset);
-    assert(it != mdata_obj->parent->children.end() && *it == dset);
-    *it = ds;
-    ds->parent = mdata_obj->parent;
-    mdata_obj->parent = nullptr;
-    ds->move_children(mdata_obj);
-    result->mdata_obj = ds;
-    delete mdata_obj;
+    ds->extra = dset->extra;
+    dset->extra = nullptr;
+
+    Object* parent = original->parent;
+    if (parent)
+    {
+        auto it = std::find(parent->children.begin(), parent->children.end(), original);
+        assert(it != parent->children.end());
+        *it = ds;
+    }
+    else
+    {
+        auto it = std::find(rf->unlinked.begin(), rf->unlinked.end(), original);
+        assert(it != rf->unlinked.end());
+        *it = ds;
+    }
+    ds->parent = parent;
+    ds->set_root(rf);
+    original->parent = nullptr;
+    ds->move_children(original);
+
+    auto retarget_links = [&](Object* object, auto&& retarget_links_ref) -> void
+    {
+        if (auto* link = dynamic_cast<HardLink*>(object);
+            link && link->target == original)
+            link->target = ds;
+        for (auto* child : object->children)
+            retarget_links_ref(child, retarget_links_ref);
+    };
+    retarget_links(rf, retarget_links);
+    for (auto* object : rf->unlinked)
+        retarget_links(object, retarget_links);
+    for (auto* pointer : our_objects)
+    {
+        auto* wrapped = static_cast<ObjectPointers*>(pointer);
+        if (wrapped->mdata_obj == original)
+            wrapped->mdata_obj = ds;
+    }
+
+    delete original;
 }
 
 void*
@@ -148,17 +228,35 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     log->trace("enter DistMetadataVOL::object_open");
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
+    std::pair<std::string, std::string> requested_path;
+    bool has_requested_path = false;
+    auto* location = obj_ ? static_cast<Object*>(obj_->mdata_obj) : nullptr;
+    if (location && loc_params->type == H5VL_OBJECT_BY_NAME)
+    {
+        requested_path = location->fullname(loc_params->loc_data.loc_by_name.name);
+        has_requested_path = true;
+    }
+    else if (location && loc_params->type == H5VL_OBJECT_BY_IDX)
+    {
+        auto link = location->locate_link(*loc_params);
+        if (link.obj && link.path.empty())
+        {
+            requested_path = link.obj->fullname();
+            has_requested_path = true;
+        }
+    }
+
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::object_open(obj, loc_params, opened_type, dxpl_id, req);
+    if (!result)
+        return nullptr;
 
     Object* mdata_obj = (Object*) result->mdata_obj;
-    if (mdata_obj)
+    if (auto* dataset = dynamic_cast<Dataset*>(mdata_obj);
+        dataset && dataset->is_memory && RemoteObject::query(mdata_obj))
     {
-        auto filepath = mdata_obj->fullname();
-        if (match_any(filepath,memory))
-        {
-            if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
-                make_remote_dataset(result, filepath);
-        }
+        auto filepath = has_requested_path ? requested_path :
+                                             mdata_obj->fullname();
+        make_remote_dataset(result, filepath);
     }
 
     return (void*) result;
@@ -173,6 +271,8 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     ObjectPointers* obj_ = (ObjectPointers*) obj;
     ObjectPointers* result = (ObjectPointers*) MetadataVOL::dataset_open(obj, loc_params, name, dapl_id, dxpl_id, req);
+    if (!result)
+        return nullptr;
     log->trace("Opening dataset (dist): {} {} {}", name, fmt::ptr(result->mdata_obj), fmt::ptr(result->h5_obj));
 
     // trace object back to root to build full path and file name
@@ -181,18 +281,10 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
 
     log->trace("Opening dataset: {} {} {}", name, filepath.first, filepath.second);
 
-    if (match_any(filepath,memory))
-    {
-        Object* mdata_obj = (Object*) result->mdata_obj;
-
-        log->trace("Checking if Dataset: {}", fmt::ptr(mdata_obj));
-
-        // Dataset that really should be RemoteDataset
-        if (dynamic_cast<Dataset*>(mdata_obj) && RemoteObject::query(mdata_obj))
-            make_remote_dataset(result, filepath);
-
-        //log_assert(dynamic_cast<RemoteDataset*>((Object*) result->mdata_obj), "Object must be a RemoteDataset");
-    }
+    Object* mdata_obj = (Object*) result->mdata_obj;
+    if (auto* dataset = dynamic_cast<Dataset*>(mdata_obj);
+        dataset && dataset->is_memory && RemoteObject::query(mdata_obj))
+        make_remote_dataset(result, filepath);
 
     return (void*)result;
 }
@@ -209,13 +301,41 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     RemoteDataset* ds = dynamic_cast<RemoteDataset*>((Object*) dset_->mdata_obj);
     if (ds)
     {
-        // consumer with the name of a remote dataset: query to producer
+        Hid file_extent(file_space_id == H5S_ALL ? H5Scopy(ds->space.id) : 0, true);
         if (file_space_id == H5S_ALL)
-            file_space_id = ds->space.id;
+        {
+            if (file_extent.id < 0 || H5Sselect_all(file_extent.id) < 0)
+                return -1;
+            file_space_id = file_extent.id;
+        }
         if (mem_space_id == H5S_ALL)
-            mem_space_id = ds->space.id;
+            mem_space_id = file_space_id;
+
+        const hssize_t count = H5Sget_select_npoints(file_space_id);
+        if (count < 0 || H5Sget_select_npoints(mem_space_id) != count ||
+            H5Sselect_valid(file_space_id) <= 0 || H5Sselect_valid(mem_space_id) <= 0)
+            return -1;
+        if (count == 0)
+            return 0;
+        if (!buf)
+            return -1;
+
+        const int rank = H5Sget_simple_extent_ndims(ds->space.id);
+        if (rank < 0 || H5Sget_simple_extent_ndims(file_space_id) != rank)
+            return -1;
+        if (rank)
+        {
+            std::vector<hsize_t> dims(rank), lower(rank), upper(rank);
+            if (H5Sget_simple_extent_dims(ds->space.id, dims.data(), nullptr) < 0 ||
+                H5Sget_select_bounds(file_space_id, lower.data(), upper.data()) < 0)
+                return -1;
+            for (int i = 0; i < rank; ++i)
+                if (upper[i] >= dims[i])
+                    return -1;
+        }
+
         CALI_MARK_BEGIN("dist_metadata_vol_dataset_read_query");
-        ds->query(Dataspace(file_space_id), Dataspace(mem_space_id), buf);
+        ds->query(Datatype(mem_type_id), Dataspace(file_space_id), Dataspace(mem_space_id), buf);
         CALI_MARK_END("dist_metadata_vol_dataset_read_query");
     } else if (dynamic_cast<Dataset*>((Object*) dset_->mdata_obj))
     {
@@ -293,31 +413,44 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
 
     auto* hff = static_cast<File*>(hf);
     if (hff->copy_whole) {
-        query->c.finish(0);
+        if (remote_file_counts_.find(intercomm_index) == remote_file_counts_.end())
+            query->c.finish(0);
         files.emplace(name, hff);
         result_mdata = hff;
     } else {
         rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
 
         log->trace("Creating remote");
-        RemoteFile* f = new RemoteFile(*hff, std::move(rf), std::move(query));
+        RemoteFile* f = new RemoteFile(*this, *hff, std::move(rf), std::move(query));
         files.emplace(name, f);
         result_mdata = f;
 
-        f->comm = MPI_COMM_NULL;
         if (H5Pget_driver(fapl_id) == H5FD_MPIO)
         {
-            MPI_Comm comm; MPI_Info info;
-            H5Pget_fapl_mpio(fapl_id, &comm, &info);
-            f->comm = comm;
+            MPI_Info info = MPI_INFO_NULL;
+            if (H5Pget_fapl_mpio(fapl_id, &f->comm, &info) < 0)
+                throw MetadataError("Cannot retrieve remote file MPI driver properties");
+            if (info != MPI_INFO_NULL)
+                MPI_Info_free(&info);
         }
 
-        // move the hierarchy over and delete the plain File object hf
+        // Move the hierarchy over and delete the plain File object.
         f->move_children(hf);
+        f->unlinked = std::move(hff->unlinked);
+        for (auto* object : f->unlinked)
+            object->set_root(f);
         delete hf;
     }
 
     ObjectPointers* result = (ObjectPointers*)MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
+    if (!result)
+    {
+        auto entry = files.find(name);
+        if (entry != files.end() && entry->second == result_mdata)
+            files.erase(entry);
+        delete static_cast<Object*>(result_mdata);
+        return nullptr;
+    }
     // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
     delete dynamic_cast<DummyFile*>((Object*)result->mdata_obj);
 
@@ -354,30 +487,8 @@ file_close(void *file, hid_t dxpl_id, void **req)
         file_->h5_obj = nullptr;    // this makes sure that the recursive call below won't trigger VOLBase::file_close() again
     }
 
-    if (RemoteFile* f = dynamic_cast<RemoteFile*>((Object*) file_->mdata_obj))
-    {
-        log->trace("DistMetadataVOL::file_close, remote file {}", f->name);
-        f->obj.call<void>("file_close");
-
-        MPI_Comm local_;
-        if (f->comm != MPI_COMM_NULL)
-            local_ = f->comm;
-        else
-            local_ = local;
-        MPI_Barrier(local_);
-        int rank; MPI_Comm_rank(local_, &rank);
-        bool root = rank == 0;
-        if (root)
-        {
-            log->debug("Calling finish");
-            f->obj.self_->finish(0);
-        }
-
-        files.erase(f->name);
-        log->trace("DistMetadataVOL::file_close delete {}", fmt::ptr(f));
-        delete f;       // erases all the children too
-        file_->mdata_obj = nullptr;
-    } else if (File* f = dynamic_cast<File*>((Object*) file_->mdata_obj))
+    File* f = dynamic_cast<File*>((Object*) file_->mdata_obj);
+    if (f && !dynamic_cast<RemoteFile*>(f))
     {
         log->trace("DistMetadataVOL::file_close, local file {}", f->name);
 //         f->print();

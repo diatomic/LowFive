@@ -26,28 +26,12 @@ struct RemoteObject
 
 struct RemoteFile: public File, public RemoteObject
 {
-    MPI_Comm comm;
+    MPI_Comm comm = MPI_COMM_NULL;
 
-    RemoteFile(const File& f, rpc::client::object&& obj, std::unique_ptr<Query>&& q):
-        File(f),
-        RemoteObject(std::move(obj)),
-        query_(std::move(q))
-    {}
+    RemoteFile(DistMetadataVOL& vol, const File& f, rpc::client::object&& obj, std::unique_ptr<Query>&& q);
+    ~RemoteFile();
 
-    ~RemoteFile()
-    {
-        // RemoteFile needs to delete children before query_, so their obj get destroyed
-        // So it's not enough to do this via ~Object
-
-        for (auto* child : children)
-        {
-            child->parent = nullptr;    // to skip remove() in child
-            delete child;
-        }
-        children.clear();
-
-        obj.destroy();                  // must destroy our obj before query_
-    }
+    DistMetadataVOL& vol;
 
     std::unique_ptr<Query> query_;
 };
@@ -59,10 +43,13 @@ struct RemoteDataset : public Dataset, public RemoteObject
 
     int                             dim;
     Decomposer                      decomposer { 1, Bounds { { 0 }, { 1} }, 1 };        // dummy to be overwritten
+    std::pair<std::string, std::string> remote_path;
 
-            RemoteDataset(std::string name, rpc::client::object&& obj):
+            RemoteDataset(std::string name, rpc::client::object&& obj,
+                          std::pair<std::string, std::string> remote_path_):
                 Dataset(name, 0, 0, Ownership::lowfive, 0, 0, false, true),
-                RemoteObject(std::move(obj))
+                RemoteObject(std::move(obj)),
+                remote_path(std::move(remote_path_))
     {
         auto log = get_logger();
 
@@ -70,9 +57,10 @@ struct RemoteDataset : public Dataset, public RemoteObject
         std::tie(dim, type, space, decomposer) = obj.call<std::tuple<int, Datatype, Dataspace, Decomposer>>("metadata");
     }
 
-    void                query(const Dataspace&                     file_space,      // input: query in terms of file space
-                              const Dataspace&                     mem_space,       // ouput: memory space of resulting data
-                              void*                                buf);            // output: resulting data, allocated by caller
+    void                query(const Datatype&                      mem_type,
+                              const Dataspace&                     file_space,
+                              const Dataspace&                     mem_space,
+                              void*                                buf);
 };
 
 }
@@ -81,10 +69,8 @@ LowFive::Query*
 LowFive::RemoteObject::
 query(Object* o)
 {
-    Object* cur = o;
-    while (cur && !dynamic_cast<RemoteFile*>(cur))
-        cur = cur->parent;
-    if (!cur)
+    if (!o)
         return nullptr;
-    return dynamic_cast<RemoteFile*>(cur)->query_.get();
+    auto* file = dynamic_cast<RemoteFile*>(o->find_root());
+    return file ? file->query_.get() : nullptr;
 }

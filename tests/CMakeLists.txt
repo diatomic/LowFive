@@ -54,6 +54,31 @@ lowfive_test(lowfive-callbacks callbacks.cpp
     reference-zero-copy-alias
     vlen-zero-copy-alias soft-link-cross-file)
 
+function(lowfive_mpi_cases target)
+    foreach(case ${ARGN})
+        add_test(NAME ${target}-${case}
+                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+                         $<TARGET_FILE:${target}> ${MPIEXEC_POSTFLAGS} ${case})
+        set_tests_properties(${target}-${case} PROPERTIES TIMEOUT 30 PROCESSORS 2 LABELS mpi)
+    endforeach()
+endfunction()
+function(lowfive_mpi_test target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE ${libraries})
+    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    lowfive_mpi_cases(${target} ${ARGN})
+endfunction()
+lowfive_mpi_test(lowfive-distributed distributed.cpp
+    contents repeated-open object-open conversion memory-all irregular multifile bounds
+    empty mpio-resources missing native-missing hard-link-replace hard-link-serialized
+    object-hard-link-serialized remote-unlinked-alias hard-link-parent-relative
+    object-alias-policy)
+lowfive_mpi_test(lowfive-rpc rpc.cpp destroy-first destroy-second)
+set(lowfive_saved_mpi_postflags ${MPIEXEC_POSTFLAGS})
+set(MPIEXEC_POSTFLAGS --lowfive-mpi-postflag)
+lowfive_mpi_cases(lowfive-distributed postflag-order)
+set(MPIEXEC_POSTFLAGS ${lowfive_saved_mpi_postflags})
+
 add_library                 (producer-multidata-test SHARED ../examples/prod-con-multidata/producer-multidata.cpp)
 target_link_libraries       (producer-multidata-test ${libraries})
 set_target_properties       (producer-multidata-test PROPERTIES PREFIX "")

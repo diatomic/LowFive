@@ -1,0 +1,295 @@
+#include "test.hpp"
+#include <lowfive/vol-dist-metadata.hpp>
+#include <array>
+#include <algorithm>
+
+namespace
+{
+int copies = 0;
+int copy_comm(MPI_Comm, int, void*, void* attribute, void* output, int* flag)
+{
+    *static_cast<void**>(output) = attribute;
+    *flag = 1;
+    ++copies;
+    return MPI_SUCCESS;
+}
+int delete_comm(MPI_Comm, int, void*, void*) { --copies; return MPI_SUCCESS; }
+
+void select(hid_t space, hsize_t start, hsize_t count, hsize_t stride = 1)
+{
+    CHECK(H5Sselect_hyperslab(space, H5S_SELECT_SET, &start, &stride, &count, nullptr) >= 0);
+}
+
+void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm intercomm)
+{
+    auto& vol = LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm);
+    vol.serve_on_close = false;
+    vol.keep = rank == 0;
+    const std::string first = "distributed-" + name + "-a.h5";
+    const std::string second = "distributed-" + name + "-b.h5";
+    vol.set_memory(first, name == "object-alias-policy" ? "/values" : "*");
+    vol.set_memory(second, "*");
+    vol.set_intercomm(first, "*", 0);
+    if (name == "native-missing")
+        vol.set_passthru(first, "*");
+    vol.set_intercomm(second, "*", 0);
+    const hid_t connector = vol.register_plugin();
+    test::Id fapl(H5Pcreate(H5P_FILE_ACCESS), H5Pclose);
+    int key = MPI_KEYVAL_INVALID;
+    if (name == "mpio-resources")
+    {
+        CHECK(MPI_Comm_create_keyval(copy_comm, delete_comm, &key, nullptr) == MPI_SUCCESS);
+        CHECK(MPI_Comm_set_attr(local, key, &copies) == MPI_SUCCESS);
+        copies = 1;
+        MPI_Info info;
+        CHECK(MPI_Info_create(&info) == MPI_SUCCESS);
+        CHECK(MPI_Info_set(info, "test_key", "test_value") == MPI_SUCCESS);
+        CHECK(H5Pset_fapl_mpio(fapl, local, info) >= 0);
+        CHECK(MPI_Info_free(&info) == MPI_SUCCESS);
+    }
+    CHECK(H5Pset_vol(fapl, connector, vol.info) >= 0);
+    const std::array<double, 4> expected = {{1.25, 2.5, 3.75, 5.0}};
+    auto create = [&](const std::string& filename)
+    {
+        test::Id file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, fapl), H5Fclose);
+        auto extent = test::space(4);
+        test::Id ds(H5Dcreate2(file, "values", H5T_NATIVE_DOUBLE, extent, H5P_DEFAULT,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+        if (name == "irregular")
+        {
+            auto packed = test::space(2);
+            select(extent, 0, 2, 2);
+            const double even[] = {expected[0], expected[2]};
+            CHECK(H5Dwrite(ds, H5T_NATIVE_DOUBLE, packed, extent, H5P_DEFAULT, even) >= 0);
+            select(extent, 1, 2, 2);
+            const double odd[] = {expected[1], expected[3]};
+            CHECK(H5Dwrite(ds, H5T_NATIVE_DOUBLE, packed, extent, H5P_DEFAULT, odd) >= 0);
+        }
+        else
+            CHECK(H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, expected.data()) >= 0);
+        if (name == "hard-link-parent-relative")
+        {
+            test::Id group(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT,
+                                      H5P_DEFAULT), H5Gclose);
+            test::Id nested(H5Dcreate2(group, "d", H5T_NATIVE_DOUBLE, extent,
+                                       H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                            H5Dclose);
+            CHECK(H5Dwrite(nested, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                           H5P_DEFAULT, expected.data()) >= 0);
+            CHECK(H5Olink(group, file, "alias", H5P_DEFAULT,
+                          H5P_DEFAULT) >= 0);
+            CHECK(H5Ldelete(file, "g", H5P_DEFAULT) >= 0);
+        }
+        if (name == "hard-link-replace" || name == "hard-link-serialized" ||
+            name == "object-hard-link-serialized" ||
+            name == "object-alias-policy")
+            CHECK(H5Olink(ds, file, "alias", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        if (name == "hard-link-serialized" || name == "object-hard-link-serialized")
+            CHECK(H5Ldelete(file, "values", H5P_DEFAULT) >= 0);
+    };
+    const int steps = name == "mpio-resources" ? 8 : 1;
+    for (int step = 0; step < steps; ++step)
+    {
+        if (rank == 0)
+        {
+            create(first);
+            if (name == "native-missing")
+                CHECK(std::remove(first.c_str()) == 0);
+            if (name == "multifile") create(second);
+            vol.serve_all();
+            vol.clear_files();
+        }
+        else if (name == "native-missing")
+        {
+            CHECK(H5Fopen(first.c_str(), H5F_ACC_RDONLY, fapl) < 0);
+        }
+        else
+        {
+            test::Id file(H5Fopen(first.c_str(), H5F_ACC_RDONLY, fapl), H5Fclose);
+            const bool object_alias = name == "object-hard-link-serialized" ||
+                                      name == "object-alias-policy";
+            const bool detached_alias = name == "hard-link-serialized" ||
+                                        name == "object-hard-link-serialized";
+            const char* dataset_name =
+                detached_alias || name == "object-alias-policy" ?
+                    "alias" : "values";
+            test::Id ds(object_alias ? H5Oopen(file, dataset_name, H5P_DEFAULT) :
+                                       H5Dopen2(file, dataset_name, H5P_DEFAULT),
+                        object_alias ? H5Oclose : H5Dclose);
+            auto read_all = [&](hid_t dataset)
+            {
+                std::array<double, 6> result;
+                result.fill(-91);
+                CHECK(H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, result.data() + 1) >= 0);
+                CHECK(result.front() == -91 && result.back() == -91);
+                CHECK(std::equal(expected.begin(), expected.end(), result.begin() + 1));
+            };
+            if (name == "repeated-open" || name == "object-open")
+            {
+                test::Id again(name == "object-open" ? H5Oopen(file, "values", H5P_DEFAULT) :
+                                                      H5Dopen2(file, "values", H5P_DEFAULT),
+                               name == "object-open" ? H5Oclose : H5Dclose);
+                read_all(ds);
+                read_all(again);
+                ds.reset();
+                read_all(again);
+                file.reset();
+                read_all(again);
+            }
+            else if (name == "conversion")
+            {
+                std::array<float, 10> result;
+                result.fill(-91);
+                CHECK(H5Dread(ds, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, result.data() + 1) >= 0);
+                CHECK(result.front() == -91);
+                for (size_t i = 0; i < expected.size(); ++i) CHECK(result[i + 1] == float(expected[i]));
+                for (size_t i = 5; i < result.size(); ++i) CHECK(result[i] == -91);
+                test::Id fs(H5Dget_space(ds), H5Sclose);
+                select(fs, 1, 2, 2);
+                auto ms = test::space(8);
+                select(ms, 2, 2, 3);
+                result.fill(-91);
+                CHECK(H5Dread(ds, H5T_NATIVE_FLOAT, ms, fs, H5P_DEFAULT, result.data() + 1) >= 0);
+                for (size_t i = 0; i < result.size(); ++i)
+                    CHECK(result[i] == (i == 3 ? float(expected[1]) : i == 6 ? float(expected[3]) : -91));
+            }
+            else if (name == "memory-all")
+            {
+                test::Id fs(H5Dget_space(ds), H5Sclose);
+                select(fs, 1, 2);
+                std::array<double, 6> result;
+                result.fill(-91);
+                CHECK(H5Dread(ds, H5T_NATIVE_DOUBLE, H5S_ALL, fs, H5P_DEFAULT, result.data() + 1) >= 0);
+                CHECK(result[0] == -91 && result[1] == -91 && result[5] == -91);
+                CHECK(result[2] == expected[1] && result[3] == expected[2] && result[4] == -91);
+            }
+            else if (name == "irregular")
+            {
+                test::Id fs(H5Dget_space(ds), H5Sclose);
+                select(fs, 1, 2, 2);
+                auto ms = test::space(2);
+                std::array<double, 4> result = {{-91, -91, -91, -91}};
+                CHECK(H5Dread(ds, H5T_NATIVE_DOUBLE, ms, fs, H5P_DEFAULT, result.data() + 1) >= 0);
+                CHECK(result[0] == -91 && result[3] == -91);
+                CHECK(result[1] == expected[1] && result[2] == expected[3]);
+                select(fs, 0, 1);
+                const hsize_t start = 2, count = 2;
+                CHECK(H5Sselect_hyperslab(fs, H5S_SELECT_OR, &start, nullptr, &count, nullptr) >= 0);
+                CHECK(H5Sis_regular_hyperslab(fs) == 0);
+                auto packed = test::space(3);
+                std::array<double, 5> irregular = {{-91, -91, -91, -91, -91}};
+                CHECK(H5Dread(ds, H5T_NATIVE_DOUBLE, packed, fs, H5P_DEFAULT, irregular.data() + 1) >= 0);
+                CHECK(irregular[0] == -91 && irregular[4] == -91);
+                CHECK(irregular[1] == expected[0] && irregular[2] == expected[2] && irregular[3] == expected[3]);
+            }
+            else if (name == "bounds")
+            {
+                test::Id fs(H5Dget_space(ds), H5Sclose);
+                auto ms = test::space(2);
+                std::array<double, 6> result;
+                result.fill(-91);
+                CHECK(H5Dread(ds, H5T_NATIVE_DOUBLE, ms, fs, H5P_DEFAULT, result.data() + 1) < 0);
+                CHECK(std::all_of(result.begin(), result.end(), [](double x) { return x == -91; }));
+                select(fs, 4, 1);
+                auto one = test::space(1);
+                CHECK(H5Dread(ds, H5T_NATIVE_DOUBLE, one, fs, H5P_DEFAULT, result.data() + 1) < 0);
+                CHECK(std::all_of(result.begin(), result.end(), [](double x) { return x == -91; }));
+            }
+            else if (name == "empty")
+            {
+                test::Id fs(H5Dget_space(ds), H5Sclose);
+                auto ms = test::space(4);
+                CHECK(H5Sselect_none(fs) >= 0 && H5Sselect_none(ms) >= 0);
+                double guard = -91;
+                CHECK(H5Dread(ds, H5T_NATIVE_DOUBLE, ms, fs, H5P_DEFAULT, &guard) >= 0);
+                CHECK(guard == -91);
+            }
+            else if (name == "missing")
+            {
+                CHECK(H5Dopen2(file, "missing", H5P_DEFAULT) < 0);
+                CHECK(H5Oopen(file, "missing", H5P_DEFAULT) < 0);
+                read_all(ds);
+            }
+            else if (name == "multifile")
+            {
+                test::Id other(H5Fopen(second.c_str(), H5F_ACC_RDONLY, fapl), H5Fclose);
+                test::Id other_ds(H5Dopen2(other, "values", H5P_DEFAULT), H5Dclose);
+                ds.reset();
+                file.reset();
+                read_all(other_ds);
+            }
+            else if (name == "hard-link-replace")
+            {
+                test::Id alias(H5Dopen2(file, "alias", H5P_DEFAULT), H5Dclose);
+                read_all(ds);
+                read_all(alias);
+            }
+            else if (name == "remote-unlinked-alias")
+            {
+                CHECK(H5Olink(ds, file, "alias", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                CHECK(H5Ldelete(file, "values", H5P_DEFAULT) >= 0);
+                ds.reset();
+                test::Id alias(H5Dopen2(file, "alias", H5P_DEFAULT), H5Dclose);
+                read_all(alias);
+                alias.reset();
+                file.reset();
+            }
+            else if (name == "hard-link-parent-relative")
+            {
+                test::Id group(H5Gopen2(file, "alias", H5P_DEFAULT),
+                               H5Gclose);
+                test::Id nested(H5Dopen2(group, "d", H5P_DEFAULT), H5Dclose);
+                read_all(nested);
+            }
+            else read_all(ds);
+        }
+        CHECK(MPI_Barrier(MPI_COMM_WORLD) == MPI_SUCCESS);
+    }
+    fapl.reset();
+    CHECK(H5VLunregister_connector(connector) >= 0);
+    if (key != MPI_KEYVAL_INVALID)
+    {
+        if (copies != 1)
+            std::fprintf(stderr, "rank %d: %d MPI communicator references remain; expected original only\n", rank, copies);
+        CHECK(copies == 1);
+        CHECK(MPI_Comm_delete_attr(local, key) == MPI_SUCCESS);
+        CHECK(copies == 0);
+        CHECK(MPI_Comm_free_keyval(&key) == MPI_SUCCESS);
+    }
+}
+}
+
+int main(int argc, char** argv)
+{
+    MPI_Init(&argc, &argv);
+    int rank = 0, size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    try
+    {
+        const char* selected = nullptr;
+        if (argc == 2)
+            selected = argv[1];
+        else if (argc == 3 &&
+                 std::string(argv[1]) == "--lowfive-mpi-postflag")
+            selected = argv[2];
+        CHECK(selected && size == 2);
+        H5Eset_auto2(H5E_DEFAULT, nullptr, nullptr);
+        MPI_Comm local, intercomm;
+        CHECK(MPI_Comm_split(MPI_COMM_WORLD, rank, 0, &local) == MPI_SUCCESS);
+        CHECK(MPI_Intercomm_create(local, 0, MPI_COMM_WORLD, 1 - rank, 17, &intercomm) == MPI_SUCCESS);
+        const std::string name = selected;
+        exercise(name == "postflag-order" ? "contents" : name,
+                 rank, local, intercomm);
+        CHECK(MPI_Comm_free(&intercomm) == MPI_SUCCESS);
+        CHECK(MPI_Comm_free(&local) == MPI_SUCCESS);
+        MPI_Finalize();
+        return EXIT_SUCCESS;
+    }
+    catch (const std::exception& error)
+    {
+        std::fprintf(stderr, "rank %d: %s\n", rank, error.what());
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+        return EXIT_FAILURE;
+    }
+}

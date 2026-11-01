@@ -2,6 +2,7 @@
 
 #include    <vector>
 #include    <set>
+#include    <map>
 #include    <mpi.h>
 
 #include    "vol-metadata.hpp"
@@ -114,6 +115,8 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     long int        file_close_counter_ {0};  // increment after each call to file_close
 
     private:
+        friend struct RemoteFile;
+        std::map<int, size_t> remote_file_counts_;
         void        make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath);
 };
 

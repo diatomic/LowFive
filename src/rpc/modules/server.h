@@ -466,7 +466,7 @@ destroy(diy::MemoryBuffer& in)
         throw std::runtime_error("Destroying an object we don't own");
     }
 
-    proxy(obj_id).destroy(objects_[obj_id].obj);
+    proxy(objects_[obj_id].cls).destroy(objects_[obj_id].obj);
     objects_[obj_id].obj = 0;
 }
 

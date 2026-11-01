@@ -191,22 +191,27 @@ Index::
 find_datasets(File* f)
 {
     Datasets result;
-    std::string name;
-    find_datasets(f, name, result);
+    Objects visited;
+    find_datasets(f, "", result, visited);
     return result;
 }
 
 void
 Index::
-find_datasets(Object* o, std::string name, Datasets& result)
+find_datasets(Object* object, std::string name, Datasets& result,
+              Objects& visited)
 {
-    name += "/" + o->name;
-    Dataset* ds = dynamic_cast<Dataset*>(o);
-    if (ds)
-        result.emplace(name, ds);
+    name += "/" + object->name;
+    if (auto* link = dynamic_cast<HardLink*>(object))
+        object = link->target;
+    if (!object || !visited.insert(object).second)
+        return;
 
-    for (Object* child : o->children)
-        find_datasets(child, name, result);
+    if (auto* dataset = dynamic_cast<Dataset*>(object))
+        result.emplace(name, dataset);
+
+    for (auto* child : object->children)
+        find_datasets(child, name, result, visited);
 }
 
 } // namespace LowFive

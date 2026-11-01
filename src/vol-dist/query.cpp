@@ -21,9 +21,10 @@ Query::Query(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, int remote_size
 
 void
 RemoteDataset::
-query(const Dataspace&  file_space,      // input: query in terms of file space
-      const Dataspace&  mem_space,       // ouput: memory space of resulting data
-      void*             buf)             // output: resulting data, allocated by caller
+query(const Datatype&   mem_type,
+      const Dataspace&  file_space,
+      const Dataspace&  mem_space,
+      void*             buf)
 {
     using Bounds        = IndexQuery::Bounds;
     using Point         = IndexQuery::Point;
@@ -46,7 +47,7 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
         // TODO: make this asynchronous (isend + irecv, etc)
 
         // TODO: keep these open for the next loop
-        auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", fullname());
+        auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", remote_path);
         BoxLocations redirects = rids.call<BoxLocations>("redirects", file_space);
         for (auto& x : redirects)
             all_redirects.push_back(x);
@@ -69,7 +70,7 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
             blocks.insert(gid);
 
             // open the object on the right rank
-            auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", fullname());
+            auto rids = obj.self_->call<rpc::client::object>(gid, "open_indexed_dataset", remote_path);
             log->trace("Opened object: {} (own = {})", rids.id_, rids.own_);
             log->trace("Opened dataset on {}", gid);
 
@@ -93,34 +94,23 @@ query(const Dataspace&  file_space,      // input: query in terms of file space
                 Dataspace mem_dst(Dataspace::project_intersection(file_space.id, mem_space.id, ds.id), true);
                 if (is_var_length_string)
                 {
-                    Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
+                    Dataspace::iterate(mem_dst, mem_type.dtype_size, [&](size_t loc, size_t len)
                     {
-                      char** to = (char**) ((char*) buf + loc);
-                      for (size_t i = 0; i < len / sizeof(intptr_t); ++i)
-                      {
-                        std::string s;
-                        diy::load(queue, s);
-                        if (!s.empty())
+                        for (size_t offset = 0; offset < len; offset += mem_type.dtype_size)
                         {
-                            // presumably HDF5 will manage this string and reclaim the
-                            // memory; I'm unclear on how this works, so it's a potential
-                            // memory leak
-                            //
-                            // We could save an extra copy here by copying
-                            // directly from the queue, but this keeps things
-                            // simpler
-                            char *cstr = new char[s.length() + 1];
-                            strcpy(cstr, s.c_str());
-                            to[i] = cstr;
-                        } else
-                            to[i] = NULL;
-                      }
+                            std::string value;
+                            diy::load(queue, value);
+                            const char* source = value.empty() ? nullptr : value.c_str();
+                            type.convert(mem_type, 1, &source, static_cast<char*>(buf) + loc + offset);
+                        }
                     });
                 } else
                 {
-                    Dataspace::iterate(mem_dst, type.dtype_size, [&](size_t loc, size_t len)
+                    Dataspace::iterate(mem_dst, mem_type.dtype_size, [&](size_t loc, size_t len)
                     {
-                      std::memcpy((char*)buf + loc, queue.advance(len), len);
+                        const size_t count = len / mem_type.dtype_size;
+                        type.convert(mem_type, count, queue.advance(count * type.dtype_size),
+                                     static_cast<char*>(buf) + loc);
                     });
                 }
             }
