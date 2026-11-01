@@ -1,3 +1,16 @@
+# Small API cases run in separate processes to isolate the connector singleton.
+function(lowfive_test target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE ${libraries})
+    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    foreach(case ${ARGN})
+        add_test(NAME ${target}-${case} COMMAND ${target} ${case})
+        set_tests_properties(${target}-${case} PROPERTIES TIMEOUT 30 LABELS api)
+    endforeach()
+endfunction()
+
+lowfive_test(lowfive-api api.cpp memory file dual native)
+
 add_library                 (producer-multidata-test SHARED ../examples/prod-con-multidata/producer-multidata.cpp)
 target_link_libraries       (producer-multidata-test ${libraries})
 set_target_properties       (producer-multidata-test PROPERTIES PREFIX "")
