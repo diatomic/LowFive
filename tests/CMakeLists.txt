@@ -12,8 +12,47 @@ endfunction()
 lowfive_test(lowfive-api api.cpp memory file dual native)
 lowfive_test(lowfive-base base.cpp
     hard hard-same-dst hard-same-src copy-same-dst copy-same-src move-same-dst move-same-src
-    reopen-native exceptions property-lifetime info-independent
+    reopen-native reopen-metadata exceptions property-lifetime info-independent
     info-nested info-malformed singleton)
+lowfive_test(lowfive-model model.cpp
+    attribute-conversion attribute-compound attribute-strings dataset-conversion
+    read-all write-all selected-strings zerocopy-strings datatype-ownership
+    persist-attributes persist-strings vlen-rewrite dataset-vlen-overlap
+    dataset-vlen-serialization dataset-vlen-sparse-serialization shutdown-cleanup
+    reference-top reference-compound reference-region-serialization
+    hard-link-serialization file-copy-root-token reference-overwrite
+    reference-delete dataset-reference-delete persist-references
+    persist-cross-file-reference persist-overwritten-reference
+    persist-deleted-reference-path-reuse persist-selected-vlen-reference
+    persist-unwritten-attribute)
+lowfive_test(lowfive-callbacks callbacks.cpp
+    wildcard file_plist_ownership file_failure lifetime multiple_files dual_reopen
+    link_name group_failure dataset_failure attr_failure missing_dataset tokens
+    attr_rename hard_links soft_links link_copy_move absolute_paths attr_by_name
+    native_parent_attr file_plists enumeration indexed_lookup object_names zero_file_name
+    native_object_dataset_extent native_attr_iteration native_attr_open_delete
+    native_attr_delete_idx native_attr_delete_idx_mixed native_link_delete
+    native_link_delete_idx native_link_delete_idx_uncached native_link_copy_move
+    native_link_move_cached native_link_move_cycle native_soft_link_uncached
+    native_group_soft_link_uncached native_dataset_intermediate_soft_link
+    native_object_soft_link_uncached extent_failure reference_ids lifetime_group
+    lifetime_attr datatype_conversion dataset-metadata-get-failure
+    native_datatype_attr native_datatype_object_open
+    native_datatype_link_create hard_link_unlink open_unlink_read
+    anonymous_dataset_link detached-self-link
+    file-id-root-group file-id-child file-id-child-file file-id-child-dual
+    reference-region reference-cross-file reference-path-reuse
+    reference-deleted-path-reuse reference-passthru-target
+    reference-native-identity reference-native-identity-deferred
+    reference-after-file-close reference-opened-native
+    reference-external-native
+    reference-registered-uncached reference-registered-root
+    reference-registered-uncached-objects reference-registered-cached-objects
+    reference-registered-intermediate-group
+    reference-live-file-collection reference-retained-collection
+    reference-attribute reference-native-attribute dataset-reference-overwrite
+    reference-zero-copy-alias
+    vlen-zero-copy-alias soft-link-cross-file)
 
 add_library                 (producer-multidata-test SHARED ../examples/prod-con-multidata/producer-multidata.cpp)
 target_link_libraries       (producer-multidata-test ${libraries})

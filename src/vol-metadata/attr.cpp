@@ -3,32 +3,65 @@
 #include "../log-private.hpp"
 #include <cassert>
 
+namespace
+{
+LowFive::Object* attribute_owner(LowFive::MetadataVOL& vol, void* obj,
+                                const H5VL_loc_params_t* location, hid_t dxpl, void** request)
+{
+    auto* parent = static_cast<LowFive::Object*>(
+        static_cast<LowFive::ObjectPointers*>(obj)->mdata_obj);
+    if (parent)
+    {
+        auto path = parent->locate(*location);
+        if (path.obj && path.path.empty()) return path.obj;
+    }
+    if (!parent) return nullptr;
+    if (!vol.unwrap(obj)) return nullptr;
+    H5I_type_t type;
+    auto* opened = static_cast<LowFive::ObjectPointers*>(vol.MetadataVOL::object_open(obj, location, &type, dxpl, request));
+    if (!opened) return nullptr;
+    auto* owner = static_cast<LowFive::Object*>(opened->mdata_obj);
+    herr_t closed = type == H5I_GROUP ? vol.MetadataVOL::group_close(opened, dxpl, request) :
+                    type == H5I_DATASET ? vol.MetadataVOL::dataset_close(opened, dxpl, request) :
+                    vol.MetadataVOL::datatype_close(opened, dxpl, request);
+    vol.drop(opened);
+    return closed < 0 ? nullptr : owner;
+}
+
+LowFive::Object* indexed_attribute(LowFive::Object* owner, H5_index_t index,
+                                   H5_iter_order_t order, hsize_t position)
+{
+    std::vector<LowFive::Object*> attributes;
+    for (auto* child : owner->children)
+        if (child->type == LowFive::ObjectType::Attribute)
+            attributes.push_back(child);
+    if (index == H5_INDEX_NAME)
+        std::sort(attributes.begin(), attributes.end(),
+                  [](const auto* lhs, const auto* rhs) { return lhs->name < rhs->name; });
+    else if (index != H5_INDEX_CRT_ORDER)
+        return nullptr;
+    if (order == H5_ITER_DEC)
+        std::reverse(attributes.begin(), attributes.end());
+    else if (order != H5_ITER_INC && order != H5_ITER_NATIVE)
+        return nullptr;
+    return position < attributes.size() ? attributes[position] : nullptr;
+}
+}
+
 void*
 LowFive::MetadataVOL::
 attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-
-    auto log = get_logger();
-    log->trace("Attr Create");
-    log->trace("loc type = {}, name = {}", loc_params->type, name);
-
-    // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
-
-    ObjectPointers* result = nullptr;
-    if (unwrap(obj_) && match_any(filepath,passthru))
+    auto* owner = attribute_owner(*this, obj, loc_params, dxpl_id, req);
+    if (!owner || owner->attribute(name)) return nullptr;
+    void* underlying = nullptr;
+    if (unwrap(obj) && match_any(owner->fullname(name), passthru))
     {
-        result = wrap(VOLBase::attr_create(unwrap(obj_), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req));
-        log->trace("created attribute named {} in passthru object {}", name, *result);
+        underlying = VOLBase::attr_create(unwrap(obj), loc_params, name, type_id, space_id, acpl_id, aapl_id, dxpl_id, req);
+        if (!underlying) return nullptr;
     }
-    else
-        result = wrap(nullptr);
-
-    result->mdata_obj = static_cast<Object*>(obj_->mdata_obj)->add_child(new Attribute(name, type_id, space_id));
-    log->trace("created attribute named {} in metadata, new object {} under parent object {} named {}",
-            name, *result, obj_->mdata_obj, static_cast<Object*>(obj_->mdata_obj)->name);
-
+    auto* result = wrap(underlying);
+    result->mdata_obj = owner->add_child(new Attribute(name, type_id, space_id));
     return result;
 }
 
@@ -36,49 +69,27 @@ void*
 LowFive::MetadataVOL::
 attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = nullptr;
-
-    auto log = get_logger();
-    log->trace("Attr Open");
-    log->trace("attr_open obj = {} name {}", *obj_, name);
-
-    if (unwrap(obj_))
+    auto* owner = attribute_owner(*this, obj, loc_params, dxpl_id, req);
+    void* underlying = nullptr;
+    if (unwrap(obj) &&
+        (!owner || match_any(owner->fullname(name), passthru)))
     {
-        auto* under_result = VOLBase::attr_open(unwrap(obj_), loc_params, name, aapl_id, dxpl_id, req);
-        if (!under_result)      // not found in passthru, return nullptr; NB: if it somehow exists in metadata, this is problematic
-            return under_result;
-        result = wrap(under_result);
+        underlying = VOLBase::attr_open(
+            unwrap(obj), loc_params, name, aapl_id, dxpl_id, req);
+        if (!underlying) return nullptr;
     }
-    else
-        result = wrap(nullptr);
+    if (!owner)
+        return underlying ? wrap(underlying) : nullptr;
 
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-    if (mdata_obj)
+    Object* metadata = owner->attribute(name);
+    if (!metadata)
     {
-        // trace object back to root to build full path and file name
-        auto filepath = mdata_obj->fullname(name);
-
-        // debug
-        log->trace("attr_open filepath first {} second {} name {}", filepath.first, filepath.second, name);
-
-        // find the attribute in our file metadata
-        std::string name_(name);
-        if (match_any(filepath, memory))
-        {
-            auto op = mdata_obj->locate(*loc_params).exact()->search(name_);
-            if (!op.path.empty())
-                return nullptr;     // hopefully this returns -1 from the calling function
-
-            result->mdata_obj = mdata_obj->locate(*loc_params).exact()->search(name_).exact();
-        }
-        // TODO: make a dummy attribute if not found; this will be triggered by assertion failure in exact
+        if (!underlying) return nullptr;
+        metadata = owner->add_child(new DummyObject(ObjectType::Attribute, name));
     }
-
-    log->trace("attr_open search result = {} = [h5_obj {} mdata_obj {}] name {}",
-            fmt::ptr(result), fmt::ptr(result->h5_obj), fmt::ptr(result->mdata_obj), name);
-
-    return (void*)result;
+    auto* result = wrap(underlying);
+    result->mdata_obj = metadata;
+    return result;
 }
 
 herr_t
@@ -107,9 +118,17 @@ attr_read(void *attr, hid_t mem_type_id, void *buf,
         Attribute* a = (Attribute*) attr_->mdata_obj;
 
         resolve_references(a);
-
-        log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
-        a->read(Datatype(mem_type), buf);
+        try
+        {
+            log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
+            a->read(Datatype(mem_type), buf);
+        }
+        catch (...)
+        {
+            suspend_references(a);
+            throw;
+        }
+        suspend_references(a);
     }
 
     return 0;
@@ -210,7 +229,7 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
     std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
     int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
     ObjectPointers* obj_tmp = wrap(nullptr);
-    *obj_tmp = *obj_;
+    obj_tmp->mdata_obj = mdata_obj;
     obj_tmp->tmp = true;
     auto log = get_logger();
     log->trace("attr_iter: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
@@ -235,8 +254,8 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order,
     {
         if (c->type == LowFive::ObjectType::Attribute)
         {
-            ainfo.data_size =                               // size of raw data (bytes)
-                    static_cast<Attribute*>(c)->space.size() * static_cast<Attribute*>(c)->type.dtype_size;
+            auto* attribute = dynamic_cast<Attribute*>(c);
+            ainfo.data_size = attribute ? attribute->space.size() * attribute->type.dtype_size : 0;
             found = true;
             log->trace("attr_iter: found attribute {} with data_size {} as a child of the parent {}", c->name, ainfo.data_size, mdata_obj->name);
             if (idx)
@@ -284,23 +303,26 @@ herr_t
 LowFive::MetadataVOL::
 attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* attr_ = (ObjectPointers*) attr;
-
-    auto log = get_logger();
-    log->trace("Attr Write");
-    log->trace("attr = {}, mem_type_id = {}, mem type = {}",
-            *attr_, mem_type_id, Datatype(mem_type_id));
-
-    if (attr_->mdata_obj)
+    auto* pointers = static_cast<ObjectPointers*>(attr);
+    if (unwrap(attr))
     {
-        Attribute* a = (Attribute*) attr_->mdata_obj;
-        a->write(Datatype(mem_type_id), buf);
-        log->trace("type = {}, space = {}, mem_type = {}", a->type, a->space, a->mem_type);
+        herr_t result = VOLBase::attr_write(unwrap(attr), mem_type_id, buf, dxpl_id, req);
+        if (result < 0) return result;
     }
-
-    if (unwrap(attr_))
-        return VOLBase::attr_write(unwrap(attr_), mem_type_id, buf, dxpl_id, req);
-
+    if (auto* metadata = dynamic_cast<Attribute*>(static_cast<Object*>(pointers->mdata_obj)))
+    {
+        try
+        {
+            metadata->write(Datatype(mem_type_id), buf);
+        }
+        catch (...)
+        {
+            suspend_references(metadata);
+            throw;
+        }
+        suspend_references(metadata);
+    }
+    else if (!unwrap(attr)) return -1;
     return 0;
 }
 
@@ -309,6 +331,7 @@ LowFive::MetadataVOL::
 attr_close(void *attr, hid_t dxpl_id, void **req)
 {
     ObjectPointers* attr_ = (ObjectPointers*) attr;
+    if (attr_->tmp) return 0;
 
     auto log = get_logger();
     log->trace("Attr Close");
@@ -326,120 +349,104 @@ herr_t
 LowFive::MetadataVOL::
 attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-
-    auto specific_type = args->op_type;
-
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-
-    auto log = get_logger();
-    log->trace("attr_specific obj = {} specific_type = {}", *obj_, specific_type);
-    log->trace("specific types H5VL_ATTR_DELETE = {} H5VL_ATTR_EXISTS = {} H5VL_ATTR_ITER = {} H5VL_ATTR_RENAME = {}",
-            H5VL_ATTR_DELETE, H5VL_ATTR_EXISTS, H5VL_ATTR_ITER, H5VL_ATTR_RENAME);
-
-    herr_t result = 0;
-    if (unwrap(obj_))
+    auto* owner = attribute_owner(*this, obj, loc_params, dxpl_id, req);
+    if (!owner)
+        return unwrap(obj) ?
+            VOLBase::attr_specific(unwrap(obj), loc_params, args, dxpl_id, req) :
+            -1;
+    const char* name = nullptr;
+    if (args->op_type == H5VL_ATTR_EXISTS) name = args->args.exists.name;
+    else if (args->op_type == H5VL_ATTR_DELETE) name = args->args.del.name;
+    else if (args->op_type == H5VL_ATTR_RENAME) name = args->args.rename.old_name;
+    const bool native = unwrap(obj) &&
+        (args->op_type == H5VL_ATTR_ITER ||
+         args->op_type == H5VL_ATTR_DELETE_BY_IDX ||
+         (name && match_any(owner->fullname(name), passthru)));
+    Object* native_indexed_attribute = nullptr;
+    if (native && args->op_type == H5VL_ATTR_DELETE_BY_IDX)
     {
-        // warn if metadata are available but won't be used
-        if (obj_->mdata_obj)
-            log->warn("Warning: attr_specific: obj = {} metadata are available but won't be used", *obj_);
+        H5VL_loc_params_t indexed{};
+        indexed.obj_type = loc_params->obj_type;
+        indexed.type = H5VL_OBJECT_BY_IDX;
+        if (loc_params->type == H5VL_OBJECT_BY_SELF)
+        {
+            indexed.loc_data.loc_by_idx.name = ".";
+            indexed.loc_data.loc_by_idx.lapl_id = H5P_DEFAULT;
+        }
+        else if (loc_params->type == H5VL_OBJECT_BY_NAME)
+        {
+            indexed.loc_data.loc_by_idx.name = loc_params->loc_data.loc_by_name.name;
+            indexed.loc_data.loc_by_idx.lapl_id = loc_params->loc_data.loc_by_name.lapl_id;
+        }
+        else
+            return -1;
+        indexed.loc_data.loc_by_idx.idx_type = args->args.delete_by_idx.idx_type;
+        indexed.loc_data.loc_by_idx.order = args->args.delete_by_idx.order;
+        indexed.loc_data.loc_by_idx.n = args->args.delete_by_idx.n;
 
-        result = VOLBase::attr_specific(unwrap(obj_), loc_params, args, dxpl_id, req);
+        H5VL_attr_get_args_t get_name{};
+        get_name.op_type = H5VL_ATTR_GET_NAME;
+        get_name.args.get_name.loc_params = indexed;
+        size_t length = 0;
+        get_name.args.get_name.attr_name_len = &length;
+        if (VOLBase::attr_get(unwrap(obj), &get_name, dxpl_id, nullptr) < 0)
+            return -1;
+        std::vector<char> buffer(length + 1);
+        get_name.args.get_name.buf_size = buffer.size();
+        get_name.args.get_name.buf = buffer.data();
+        if (VOLBase::attr_get(unwrap(obj), &get_name, dxpl_id, nullptr) < 0)
+            return -1;
+        native_indexed_attribute = owner->attribute(std::string(buffer.data(), length));
     }
-    else // if (match_any(filepath, memory))
+    if (native)
     {
-        switch(specific_type)
-        {
-        case H5VL_ATTR_DELETE:                      // H5Adelete(_by_name/idx)
-        {
-            Attribute* attr = nullptr;
-
-            if (H5VL_OBJECT_BY_SELF == loc_params->type)
-            {
-                // we still search by name, but only in immediate children
-                // mdata_obj is dataset/group, not the attribute to be deleted
-                const char *attr_name_ = args->args.del.name;
-                std::string attr_name(attr_name_);
-                log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by self, attr_name = {}, mdata_obj = {}", attr_name, fmt::ptr(mdata_obj));
-                bool found = false;
-                for (auto& c : mdata_obj->children)
-                {
-                    if (c->type == LowFive::ObjectType::Attribute && c->name == attr_name_)
-                    {
-                        attr = dynamic_cast<Attribute*>(c);
-                        found = true;
-                        break;
-                    }
-                }
-                log->trace("attr_specific: attr = {}", fmt::ptr(attr));
-                if (!found)
-                    throw MetadataError(fmt::format("MetadataVOL::attr_specific: Did not find attribute {} as a child of the parent {}", attr_name, mdata_obj->name));
-            }
-            else if (H5VL_OBJECT_BY_NAME == loc_params->type)
-            {
-                const char *attr_name = args->args.del.name;
-                Object* o = mdata_obj->locate(*loc_params).exact();
-                attr = dynamic_cast<Attribute*>(o->search(attr_name).exact());
-                log->trace("attr_specific: specific type H5VL_ATTR_DELETE locate object by name, attr_name = {}, mdata_obj = {}, attr = {}", attr_name, fmt::ptr(mdata_obj), fmt::ptr(attr));
-            }
-            else if (H5VL_OBJECT_BY_IDX == loc_params->type)
-            {
-                // need to use: args->args.delete_by_idx.{order,n,idx_type}
-                throw MetadataError(fmt::format("H5VL_ATTR_DELETE locate object by index not yet implemented in LowFive::MetadataVOL::attr_specific()"));
-            }
-
-            // remove attribute from metadata tree and free its memory
-            // will throw, if dynamic cast failed
-            attr->remove();
-            delete attr;
-            break;
-        }
-        case H5VL_ATTR_EXISTS:                      // H5Aexists(_by_name)
-        {
-            log->trace("attr_specific: specific_type H5VL_ATTR_EXISTS");
-            htri_t ret;
-            result = attr_exists(mdata_obj->locate(*loc_params).exact(), args->args.exists.name, &ret);
-            *args->args.exists.exists = (ret == 1);
-
-            break;
-        }
-        case H5VL_ATTR_ITER:                        // H5Aiterate(_by_name)
-        {
-            log->trace("attr_specific: specific_type H5VL_ATTR_ITER");
-
-            // sanity check that the provided object matches the location parameters
-            // ie,  we're not supposed to operate on one of the children instead of the parent (which we don't support)
-            if (mdata_obj != mdata_obj->locate(*loc_params).exact())
-                throw MetadataError(fmt::format("attr__specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
-
-            result = attr_iter(obj, loc_params, args->args.iterate.order, args->args.iterate.idx, args->args.iterate.op, args->args.iterate.op_data);
-
-            break;
-        }
-        case H5VL_ATTR_RENAME:                     // H5Arename(_by_name)
-        {
-            const char *old_name = args->args.rename.old_name;
-            const char *new_name = args->args.rename.new_name;
-            log->trace("attr_specific: specific_type H5VL_ATTR_RENAME: old_name = {}, new_name = {}, loc_params->type = {}, loc_params->name = {}",
-                    old_name, new_name, loc_params->type, loc_params->loc_data.loc_by_name.name);
-
-            if (loc_params->type == H5VL_OBJECT_BY_SELF) { /* H5Arename */
-                auto* attr = static_cast<Attribute*>(mdata_obj);
-                attr->name = new_name;
-            } else if (loc_params->type == H5VL_OBJECT_BY_NAME) { /* H5Arename_by_name */
-                Object* o = mdata_obj->locate(*loc_params).exact();
-                Object* attr = o->search(old_name).exact();
-                attr->name = new_name;
-            } else
-                throw MetadataError(fmt::format("attr_specific: unknown loc_params type for specific_type H5VL_ATTR_RENAME"));
-            break;
-        }
-        default:
-            throw MetadataError(fmt::format("Unknown specific_type in LowFive::MetadataVOL::attr_specific()"));
-        }
+        auto result = VOLBase::attr_specific(unwrap(obj), loc_params, args, dxpl_id, req);
+        if (result < 0 || args->op_type == H5VL_ATTR_EXISTS ||
+            args->op_type == H5VL_ATTR_ITER)
+            return result;
     }
-
-    return result;
+    switch (args->op_type)
+    {
+    case H5VL_ATTR_EXISTS:
+        *args->args.exists.exists = owner->attribute(name) != nullptr;
+        return 0;
+    case H5VL_ATTR_RENAME:
+    {
+        auto* attribute = owner->attribute(name);
+        if (!attribute) return native ? 0 : -1;
+        if (attribute->name == args->args.rename.new_name) return 0;
+        if (owner->attribute(args->args.rename.new_name)) return -1;
+        attribute->name = args->args.rename.new_name;
+        return 0;
+    }
+    case H5VL_ATTR_DELETE:
+    {
+        auto* attribute = owner->attribute(name);
+        if (!attribute) return native ? 0 : -1;
+        unlink_metadata(*this, attribute);
+        return 0;
+    }
+    case H5VL_ATTR_DELETE_BY_IDX:
+    {
+        if (!native)
+        {
+            auto* attribute = indexed_attribute(owner, args->args.delete_by_idx.idx_type,
+                                                args->args.delete_by_idx.order,
+                                                args->args.delete_by_idx.n);
+            if (!attribute) return -1;
+            unlink_metadata(*this, attribute);
+            return 0;
+        }
+        if (native_indexed_attribute)
+            unlink_metadata(*this, native_indexed_attribute);
+        return 0;
+    }
+    case H5VL_ATTR_ITER:
+        return attr_iter(obj, loc_params, args->args.iterate.order, args->args.iterate.idx,
+                         args->args.iterate.op, args->args.iterate.op_data);
+    default:
+        return -1;
+    }
 }
 
 herr_t

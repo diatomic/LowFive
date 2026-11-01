@@ -7,71 +7,88 @@ void *
 LowFive::MetadataVOL::
 object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_        = (ObjectPointers*) obj;
-
-    auto log = get_logger();
-    log->trace("MetadataVOL::object_open: parent obj = {}, loca_params.type = {}", *obj_, loc_params->type);
-
+    auto* pointers = static_cast<ObjectPointers*>(obj);
+    auto* parent = static_cast<Object*>(pointers->mdata_obj);
     *opened_type = H5I_BADID;
-
-    ObjectPointers* result;
-    if (!unwrap(obj))           // memory
-        result = wrap(nullptr);
-    else                        // passthru
-        result = wrap(VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req));
-    result->mdata_obj = nullptr;
-
-    log->trace("MetadataVOL::object_open, result = {}", fmt::ptr(result));
-
-    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
-
-    // TODO: technically it's even more complicated; it's possible that obj has mdata, but the object we are opening doesn't;
-    //       I think locate will return the last parent that has mdata, which is not what we want
-    if (mdata_obj)
+    Object* metadata = nullptr;
+    if (parent)
     {
-        auto op = mdata_obj->locate(*loc_params);
-        auto fullname = op.obj ? op.obj->fullname(op.path) : std::make_pair<std::string, std::string>("", "");
-        log->trace("MetadataVOL::object_open: fullname = ({},{}), locate = ({}, {})", fullname.first, fullname.second, fmt::ptr(op.obj), op.path);
-        if (op.path.empty())
+        auto path = parent->locate(*loc_params);
+        metadata = path.path.empty() ? path.obj : nullptr;
+    }
+    void* underlying = nullptr;
+    if (unwrap(obj))
+    {
+        underlying = VOLBase::object_open(unwrap(obj), loc_params, opened_type, dxpl_id, req);
+        if (!underlying) return nullptr;
+        if (parent && !metadata && loc_params->type == H5VL_OBJECT_BY_NAME)
         {
-            Object* o = op.obj;
-            log->trace("MetadataVOL::object_open, result = {}, mdata_obj = {}", fmt::ptr(result), fmt::ptr(o));
-            result->mdata_obj = o;
-
-            if (*opened_type == H5I_BADID)      // not set by native
+            auto close_underlying = [&]()
             {
-                *opened_type = get_identifier_type(o);
+                if (*opened_type == H5I_DATASET)
+                    return VOLBase::dataset_close(underlying, dxpl_id, nullptr);
+                if (*opened_type == H5I_GROUP)
+                    return VOLBase::group_close(underlying, dxpl_id, nullptr);
+                if (*opened_type == H5I_DATATYPE)
+                    return VOLBase::datatype_close(underlying, dxpl_id, nullptr);
+                return herr_t {-1};
+            };
 
-                log->trace("MetadataVOL::object_open(): opened_type was H5I_BAD_ID, reset to type {}", *opened_type);
-
-                // XXX: this is hack; we should not be able to open a file, but
-                //      rather the "/" group. Ideally, we'd have such a group for every
-                //      file, but I'm not sure how to implement that. This is a
-                //      workaround.
-                if (*opened_type == H5I_FILE)
+            Object* inserted = nullptr;
+            if (*opened_type == H5I_DATASET)
+            {
+                auto properties = query_dataset_metadata(
+                    [&](H5VL_dataset_get_args_t& args)
+                    {
+                        return VOLBase::dataset_get(
+                            underlying, &args, dxpl_id, nullptr);
+                    });
+                if (!properties)
                 {
-                    log->warn("In MetadataVOL::object_open(): forcing file to be a group");
-                    *opened_type = H5I_GROUP;
+                    close_underlying();
+                    return nullptr;
                 }
+                inserted = new Dataset(
+                    "", properties->type.id, properties->space.id,
+                    Dataset::Ownership::lowfive, properties->dcpl,
+                    properties->dapl, true, false);
+            }
+            else if (*opened_type == H5I_GROUP)
+                inserted = new DummyObject(ObjectType::Group, "");
+            else if (*opened_type == H5I_DATATYPE)
+                inserted = new DummyObject(ObjectType::NamedDtype, "");
+            else
+            {
+                close_underlying();
+                return nullptr;
             }
 
-            // HDF5 allows only a group, dataset, or datatype to be opened as an abject
-            if (*opened_type != H5I_GROUP && *opened_type != H5I_DATATYPE && *opened_type != H5I_DATASET)
+            const char* name = loc_params->loc_data.loc_by_name.name;
+            auto target = metadata_target_path(parent, name);
+            if (target.obj && !target.path.empty())
+                metadata = target.obj->add_path(inserted, target.path);
+            else
+                delete inserted;
+            if (!metadata)
             {
-                // TODO: consider throwing an error if this should never happen?
-                log->trace("MetadataVOL: object_open(): attempting to open object mdata type {}, which is not a group, dataset, or datatype; setting opened_type to H5I_BADID and returning null");
-                *opened_type = H5I_BADID;
-                result = wrap(nullptr);
+                close_underlying();
+                return nullptr;
             }
-        } else
-        {
-            // we didn't find the object; let's make sure that's Ok
-            log_assert(!match_any(fullname, memory), "didn't find an mdata_obj");
         }
     }
-
-    log->trace("MetadataVOL::object_open: opened_type = {}", *opened_type);
-
+    else
+    {
+        if (!metadata) return nullptr;
+        *opened_type = get_identifier_type(metadata);
+        if (*opened_type == H5I_FILE) *opened_type = H5I_GROUP;
+        if (*opened_type != H5I_GROUP && *opened_type != H5I_DATASET && *opened_type != H5I_DATATYPE)
+        {
+            *opened_type = H5I_BADID;
+            return nullptr;
+        }
+    }
+    auto* result = wrap(underlying);
+    result->mdata_obj = metadata ? metadata : parent;
     return result;
 }
 
@@ -134,10 +151,14 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
 
                 Object* res = mdata_obj->find_root();
                 assert(res->type == ObjectType::File);
-                ObjectPointers* res_pair = wrap(nullptr);
-                log->trace("MetadataVOL: res_pair = {}, mdata = {}", fmt::ptr(res_pair), fmt::ptr(res));
+                auto* res_pair = wrap(nullptr);
                 res_pair->mdata_obj = res;
                 res_pair->tmp = true;
+                res_pair->file_wrapper = true;
+                res_pair->reference_file_wrapper =
+                    retaining_reference_file;
+                log->trace("MetadataVOL: temporary file = {}, mdata = {}",
+                           fmt::ptr(res_pair), fmt::ptr(res));
                 *args->args.get_file.file = res_pair;
             }
             else
@@ -156,14 +177,14 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             size_t size     = args->args.get_name.buf_size;
 
             Object* obj = mdata_obj->locate(*loc_params).exact();
-            if (name == NULL)
+            if (!obj) return -1;
+            auto path = obj->fullname().second;
+            *ret = path.size();
+            if (name && size)
             {
-                *ret = obj->name.size();
-            } else
-            {
-                auto len = std::min(size, obj->name.size());
-                *ret = len;
-                strncpy(name, obj->name.c_str(), len);
+                auto copied = std::min(size - 1, path.size());
+                memcpy(name, path.data(), copied);
+                name[copied] = '\0';
             }
 
             return 0;
@@ -209,7 +230,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             if (otype == H5O_TYPE_UNKNOWN)
                 throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
 
-            mdata_obj->fill_token(oinfo->token);
+            obj->fill_token(oinfo->token);
 
             // count number of attributes
             oinfo->num_attrs = 0;
@@ -238,15 +259,20 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
         default:
             throw MetadataError("object_get(): unrecognized get_type");
         }
-    } else                      // passthru
+    } else
     {
-        ObjectPointers* obj_        = (ObjectPointers*) obj;
-
-        // warn if metadata are available but won't be used
-        if (obj_->mdata_obj)
-            log->warn("Warning: object_get: obj = {} metadata are available but won't be used", *obj_);
-
-        return VOLBase::object_get(unwrap(obj), loc_params, args, dxpl_id, req);
+        auto* wrapped = static_cast<ObjectPointers*>(obj);
+        auto result =
+            VOLBase::object_get(unwrap(obj), loc_params, args, dxpl_id, req);
+        if (result >= 0 && get_type == H5VL_OBJECT_GET_FILE &&
+            loc_params->type == H5VL_OBJECT_BY_SELF && wrapped->mdata_obj &&
+            *args->args.get_file.file)
+            pending_wrap_metadata[*args->args.get_file.file] =
+                static_cast<Object*>(wrapped->mdata_obj)->find_root();
+        else if (wrapped->mdata_obj)
+            log->warn("Warning: object_get: obj = {} metadata are available "
+                      "but won't be used", *wrapped);
+        return result;
     }
 }
 
@@ -270,7 +296,8 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
             /* H5Oexists_by_name */
         case H5VL_OBJECT_EXISTS: {
 
-            if (mdata_obj->locate(*loc_params).path.empty())
+            auto location = mdata_obj->locate(*loc_params);
+            if (location.obj && location.path.empty())
                 *(args->args.exists.exists) = 1;
             else
                 *(args->args.exists.exists) = 0;
@@ -284,8 +311,8 @@ object_specific(void *obj, const H5VL_loc_params_t *loc_params,
             log->trace("name = {}", loc_params->loc_data.loc_by_name.name);
 
             Object* o = mdata_obj->locate(*loc_params).exact();
-            log->trace("filling token, {} -> {}", fmt::ptr(o), fmt::ptr((void*)args->args.lookup.token_ptr));
-            mdata_obj->fill_token(*args->args.lookup.token_ptr);
+            if (!o) return -1;
+            o->fill_token(*args->args.lookup.token_ptr);
             return 0;
 
             break;

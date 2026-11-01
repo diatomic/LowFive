@@ -27,6 +27,8 @@ inline std::ostream& operator<<(std::ostream& out, const LocationPattern& p)
 
 struct Object;              // forward declaration for Files
 struct ObjectPointers;      // forward declaration for wrap
+struct Dataset;
+struct File;
 
 // custom VOL object
 // only need to specialize those functions that are custom
@@ -48,6 +50,8 @@ struct MetadataVOL: public LowFive::VOLBase
     LocationPatterns            passthru;
     LocationPatterns            zerocopy;
     bool                        keep = false;       // whether to keep files in the metadata after they are closed
+    bool                        collecting_files = false;
+    bool                        retaining_reference_file = false;
 
     // callbacks
     AfterFileCreate             after_file_create;
@@ -73,6 +77,7 @@ struct MetadataVOL: public LowFive::VOLBase
 
     //bool dont_wrap = false;
     std::unordered_set<void*>   our_objects;
+    std::unordered_map<void*, Object*> pending_wrap_metadata;
     bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }
 
     ObjectPointers* wrap(void* p);
@@ -83,7 +88,12 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void            print_files();
 
+    void            resolve_reference(File& file, H5R_ref_t* reference);
     void            resolve_references(Object* o);
+    void            resolve_references(Dataset* dataset, hid_t memory_space,
+                                       hid_t file_space);
+    void            suspend_references(Object* o);
+    herr_t          retain_reference_file(File& file, hid_t target_id);
 
     bool            has_real_file(const char* fname) const; // return true, if fname is in files and
                                                             // it is not a DummyFile
@@ -143,8 +153,8 @@ struct MetadataVOL: public LowFive::VOLBase
         if (*first == '\0' && *second == '\0')
             return true;
 
-        if (*first == '*' && *(first+1) != '\0' && *second == '\0')
-            return false;
+        if (*second == '\0')
+            return *first == '*' && match(first + 1, second);
 
         if (*first == '?' || *first == *second)
             return match(first+1, second+1);

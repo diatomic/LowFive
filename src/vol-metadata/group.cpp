@@ -7,80 +7,70 @@ void*
 LowFive::MetadataVOL::
 group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-
-    auto log = get_logger();
-    log->trace("group_create:");
-    log->trace("loc type = {}, name = {}, obj = {}", loc_params->type, name, *obj_);
-
-    log_assert(obj_->mdata_obj, "mdata_obj not set");
-
-    // trace object back to root to build full path and file name
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name);
-
-    ObjectPointers* result = nullptr;
-    if (unwrap(obj_) && match_any(filepath, passthru, true))
-        result = wrap(VOLBase::group_create(unwrap(obj_), loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req));
-    else
-        result = wrap(nullptr);
-
-    // add group to our metadata
-    auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name);
-
-    // create intermediate groups, if necessary
-    do
+    auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
+    auto path = parent->search(name);
+    if (!path.obj || path.path.empty()) return nullptr;
+    auto filepath = parent->fullname(name);
+    void* underlying = nullptr;
+    if (unwrap(obj) && match_any(filepath, passthru, true))
     {
-        auto i = obj_path.path.find('/');
-        auto name = obj_path.path.substr(0, i);
-        if (name != ".")
-        {
-            log->trace("Creating group {} under {} with gcpl_id {}", name, obj_path.obj->name, gcpl_id);
-            obj_path.obj = obj_path.obj->add_child(new Group(name, gcpl_id));
-        } else
-            log->trace("Skipping . in the name");
-        if (i == std::string::npos)
-            obj_path.path = "";
-        else
-            obj_path.path = obj_path.path.substr(i+1);
-        log->trace("Remaining path {}", obj_path.path);
-    } while (!obj_path.path.empty());
-    result->mdata_obj = obj_path.obj;
-
-    log->trace("group_create: created group = {}", *result);
-
-    return (void*)result;
+        underlying = VOLBase::group_create(unwrap(obj), loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
+        if (!underlying) return nullptr;
+    }
+    while (!path.path.empty())
+    {
+        auto slash = path.path.find('/');
+        auto component = path.path.substr(0, slash);
+        if (!component.empty() && component != ".")
+            path.obj = path.obj->add_child(new Group(component, gcpl_id));
+        path.path = slash == std::string::npos ? "" : path.path.substr(slash + 1);
+    }
+    auto* result = wrap(underlying);
+    result->mdata_obj = path.obj;
+    return result;
 }
 
 void*
 LowFive::MetadataVOL::
 group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    auto log = get_logger();
-    log->trace("group_open: obj = {} name {}", *obj_, name);
-
-    Object* parent = static_cast<Object*>(obj_->mdata_obj);
-    auto filepath = parent->fullname(name);
-
-    // open from the file if not opening from memory
-    // if both memory and passthru are enabled, open from memory only
-    ObjectPointers* result = nullptr;
-    if (unwrap(obj_) && match_any(filepath, passthru, true))
-        result = wrap(VOLBase::group_open(unwrap(obj_), loc_params, name, gapl_id, dxpl_id, req));
-    else
-        result = wrap(nullptr);
-
-    // find the group in our file metadata
-    std::string name_(name);
-    auto obj_path = parent->search(name_);
-
-    if (obj_path.path.empty())
-        result->mdata_obj = obj_path.obj;
-
-    if (!result->mdata_obj)
-        result->mdata_obj = parent->add_child(new DummyGroup(name_));
-
-    return (void*)result;
+    auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
+    auto path = parent->search(name);
+    void* underlying = nullptr;
+    if (unwrap(obj) && match_any(parent->fullname(name), passthru, true))
+    {
+        underlying = VOLBase::group_open(unwrap(obj), loc_params, name, gapl_id, dxpl_id, req);
+        if (!underlying) return nullptr;
+    }
+    Object* metadata = path.path.empty() ? path.obj : nullptr;
+    if (metadata && metadata->type != ObjectType::Group && metadata->type != ObjectType::File)
+    {
+        if (underlying) VOLBase::group_close(underlying, dxpl_id, req);
+        return nullptr;
+    }
+    if (!metadata)
+    {
+        if (!underlying) return nullptr;
+        H5VL_group_get_args_t get {};
+        get.op_type = H5VL_GROUP_GET_GCPL;
+        if (VOLBase::group_get(underlying, &get, dxpl_id, nullptr) < 0)
+        {
+            VOLBase::group_close(underlying, dxpl_id, nullptr);
+            return nullptr;
+        }
+        Hid gcpl(get.args.get_gcpl.gcpl_id, true);
+        auto target = metadata_target_path(parent, name);
+        metadata = target.obj && !target.path.empty() ?
+            target.obj->add_path(new Group("", gcpl), target.path) : nullptr;
+        if (!metadata)
+        {
+            VOLBase::group_close(underlying, dxpl_id, nullptr);
+            return nullptr;
+        }
+    }
+    auto* result = wrap(underlying);
+    result->mdata_obj = metadata;
+    return result;
 }
 
 herr_t
@@ -88,6 +78,7 @@ LowFive::MetadataVOL::
 group_close(void *grp, hid_t dxpl_id, void **req)
 {
     ObjectPointers* grp_ = (ObjectPointers*) grp;
+    if (grp_->tmp) return 0;
 
     auto log = get_logger();
     log->trace("MetadataVOL::group_close: {}", *grp_);
@@ -157,7 +148,7 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
             else
                 log->trace("group_optional: iterating, the current index is unassigned");
 
-            for (auto& c : mdata_obj->children)
+            for (auto* c : mdata_obj->links())
             {
 
                 log->trace("group_optional: found object {} as a child of the parent {}", c->name, mdata_obj->name);
@@ -251,7 +242,7 @@ group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req)
 
             auto* g = static_cast<Object*>(obj_->mdata_obj)->locate(loc_params).exact();
             group_info->storage_type = H5G_STORAGE_TYPE_UNKNOWN;
-            group_info->nlinks = g->children.size();
+            group_info->nlinks = g->links().size();
             group_info->max_corder = 0;
             group_info->mounted = false;
         }

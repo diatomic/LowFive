@@ -3,6 +3,103 @@
 #include "../vol-metadata-private.hpp"
 #include <cassert>
 
+namespace
+{
+struct UnderConnector
+{
+    hid_t connector = H5I_INVALID_HID;
+    void* info = nullptr;
+
+    explicit UnderConnector(hid_t fapl)
+    {
+        if (H5Pget_vol_id(fapl, &connector) < 0) return;
+        void* value = nullptr;
+        if (H5Pget_vol_info(fapl, &value) < 0)
+        {
+            H5Idec_ref(connector);
+            connector = H5I_INVALID_HID;
+            return;
+        }
+        info = value;
+    }
+
+    ~UnderConnector()
+    {
+        if (info)
+            H5VLfree_connector_info(connector, info);
+        if (connector >= 0)
+            H5Idec_ref(connector);
+    }
+
+    explicit operator bool() const
+    {
+        return connector >= 0;
+    }
+};
+template<class Operation>
+herr_t with_native_dataset(LowFive::Dataset& dataset, void* native_dataset,
+                           void* native_file, hid_t dxpl_id,
+                           Operation&& operation)
+{
+    auto* file = dynamic_cast<LowFive::File*>(dataset.find_root());
+    if (!file) return -1;
+    UnderConnector configured(file->fapl.id);
+    if (!configured) return -1;
+
+    if (native_dataset)
+        return operation(native_dataset, configured.connector) < 0 ? -1 : 0;
+
+    if (!native_file) return -1;
+
+    H5VL_loc_params_t loc_params {};
+    loc_params.type = H5VL_OBJECT_BY_TOKEN;
+    loc_params.obj_type = H5I_FILE;
+    H5O_token_t token {};
+    dataset.fill_token(token);
+    loc_params.loc_data.loc_by_token.token = &token;
+    H5I_type_t opened_type = H5I_BADID;
+    native_dataset =
+        H5VLobject_open(native_file, &loc_params, configured.connector,
+                        &opened_type, dxpl_id, nullptr);
+    if (!native_dataset || opened_type != H5I_DATASET)
+    {
+        if (native_dataset)
+            H5VLdataset_close(native_dataset, configured.connector, dxpl_id,
+                              nullptr);
+        return -1;
+    }
+
+    const auto result = operation(native_dataset, configured.connector);
+    const auto dataset_close =
+        H5VLdataset_close(native_dataset, configured.connector, dxpl_id,
+                          nullptr);
+    return result < 0 || dataset_close < 0 ? -1 : 0;
+}
+std::pair<void*, void*> native_objects(LowFive::MetadataVOL& vol,
+                                       LowFive::ObjectPointers* current,
+                                       LowFive::Dataset& dataset)
+{
+    void* native_dataset = nullptr;
+    void* native_file = nullptr;
+    auto* file = dataset.find_root();
+    for (auto* pointer : vol.our_objects)
+    {
+        auto* wrapped = static_cast<LowFive::ObjectPointers*>(pointer);
+        if (wrapped == current || !vol.unwrap(wrapped)) continue;
+        if (wrapped->mdata_obj == &dataset)
+            native_dataset = vol.unwrap(wrapped);
+        else if (wrapped->file_wrapper && wrapped->mdata_obj == file)
+            native_file = vol.unwrap(wrapped);
+    }
+    if (!native_file)
+        if (auto* metadata = dynamic_cast<LowFive::File*>(file))
+            if (metadata->reference_file_id >= 0)
+                native_file = H5VLobject(metadata->reference_file_id);
+    return {native_dataset, native_file};
+}
+
+}
+
 void*
 LowFive::MetadataVOL::
 dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
@@ -11,85 +108,87 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         hid_t space_id, hid_t dcpl_id,
         hid_t dapl_id,  hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = nullptr;
-
-    auto log = get_logger();
-    log->trace("Dataset Create");
-    log->trace("dataset_create: parent obj = {}", *obj_);
+    auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
+    std::string dataset_name = name ? name : "";
+    auto path = parent->search(dataset_name);
+    if (!path.obj || !path.is_name() || (name && path.path.empty())) return nullptr;
+    auto filepath = parent->fullname(dataset_name);
+    bool native = match_any(filepath, passthru);
+    bool in_memory = match_any(filepath, memory);
+    void* underlying = nullptr;
+    if (native)
+    {
+        if (!unwrap(obj)) return nullptr;
+        underlying = VOLBase::dataset_create(unwrap(obj), loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
+        if (!underlying) return nullptr;
+    }
+    auto ownership = match_any(filepath, zerocopy) ? Dataset::Ownership::user : Dataset::Ownership::lowfive;
+    auto* metadata = new Dataset(path.path, type_id, space_id, ownership, dcpl_id,
+                                 dapl_id, native, in_memory);
     if (name)
-        log->trace(", name = {}", name);
+        metadata = static_cast<Dataset*>(path.obj->add_child(metadata));
+    else if (auto* file = dynamic_cast<File*>(parent->find_root()))
+    {
+        metadata->set_root(file);
+        file->unlinked.push_back(metadata);
+    }
     else
-        log->trace(", name = NULL");
-    log->trace("");
-
-    log_assert(obj_->mdata_obj, "mdata_obj not set");
-
-    // trace object back to root to build full path and file name
-    std::string name_str = name ? name : "";
-    auto filepath = static_cast<Object*>(obj_->mdata_obj)->fullname(name_str);
-
-    bool is_passthru = match_any(filepath, passthru);
-    bool is_memory = match_any(filepath, memory);
-
-    log->trace("MetadataVOL::dataset_create: is_passthru = {}, is_memory = {}, filepath = ({}, {})", is_passthru, is_memory, filepath.first, filepath.second);
-
-    if (is_passthru)
-        result = wrap(VOLBase::dataset_create(unwrap(obj_), loc_params, name, lcpl_id,  type_id, space_id, dcpl_id, dapl_id,  dxpl_id, req));
-    else
-        result = wrap(nullptr);
-
-    // check the ownership map for the full path name and file name
-    Dataset::Ownership own = Dataset::Ownership::lowfive;
-    if (match_any(filepath, zerocopy))
-        own = Dataset::Ownership::user;
-
-    // add the dataset
-    auto obj_path = static_cast<Object*>(obj_->mdata_obj)->search(name_str);
-    assert(obj_path.is_name());
-    result->mdata_obj = obj_path.obj->add_child(new Dataset(obj_path.path, type_id, space_id, own, dcpl_id, dapl_id, is_passthru, is_memory));
-
-    log->trace("created dataset in metadata, new object {} under parent object {} named {}",
-            *result, fmt::ptr(obj_path.obj), static_cast<Object*>(obj_path.obj)->name);
-
-    return (void*)result;
+        metadata = static_cast<Dataset*>(path.obj->add_child(metadata));
+    auto* result = wrap(underlying);
+    result->mdata_obj = metadata;
+    return result;
 }
 
 void*
 LowFive::MetadataVOL::
 dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*) obj;
-    ObjectPointers* result = nullptr;
-
-    auto log = get_logger();
-    log->trace("MetadataVOL::dataset_open {}", *obj_);
-
-    // trace object back to root to build full path and file name
-    Object* parent = static_cast<Object*>(obj_->mdata_obj);
-    auto filepath = parent->fullname(name);
-
-    // if dataset is on disk and in memory, use memory
-    if (match_any(filepath, passthru) && !match_any(filepath, memory))
-        result = wrap(VOLBase::dataset_open(unwrap(obj_), loc_params, name, dapl_id, dxpl_id, req));
-    else
-        result = wrap(nullptr);
-
-    //if (match_any(filepath, memory))
-    //{
-    //    // find the dataset in our file metadata
-    auto obj_path = parent->search(name);
-    if (obj_path.path.empty())
-        result->mdata_obj = obj_path.obj;
-    //}
-
-    if (!result->mdata_obj)
+    auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
+    auto path = parent->search(name);
+    void* underlying = nullptr;
+    if (match_any(parent->fullname(name), passthru) && unwrap(obj))
     {
-        // TODO: create group structure on the fly
-        result->mdata_obj = parent->add_child(new DummyDataset(name));
+        underlying = VOLBase::dataset_open(unwrap(obj), loc_params, name, dapl_id, dxpl_id, req);
+        if (!underlying) return nullptr;
     }
-
-    return (void*)result;
+    Object* metadata = path.path.empty() ? path.obj : nullptr;
+    if (metadata && metadata->type != ObjectType::Dataset)
+    {
+        if (underlying) VOLBase::dataset_close(underlying, dxpl_id, req);
+        return nullptr;
+    }
+    if (!metadata)
+    {
+        if (!underlying) return nullptr;
+        auto properties = query_dataset_metadata(
+            [&](H5VL_dataset_get_args_t& args)
+            {
+                return VOLBase::dataset_get(
+                    underlying, &args, dxpl_id, nullptr);
+            });
+        if (!properties)
+        {
+            VOLBase::dataset_close(underlying, dxpl_id, nullptr);
+            return nullptr;
+        }
+        auto* inserted = new Dataset(
+            "", properties->type.id, properties->space.id,
+            Dataset::Ownership::lowfive, properties->dcpl,
+            properties->dapl, true, false);
+        auto target = metadata_target_path(parent, name);
+        if (target.obj && !target.path.empty())
+            metadata = target.obj->add_path(inserted, target.path);
+        else
+            delete inserted;
+        if (!metadata)
+        {
+            VOLBase::dataset_close(underlying, dxpl_id, nullptr);
+            return nullptr;
+        }
+    }
+    auto* result = wrap(underlying);
+    result->mdata_obj = metadata;
+    return result;
 }
 
 herr_t
@@ -143,18 +242,33 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
     }
     else if (dset_->mdata_obj)
     {
-        Dataset* ds = (Dataset*) dset_->mdata_obj;              // dataset from our metadata
-
-        // sanity check that the datatype and dimensionality being read matches the metadata
-        // TODO: HDF5 allows datatypes to not match and takes care of the conversion;
-        //       eventually, we need to support this functionality as well
-        if (ds->type.dtype_class != convert_type_class(H5Tget_class(mem_type_id)) ||
-                ds->type.dtype_size != H5Tget_size(mem_type_id))
-            throw MetadataError(fmt::format("Error: dataset_read(): type mismatch"));
-        if (file_space_id != H5S_ALL && Dataspace(file_space_id).dim != ds->space.dim)
-            throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
-
-        ds->read(mem_type_id, mem_space_id, file_space_id, buf);
+        auto* ds = dynamic_cast<Dataset*>(static_cast<Object*>(dset_->mdata_obj));
+        if (!ds) return -1;
+        if (ds->is_passthru)
+        {
+            auto native = native_objects(*this, dset_, *ds);
+            return with_native_dataset(
+                *ds, native.first, native.second, plist_id,
+                [&](void* native, hid_t connector)
+                {
+                    return H5VLdataset_read(
+                        1, &native, connector, &mem_type_id, &mem_space_id,
+                        &file_space_id, plist_id, &buf, nullptr);
+                });
+        }
+        resolve_references(ds, mem_space_id, file_space_id);
+        try
+        {
+            if (file_space_id != H5S_ALL && Dataspace(file_space_id).dim != ds->space.dim)
+                throw MetadataError(fmt::format("Error: dataset_read(): dim mismatch"));
+            ds->read(mem_type_id, mem_space_id, file_space_id, buf);
+        }
+        catch (...)
+        {
+            suspend_references(ds);
+            throw;
+        }
+        suspend_references(ds);
     }
 
     return 0;
@@ -164,45 +278,45 @@ herr_t
 LowFive::MetadataVOL::
 dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
-    ObjectPointers* dset_ = (ObjectPointers*) dset;
-
-    auto log = get_logger();
-    log->trace("MetadataVOL::dataset_write, dset = {}\nmem_space_id = {} ({})\nfile_space_id = {} ({})",
-            *dset_,
-            mem_space_id, Dataspace(mem_space_id),
-            file_space_id, Dataspace(file_space_id));
-
-    if (dset_->mdata_obj)
+    auto* pointers = static_cast<ObjectPointers*>(dset);
+    if (unwrap(dset))
     {
-        // we build our hierarchy for all datasets, so here we must check if this dataset is passthru only
-        auto filepath = static_cast<Object*>(dset_->mdata_obj)->fullname();
-        // save our metadata
-        Dataset* ds = dynamic_cast<Dataset*>((Object*) dset_->mdata_obj);
-        if (!ds)
-        {
-            // this error typically happens when a file is created, closed, and then re-opened for writing.
-            // for this to work, the file needs to remain in memory from close to re-open, which means
-            // set_keep(true) needs to be called on the vol
-            log->critical("Opened a dummy dataset; did you forget to set_keep(true)?");
-            assert(ds);
-        }
-        if (ds->is_memory) {
-            //log->trace("MetadataVOL::dataset_write: saving data to memory, dataset {} is_memory is true", ds->name);
-            ds->write(Datatype(mem_type_id), Dataspace(mem_space_id), Dataspace(file_space_id), buf);
-        } else {
-            //log->trace("MetadataVOL::dataset_write: not saving data to memory, dataset {} is passthru only", ds->name);
-        }
-        // if dataset is marked as passthru, it must have an underlying HDF5 object
-
-        assert(not ds->is_passthru or unwrap(dset));
+        herr_t result = VOLBase::dataset_write(unwrap(dset), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
+        if (result < 0) return result;
     }
-
-    if (after_dataset_write)
-        after_dataset_write();
-
-    if (unwrap(dset_))
-        return VOLBase::dataset_write(unwrap(dset_), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
-
+    auto* metadata = dynamic_cast<Dataset*>(static_cast<Object*>(pointers->mdata_obj));
+    bool wrote_native = false;
+    if (!unwrap(dset) && metadata && metadata->is_passthru)
+    {
+        auto native = native_objects(*this, pointers, *metadata);
+        if (with_native_dataset(
+                *metadata, native.first, native.second, plist_id,
+                [&](void* native, hid_t connector)
+                {
+                    const void* output = buf;
+                    return H5VLdataset_write(
+                        1, &native, connector, &mem_type_id, &mem_space_id,
+                        &file_space_id, plist_id, &output, nullptr);
+                }) < 0)
+            return -1;
+        wrote_native = true;
+    }
+    if (metadata && metadata->is_memory)
+    {
+        try
+        {
+            metadata->write(Datatype(mem_type_id), Dataspace(mem_space_id),
+                            Dataspace(file_space_id), buf);
+        }
+        catch (...)
+        {
+            suspend_references(metadata);
+            throw;
+        }
+        suspend_references(metadata);
+    }
+    else if (!unwrap(dset) && !wrote_native) return -1;
+    if (after_dataset_write) after_dataset_write();
     return 0;
 }
 
@@ -220,11 +334,10 @@ dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, v
     herr_t res = 0;
     if (unwrap(obj_))
         res = VOLBase::dataset_specific(unwrap(obj_), args, dxpl_id, req);
+    if (res < 0) return res;
 
-    // switching from else if to if so that if a file exists on disk, we can still perform dataset
-    // specific operations on the metadata, which were previeously being skipped, TP 6/24/26
-//     else if (obj_->mdata_obj)
-    if (obj_->mdata_obj)
+    if (auto* dataset = dynamic_cast<Dataset*>(
+            static_cast<Object*>(obj_->mdata_obj)))
     {
         // specific types are enumerated in H5VLconnector.h
         switch (specific_type)
@@ -233,23 +346,18 @@ dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, v
         {
             // adapted from H5VLnative_dataset.c, H5VL__native_dataset_specific()
             const hsize_t *size = args->args.set_extent.size;
-            Dataspace& space = static_cast<Dataset*>(obj_->mdata_obj)->space;
-            space.set_extent(size); // NB: updating overall dataspace, not individual data triples
+            dataset->space.set_extent(size);
             break;
         }
         case H5VL_DATASET_FLUSH:
-        {
             log->trace("dataset_specific specific_type H5VL_DATASET_FLUSH is a no-op in metadata");
             break;
-        }
         case H5VL_DATASET_REFRESH:
-        {
             log->trace("dataset_specific specific_type H5VL_DATASET_REFRESH is a no-op in metadata");
             break;
         }
-        }
     }
-    else
+    else if (!unwrap(obj_))
         throw MetadataError(fmt::format("dataset_specific(): either passthru or metadata must be specified"));
 
     return res;
