@@ -1,5 +1,5 @@
+cmake_minimum_required      (VERSION 3.18)
 project                     (LowFive)
-cmake_minimum_required      (VERSION 3.9)
 
 option                      (wrapped_mpi      "MPI compiler wrapper requires no further MPI libs"     OFF)
 option                      (lowfive_python   "Build python bindings"                                 ON)
@@ -139,6 +139,8 @@ install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTAL
 install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
 
 if                          (lowfive_python)
+    find_package            (Python REQUIRED COMPONENTS Interpreter Development.Module)
+    set                     (PYBIND11_FINDPYTHON ON)
     add_subdirectory        (ext/pybind11)
     add_subdirectory        (bindings/python)
 endif                       ()

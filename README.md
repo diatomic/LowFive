@@ -21,8 +21,22 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The API tests check data, selections, attributes, and named datatypes in memory,
-file, combined, and native-passthrough modes. Each case runs in its own process
-because LowFive maintains a single active connector. Checks remain enabled in
-Release builds. The existing MPI matrix also exercises redistribution between
+The isolated API tests cover storage modes, datatype conversion, selections,
+attributes, links and paths, object lifetimes, VOL wrapping, connector
+configuration, distributed queries, and RPC teardown. Checks remain enabled in
+Release builds. The MPI matrix additionally exercises redistribution between
 one or two producers and consumers.
+
+Use CTest labels to select a layer:
+
+```sh
+ctest --test-dir build --output-on-failure -L api
+ctest --test-dir build --output-on-failure -L mpi
+ctest --test-dir build --output-on-failure -L python
+ctest --test-dir build --output-on-failure -L install
+```
+
+Python tests are enabled with `lowfive_python`. The distributed Python example
+is registered when the selected interpreter provides mpi4py, h5py, and NumPy.
+Each connector test runs in its own process because LowFive maintains one
+active connector instance per process.

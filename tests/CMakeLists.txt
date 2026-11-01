@@ -53,6 +53,9 @@ lowfive_test(lowfive-callbacks callbacks.cpp
     reference-attribute reference-native-attribute dataset-reference-overwrite
     reference-zero-copy-alias
     vlen-zero-copy-alias soft-link-cross-file)
+lowfive_test(lowfive-examples examples.cpp
+    grid-valid grid-corrupt grid-read-error particles-valid particles-duplicate
+    particles-reordered particles-coordinate particles-read-error)
 
 function(lowfive_mpi_cases target)
     foreach(case ${ARGN})

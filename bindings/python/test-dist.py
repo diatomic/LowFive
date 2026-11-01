@@ -20,8 +20,10 @@ lowfive.create_logger("debug")
 world = MPI.COMM_WORLD
 size  = world.Get_size()
 rank  = world.Get_rank()
+if size < 2:
+    raise RuntimeError("test-dist.py requires at least two MPI ranks")
 
-producer_ranks = size / 2
+producer_ranks = size // 2
 producer = rank < producer_ranks
 
 local = world.Split(producer)
@@ -54,5 +56,6 @@ else:
 
     print(f"Consumer: {local.rank} out of {local.size}")
     with h5py.File("out.h5", "r") as f:
-        data = f[f"data{local.rank}"]
+        data = f[f"data{local.rank % producer_ranks}"]
+        assert np.all(data[...] == 1)
         print("Consumer:", data)

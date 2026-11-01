@@ -18,7 +18,6 @@ def create_DistMetadataVOL(local, intercomm):
     return vol
 
 def unset_vol_callbacks():
-    pass
     for vol in dist_vols:
         vol.unset_dist_callbacks()
         vol.unset_callbacks()
@@ -28,4 +27,4 @@ def unset_vol_callbacks():
 
 atexit.register(unset_vol_callbacks)
 
-__all__ = ["create_DistMetadataVOL", "create_MetadataVOL", "create_VOLBase", "create_logger", "DistMetatadataVOL", "MetadataVOL", "VOLBase"]
+__all__ = ["create_DistMetadataVOL", "create_MetadataVOL", "create_VOLBase", "create_logger", "DistMetadataVOL", "MetadataVOL", "VOLBase"]

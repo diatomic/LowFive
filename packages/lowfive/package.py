@@ -43,7 +43,7 @@ class Lowfive(CMakePackage):
         ]
 
         if self.spec.satisfies("+python"):
-            args += [self.define("PYTHON_EXECUTABLE", self.spec["python"].command.path)]
+            args += [self.define("Python_EXECUTABLE", self.spec["python"].command.path)]
 
         return args
 

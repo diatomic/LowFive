@@ -13,6 +13,8 @@ file                        (GLOB LOWFIVE_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/lo
 add_custom_target           (pylowfive ALL ${CMAKE_COMMAND} -E copy_directory
                                     ${CMAKE_CURRENT_SOURCE_DIR}/lowfive ${MODULE_OUTPUT_DIRECTORY}/lowfive
                                     DEPENDS ${LOWFIVE_PYTHON})
+configure_file              (${CMAKE_CURRENT_SOURCE_DIR}/test-dist.py
+                             ${MODULE_OUTPUT_DIRECTORY}/test-dist.py COPYONLY)
 
 pybind11_add_module         (_lowfive lowfive.cpp)
 target_link_libraries       (_lowfive PRIVATE ${libraries})
@@ -24,11 +26,55 @@ if                          (MPI4Py_FOUND)
     target_include_directories  (_lowfive PUBLIC ${MPI4Py_INCLUDE_DIR})
 endif()
 
-# install _lowfive, __init__.py, and set PYTHONPATH for spack
-list                        (APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/ext/pybind11/tools")
-find_package                (PythonLibsNew)
-string                      (REPLACE ${PYTHON_PREFIX}/ "" PYTHON_SITE_PACKAGES_RELATIVE ${PYTHON_SITE_PACKAGES})
-install                     (TARGETS _lowfive LIBRARY DESTINATION ${PYTHON_SITE_PACKAGES_RELATIVE}/lowfive)
-install                     (FILES lowfive/__init__.py DESTINATION ${PYTHON_SITE_PACKAGES_RELATIVE}/lowfive)
+# Use the same interpreter for compilation, MPI bindings, tests, and installation.
+execute_process             (COMMAND "${Python_EXECUTABLE}" -c
+                             "import sysconfig; print(sysconfig.get_path('platlib', vars={'base': '', 'platbase': ''}).lstrip('/'))"
+                             OUTPUT_VARIABLE LOWFIVE_PYTHON_INSTALL_DIR
+                             OUTPUT_STRIP_TRAILING_WHITESPACE
+                             RESULT_VARIABLE LOWFIVE_PYTHON_PATH_STATUS)
+if                          (NOT LOWFIVE_PYTHON_PATH_STATUS EQUAL 0)
+    message                 (FATAL_ERROR "Could not determine the Python installation directory")
+endif                       ()
+install                     (TARGETS _lowfive LIBRARY DESTINATION ${LOWFIVE_PYTHON_INSTALL_DIR}/lowfive)
+install                     (FILES lowfive/__init__.py DESTINATION ${LOWFIVE_PYTHON_INSTALL_DIR}/lowfive)
+
+foreach                     (case exports errors lifetime)
+    add_test                (NAME lowfive-python-${case}
+                             COMMAND "${CMAKE_COMMAND}" -E env
+                             "PYTHONPATH=${MODULE_OUTPUT_DIRECTORY}"
+                             "HDF5_PLUGIN_PATH=$<TARGET_FILE_DIR:lowfive>"
+                             "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/python_api.py" ${case})
+    set_tests_properties    (lowfive-python-${case} PROPERTIES TIMEOUT 30 LABELS python)
+endforeach                  ()
+if                          (MPI4Py_FOUND)
+    execute_process         (COMMAND "${Python_EXECUTABLE}" -c "import h5py, numpy"
+                             RESULT_VARIABLE LOWFIVE_H5PY_STATUS
+                             ERROR_QUIET)
+    if                      (LOWFIVE_H5PY_STATUS EQUAL 0)
+        add_test            (NAME lowfive-python-distributed
+                             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 ${MPIEXEC_PREFLAGS}
+                             "${CMAKE_COMMAND}" -E env
+                             "PYTHONPATH=${MODULE_OUTPUT_DIRECTORY}"
+                             "HDF5_PLUGIN_PATH=$<TARGET_FILE_DIR:lowfive>"
+                             "HDF5_VOL_CONNECTOR=lowfive under_vol=0$<SEMICOLON>under_info={}$<SEMICOLON>"
+                             "${Python_EXECUTABLE}" "${MODULE_OUTPUT_DIRECTORY}/test-dist.py" -m
+                             ${MPIEXEC_POSTFLAGS})
+        set_tests_properties(lowfive-python-distributed PROPERTIES
+                             TIMEOUT 60 LABELS "python;mpi" PROCESSORS 3)
+    endif                   ()
+endif                       ()
+foreach                     (case permissions python)
+    add_test                (NAME lowfive-install-${case}
+                             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/install.py"
+                             "${PROJECT_BINARY_DIR}" "${CMAKE_INSTALL_PREFIX}" ${case}
+                             "$<TARGET_FILE_NAME:lowfive>" "$<TARGET_FILE_NAME:lowfive-dist>")
+    set_tests_properties    (lowfive-install-${case} PROPERTIES TIMEOUT 60 LABELS install)
+endforeach                  ()
+add_test                    (NAME lowfive-cmake-mpi4py-stale-cache
+                             COMMAND "${CMAKE_COMMAND}"
+                             "-DMPI4PY_FINDER=${CMAKE_CURRENT_SOURCE_DIR}/FindMPI4Py.cmake"
+                             -P "${PROJECT_SOURCE_DIR}/tests/find_mpi4py.cmake")
+set_tests_properties        (lowfive-cmake-mpi4py-stale-cache PROPERTIES
+                             TIMEOUT 30 LABELS python)
 
 
