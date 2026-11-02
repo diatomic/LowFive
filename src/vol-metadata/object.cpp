@@ -200,6 +200,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             H5O_type_t *obj_type = args->args.get_type.obj_type;
 
             Object* obj = mdata_obj->locate(*loc_params).exact();
+            if (!obj) return -1;
             if (static_cast<int>(obj->type) >= h5_types.size())     // sanity check
                 throw MetadataError(fmt::format("object_get(): obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", obj->type));
 
@@ -221,6 +222,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             // we don't fill args->args.get_info.fields
 
             Object* obj = mdata_obj->locate(*loc_params).exact();
+            if (!obj) return -1;
 
             if (static_cast<int>(obj->type) >= h5_types.size())     // sanity check
                 throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));

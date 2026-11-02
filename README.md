@@ -11,6 +11,10 @@ than one task can produce (write) data, and more than one task can consume
 LowFive supports data redistribution from n producer processes to m consumer
 processes.
 
+## Connector behavior
+
+Missing object, group, and attribute locations return HDF5 errors.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:

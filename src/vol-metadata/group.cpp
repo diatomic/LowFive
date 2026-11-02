@@ -133,27 +133,32 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
             // resolve location
             H5VL_native_group_iterate_old_t *iter_args = &opt_args->iterate_old;
             mdata_obj = mdata_obj->locate(iter_args->loc_params).exact();
+            if (!mdata_obj ||
+                (mdata_obj->type != ObjectType::File &&
+                 mdata_obj->type != ObjectType::Group)) return -1;
 
-            // get object type in HDF format and use that to get an HDF hid_t to the object
-            std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
-            int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
+            const auto obj_type = get_identifier_type(mdata_obj);
             ObjectPointers* obj_tmp = wrap(mdata_obj);
             *obj_tmp = *obj_;
+            obj_tmp->mdata_obj = mdata_obj;
             obj_tmp->tmp = true;
             auto log = get_logger();
             log->trace("group_optional: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
             hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
+            if (obj_loc_id < 0) return -1;
 
-            // check direct children of the parent group object, not full search all the way down the tree
-            // blindly goes through all the children in the order they were created, ignoring idx
-
-            if (opt_args->iterate_old.idx)
-                log->warn("group_optional: for iterating, ignoring the current index which is {}", opt_args->iterate_old.idx);
-            else
-                log->trace("group_optional: iterating, the current index is unassigned");
-
-            for (auto* c : mdata_obj->links())
+            auto children = mdata_obj->links();
+            const hsize_t start = iter_args->idx;
+            if (start > children.size())
             {
+                H5Idec_ref(obj_loc_id);
+                return -1;
+            }
+            if (iter_args->last_obj) *iter_args->last_obj = start;
+            size_t position = 0;
+            for (auto* c : children)
+            {
+                if (position++ < static_cast<size_t>(start)) continue;
 
                 log->trace("group_optional: found object {} as a child of the parent {}", c->name, mdata_obj->name);
 
@@ -162,13 +167,14 @@ group_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 
                 // make the application callback, copied from H5Glink.c, H5G__link_iterate_table()
                 res = (opt_args->iterate_old.op)(obj_loc_id, c_name.data(), opt_args->iterate_old.op_data);
+                if (iter_args->last_obj) *iter_args->last_obj = position;
                 if (res > 0)
                 {
                     log->trace("group_optional iteration: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
                     break;
                 }
                 else if (res < 0)
-                    throw MetadataError(fmt::format("group_optional() opt_type H5VL_NATIVE_GROUP_ITERATE_OLD callback returned nonzero value indicating error"));
+                    break;
             }   // for all children
 
             auto refcount = H5Idec_ref(obj_loc_id);
@@ -244,6 +250,8 @@ group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req)
             H5G_info_t*             group_info = args->args.get_info.ginfo;
 
             auto* g = static_cast<Object*>(obj_->mdata_obj)->locate(loc_params).exact();
+            if (!g || (g->type != ObjectType::File &&
+                       g->type != ObjectType::Group)) return -1;
             group_info->storage_type = H5G_STORAGE_TYPE_UNKNOWN;
             group_info->nlinks = g->links().size();
             group_info->max_corder = 0;

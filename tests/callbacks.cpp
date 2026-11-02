@@ -517,6 +517,46 @@ void run(const std::string& name)
                           connector.fapl), H5Fclose);
     }();
     auto scalar = test::scalar();
+    if (name == "missing_callback_names")
+    {
+        H5O_info2_t object_info {};
+        H5G_info_t group_info {};
+        CHECK(H5Oget_info_by_name3(file, "missing", &object_info,
+                                  H5O_INFO_BASIC, H5P_DEFAULT) < 0);
+        CHECK(H5Gget_info_by_name(file, "missing", &group_info,
+                                  H5P_DEFAULT) < 0);
+        hsize_t index = 0;
+        std::vector<std::string> names;
+        CHECK(H5Aiterate_by_name(file, "missing", H5_INDEX_NAME, H5_ITER_INC,
+                                 &index, collect_attribute, &names,
+                                 H5P_DEFAULT) < 0);
+        CHECK(index == 0);
+        CHECK(names.empty());
+        CHECK(H5Giterate(file, "missing", nullptr,
+                         [](hid_t, const char*, void*) -> herr_t { return 0; },
+                         nullptr) < 0);
+        Id group(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        auto first = dataset(group, "a", scalar);
+        auto second = dataset(group, "b", scalar);
+        auto third = dataset(group, "c", scalar);
+        int next = 1;
+        auto collect = [](hid_t location, const char* child, void* context) -> herr_t
+        {
+            char path[16] {};
+            CHECK(H5Iget_name(location, path, sizeof(path)) == 6);
+            CHECK(std::string(path) == "/group");
+            static_cast<std::vector<std::string>*>(context)->emplace_back(child);
+            return 1;
+        };
+        CHECK(H5Giterate(file, "group", &next, collect, &names) == 1);
+        CHECK(next == 2 && names == std::vector<std::string>{"b"});
+        CHECK(H5Giterate(file, "group", &next, collect, &names) == 1);
+        CHECK(next == 3 && names == (std::vector<std::string>{"b", "c"}));
+        CHECK(H5Giterate(file, "group", &next, collect, &names) == 0);
+        CHECK(next == 3 && names.size() == 2);
+        return;
+    }
     if (name == "bounded_object_ids")
     {
         auto first = dataset(file, "first", scalar);

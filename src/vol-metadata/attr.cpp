@@ -235,6 +235,7 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_index_t index,
     auto* metadata = static_cast<Object*>(pointers->mdata_obj);
     try { metadata = metadata->locate(*loc_params).exact(); }
     catch (...) { return -1; }
+    if (!metadata) return -1;
 
     std::vector<std::pair<Object*, int64_t>> attributes;
     int64_t creation_order = 0;
