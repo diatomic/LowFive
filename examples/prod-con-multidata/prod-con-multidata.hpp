@@ -59,6 +59,7 @@ struct PointBlock
     {
         const PointBlock* b = static_cast<const PointBlock*>(b_);
         diy::save(bb, b->bounds);
+        diy::save(bb, b->core);
         diy::save(bb, b->domain);
         diy::save(bb, b->points);
         diy::save(bb, b->grid);
@@ -70,6 +71,7 @@ struct PointBlock
     {
         PointBlock* b = static_cast<PointBlock*>(b_);
         diy::load(bb, b->bounds);
+        diy::load(bb, b->core);
         diy::load(bb, b->domain);
         diy::load(bb, b->points);
         diy::load(bb, b->grid);

@@ -7,6 +7,32 @@ int main(int argc, char** argv)
 {
     return test::run(argc, argv, [](const std::string& name)
     {
+        if (name == "serialization")
+        {
+            Bounds core(3), bounds(3), domain(3);
+            for (int j = 0; j < 3; ++j)
+            {
+                core.min[j] = j + 2;
+                core.max[j] = j + 4;
+                bounds.min[j] = j + 1;
+                bounds.max[j] = j + 5;
+                domain.min[j] = 0;
+                domain.max[j] = 9;
+            }
+            Block source(core, bounds, domain);
+            diy::MemoryBuffer buffer;
+            Block::save(&source, buffer);
+            buffer.reset();
+            std::unique_ptr<Block> restored(static_cast<Block*>(Block::create()));
+            Block::load(restored.get(), buffer);
+            for (int j = 0; j < 3; ++j)
+            {
+                CHECK(restored->core.min[j] == core.min[j]);
+                CHECK(restored->core.max[j] == core.max[j]);
+            }
+            return;
+        }
+
         const bool particles = name.find("particles") == 0;
         const bool valid = name.find("valid") != std::string::npos && name.find("invalid") == std::string::npos;
         Bounds domain(3);
