@@ -116,7 +116,7 @@ void property_lifetime()
 
 void info_roundtrip(bool nested)
 {
-    test::Connector connector("base-info", "native");
+    test::Connector connector(nested ? "base-info-nested" : "base-info-independent", "native");
     auto* original = LowFive::VOLBase::info;
     const std::string text = nested ? "under_vol=510;under_info={under_vol=0;under_info={}}" : "under_vol=0;under_info={}";
     void* parsed = nullptr;
