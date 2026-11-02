@@ -144,13 +144,23 @@ broadcast_files(int root)
 
         size_t n_files;
         diy::load(bb, n_files);
-        // NB: we are not clearing files beforehand, might be a reasonable thing to do
+        std::map<std::string, std::unique_ptr<Object>> received;
         for (size_t i = 0; i < n_files; ++i)
         {
             std::string filename;
             diy::load(bb, filename);
-            auto* f = deserialize(bb, *this);
-            files.emplace(filename, f);
+            std::unique_ptr<Object> file(deserialize(bb, *this));
+            if (!received.emplace(filename, std::move(file)).second)
+                throw MetadataError("Duplicate filename in broadcast metadata");
+        }
+        // A broadcast replaces the authoritative snapshot. Existing wrappers
+        // keep their old tree alive through drop() until their last close.
+        clear_files();
+        for (auto& entry : received)
+        {
+            if (!files.emplace(entry.first, entry.second.get()).second)
+                throw MetadataError("Could not replace broadcast metadata");
+            entry.second.release();
         }
     }
 }
@@ -392,7 +402,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     // Will break, if so far the producer only created passthru datasets,
     // because indexed_datasets will be empty and we won't start serving.
 
-    void* result_mdata {nullptr};
+    std::unique_ptr<Object> metadata;
     // get an intercomm for this file
     auto locs = find_matches(name, "", intercomm_locations, true);
     if (locs.empty())
@@ -419,23 +429,20 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         return nullptr;
     }
     hierarchy.reset();
-    Object* hf = deserialize(hierarchy, *this);
+    metadata.reset(deserialize(hierarchy, *this));
 
-    auto* hff = static_cast<File*>(hf);
+    auto* hff = static_cast<File*>(metadata.get());
     if (hff->copy_whole) {
         MPI_Barrier(local);
         if (remote_file_counts_.find(intercomm_index) ==
             remote_file_counts_.end())
             query->send_done();
-        files.emplace(name, hff);
-        result_mdata = hff;
     } else {
         rpc::client::object rf = query->c.call<rpc::client::object>("file_open", std::string(name));
 
         log->trace("Creating remote");
-        RemoteFile* f = new RemoteFile(*this, *hff, std::move(rf), std::move(query));
-        files.emplace(name, f);
-        result_mdata = f;
+        std::unique_ptr<RemoteFile> f(
+            new RemoteFile(*this, *hff, std::move(rf), std::move(query)));
 
         if (H5Pget_driver(fapl_id) == H5FD_MPIO)
         {
@@ -447,26 +454,26 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         }
 
         // Move the hierarchy over and delete the plain File object.
-        f->move_children(hf);
+        f->move_children(hff);
         f->unlinked = std::move(hff->unlinked);
         for (auto* object : f->unlinked)
-            object->set_root(f);
-        delete hf;
+            object->set_root(f.get());
+        metadata.reset(f.release());
     }
+
+    // Retire a dummy together with its map entry. Any wrappers already
+    // referencing it retain that tree until their last close.
+    drop(std::string(name));
+    if (!files.emplace(name, metadata.get()).second)
+        throw MetadataError("Could not replace remote file metadata");
+    metadata.release();
 
     ObjectPointers* result = (ObjectPointers*)MetadataVOL::file_open(name, flags, fapl_id, dxpl_id, req);
     if (!result)
     {
-        auto entry = files.find(name);
-        if (entry != files.end() && entry->second == result_mdata)
-            files.erase(entry);
-        delete static_cast<Object*>(result_mdata);
+        drop(std::string(name));
         return nullptr;
     }
-    // if there was DummyFile, delete it (if dynamic cast fails, delete nullptr is fine)
-    delete dynamic_cast<DummyFile*>((Object*)result->mdata_obj);
-
-    result->mdata_obj = result_mdata;
 
     return result;
 }

@@ -30,6 +30,10 @@ Native-backed objects continue to forward operations to the underlying connector
 Open-object counts and ID lists are scoped to the requested file;
 `H5F_OBJ_LOCAL` restricts them to the originating file handle.
 
+`broadcast_files()` replaces the receiver's metadata snapshot. Existing handles
+keep their previous snapshot and its same-file reference targets until closed;
+subsequent opens use the replacement.
+Repeated broadcasts, including an empty snapshot, retire prior map ownership.
 The metadata wire format carries unwritten attribute state and dataset fill
 values; communicating processes must use the same LowFive version. Distributed
 modern-reference values remain unsupported.

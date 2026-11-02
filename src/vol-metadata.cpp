@@ -166,7 +166,8 @@ LowFive::File* reference_file(
     LowFive::MetadataVOL& vol, LowFive::File* source,
     const LowFive::File::PendingReference& state)
 {
-    if (state.filename.empty()) return source;
+    if (state.filename.empty() ||
+        (source && state.filename == source->name)) return source;
     auto found = vol.files.find(state.filename);
     return found == vol.files.end() ?
         nullptr : dynamic_cast<LowFive::File*>(found->second);

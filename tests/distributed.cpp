@@ -1,5 +1,7 @@
 #include "test.hpp"
 #include "metadata.hpp"
+#include "metadata/dummy.hpp"
+#include "vol-metadata-private.hpp"
 #include <lowfive/vol-dist-metadata.hpp>
 #include <array>
 #include <algorithm>
@@ -63,6 +65,117 @@ int delete_comm(MPI_Comm, int, void*, void*) { --copies; return MPI_SUCCESS; }
 void select(hid_t space, hsize_t start, hsize_t count, hsize_t stride = 1)
 {
     CHECK(H5Sselect_hyperslab(space, H5S_SELECT_SET, &start, &stride, &count, nullptr) >= 0);
+}
+
+void exercise_broadcast(int rank)
+{
+    auto& vol = LowFive::DistMetadataVOL::create_DistMetadataVOL(
+        MPI_COMM_WORLD, LowFive::DistMetadataVOL::communicators {});
+    vol.serve_on_close = false;
+    vol.keep = true;
+    const std::string filename = "distributed-broadcast.h5";
+    const std::string stale = "distributed-broadcast-stale.h5";
+    vol.set_memory(filename, "*");
+    vol.set_memory(stale, "*");
+    const hid_t connector = vol.register_plugin();
+    test::Id fapl(H5Pcreate(H5P_FILE_ACCESS), H5Pclose);
+    CHECK(H5Pset_vol(fapl, connector, vol.info) >= 0);
+    auto create = [&](hsize_t size, int fill)
+    {
+        test::Id file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC,
+                                H5P_DEFAULT, fapl), H5Fclose);
+        auto extent = test::space(size);
+        test::Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+        CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_INT, &fill) >= 0);
+        test::Id dataset(H5Dcreate2(file, "values", H5T_NATIVE_INT, extent,
+                                    H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+        H5R_ref_t reference {};
+        CHECK(H5Rcreate_object(file, "values", H5P_DEFAULT, &reference) >= 0);
+        auto scalar = test::scalar();
+        test::Id attribute(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                                      H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(attribute, H5T_STD_REF, &reference) >= 0);
+        CHECK(H5Rdestroy(&reference) >= 0);
+    };
+    auto check = [&](hid_t dataset, hsize_t size, int fill)
+    {
+        test::Id extent(H5Dget_space(dataset), H5Sclose);
+        hsize_t actual = 0;
+        CHECK(H5Sget_simple_extent_dims(extent, &actual, nullptr) == 1);
+        CHECK(actual == size);
+        std::vector<int> values(size + 2, -91);
+        CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, values.data() + 1) >= 0);
+        CHECK(values.front() == -91 && values.back() == -91);
+        CHECK(std::all_of(values.begin() + 1, values.end() - 1,
+                          [&](int value) { return value == fill; }));
+    };
+    auto check_reference = [&](hid_t attribute, hsize_t size, int fill)
+    {
+        H5R_ref_t reference {};
+        CHECK(H5Aread(attribute, H5T_STD_REF, &reference) >= 0);
+        test::Id target(H5Ropen_object(&reference, H5P_DEFAULT, H5P_DEFAULT),
+                         H5Dclose);
+        check(target, size, fill);
+        CHECK(H5Rdestroy(&reference) >= 0);
+    };
+    if (rank == 0)
+        create(1, 11);
+    else
+    {
+        test::Id old(H5Fcreate(stale.c_str(), H5F_ACC_TRUNC,
+                               H5P_DEFAULT, fapl), H5Fclose);
+    }
+    vol.broadcast_files();
+    CHECK(vol.files.size() == 1 && vol.files.count(filename) == 1);
+    test::Id old_file(H5Fopen(filename.c_str(), H5F_ACC_RDONLY, fapl),
+                      H5Fclose);
+    test::Id old_dataset(H5Dopen2(old_file, "values", H5P_DEFAULT), H5Dclose);
+    test::Id old_attribute(H5Aopen(old_file, "reference", H5P_DEFAULT),
+                            H5Aclose);
+    const hid_t old_dcpl =
+        dynamic_cast<LowFive::Dataset*>(vol.locate(filename, "/values"))->dcpl.id;
+    check(old_dataset, 1, 11);
+    check_reference(old_attribute, 1, 11);
+    for (hsize_t step = 2; step <= 4; ++step)
+    {
+        hid_t replaced_dcpl = H5I_INVALID_HID;
+        if (rank == 0)
+            create(step, int(10 + step));
+        else if (step > 2)
+            replaced_dcpl = dynamic_cast<LowFive::Dataset*>(
+                vol.locate(filename, "/values"))->dcpl.id;
+        vol.broadcast_files();
+        CHECK(vol.files.size() == 1 && vol.files.count(stale) == 0);
+        if (replaced_dcpl >= 0)
+            CHECK(H5Iis_valid(replaced_dcpl) == 0);
+        test::Id current_file(
+            H5Fopen(filename.c_str(), H5F_ACC_RDONLY, fapl), H5Fclose);
+        test::Id current_dataset(
+            H5Dopen2(current_file, "values", H5P_DEFAULT), H5Dclose);
+        test::Id current_attribute(H5Aopen(current_file, "reference", H5P_DEFAULT),
+                                    H5Aclose);
+        check_reference(current_attribute, step, int(10 + step));
+        check(current_dataset, step, int(10 + step));
+        check(old_dataset, 1, 11);
+        check_reference(old_attribute, 1, 11);
+        CHECK(H5Iis_valid(old_dcpl) > 0);
+    }
+    old_file.reset();
+    check(old_dataset, 1, 11);
+    check_reference(old_attribute, 1, 11);
+    old_attribute.reset();
+    old_dataset.reset();
+    CHECK(H5Iis_valid(old_dcpl) == 0);
+    const hid_t final_dcpl =
+        dynamic_cast<LowFive::Dataset*>(vol.locate(filename, "/values"))->dcpl.id;
+    if (rank == 0)
+        vol.clear_files();
+    vol.broadcast_files();
+    CHECK(vol.files.empty());
+    CHECK(H5Iis_valid(final_dcpl) == 0);
+    fapl.reset();
+    CHECK(H5VLunregister_connector(connector) >= 0);
 }
 
 void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm intercomm)
@@ -259,7 +372,7 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
             if (name == "native-missing")
                 CHECK(std::remove(first.c_str()) == 0);
             if (name == "multifile") create(second);
-            if (name == "copy-whole")
+            if (name == "copy-whole" || name == "dummy-copy-whole")
             {
                 auto* source =
                     dynamic_cast<LowFive::File*>(vol.files.at(first));
@@ -279,13 +392,33 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
         }
         else
         {
-            if (name == "copy-whole")
+            if (name == "copy-whole" || name == "dummy-copy-whole")
             {
                 int local_rank = 0;
                 CHECK(MPI_Comm_rank(local, &local_rank) == MPI_SUCCESS);
                 if (local_rank == 1)
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(100));
+            }
+            LowFive::ObjectPointers* dummy_wrapper = nullptr;
+            hid_t dummy_dcpl = H5I_INVALID_HID;
+            if (name == "dummy-real" || name == "dummy-copy-whole")
+            {
+                auto* dummy = new LowFive::DummyFile(first);
+                auto extent = test::space(1);
+                auto* child = new LowFive::Dataset(
+                    "old", H5T_NATIVE_INT, extent,
+                    LowFive::Dataset::Ownership::lowfive,
+                    H5P_DATASET_CREATE_DEFAULT, H5P_DATASET_ACCESS_DEFAULT,
+                    false, true);
+                dummy->add_child(child);
+                dummy_dcpl = child->dcpl.id;
+                CHECK(vol.files.emplace(first, dummy).second);
+                dummy_wrapper = static_cast<LowFive::ObjectPointers*>(
+                    vol.MetadataVOL::file_open(
+                        first.c_str(), H5F_ACC_RDONLY, fapl,
+                        H5P_DEFAULT, nullptr));
+                CHECK(dummy_wrapper && dummy_wrapper->mdata_obj == dummy);
             }
             const unsigned open_flags =
                 name == "remote-unlinked-alias" ? H5F_ACC_RDWR :
@@ -382,6 +515,26 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
                 auto extent = test::space(3);
                 CHECK(H5Treclaim(type, extent, H5P_DEFAULT,
                                  result.data()) >= 0);
+            }
+            else if (name == "dummy-real" || name == "dummy-copy-whole")
+            {
+                auto* current = vol.files.at(first);
+                CHECK(dynamic_cast<LowFive::File*>(current));
+                CHECK(dummy_wrapper->mdata_obj != current);
+                CHECK(static_cast<LowFive::Object*>(
+                          dummy_wrapper->mdata_obj)->name == first);
+                CHECK(H5Iis_valid(dummy_dcpl) > 0);
+                test::Id again(H5Fopen(first.c_str(), H5F_ACC_RDONLY, fapl),
+                               H5Fclose);
+                test::Id other(H5Dopen2(again, "values", H5P_DEFAULT), H5Dclose);
+                read_all(ds);
+                read_all(other);
+                CHECK(vol.MetadataVOL::file_close(
+                          dummy_wrapper, H5P_DEFAULT, nullptr) >= 0);
+                vol.drop(dummy_wrapper);
+                CHECK(H5Iis_valid(dummy_dcpl) == 0);
+                CHECK(vol.files.at(first) == current);
+                read_all(other);
             }
             else if (name == "scalar")
             {
@@ -602,9 +755,18 @@ int main(int argc, char** argv)
             selected = argv[2];
         CHECK(selected);
         const std::string name = selected;
-        const bool grouped_consumers = name == "copy-whole";
+        const bool grouped_consumers =
+            name == "copy-whole" || name == "dummy-copy-whole";
         CHECK(size == (grouped_consumers ? 3 : 2));
         H5Eset_auto2(H5E_DEFAULT, nullptr, nullptr);
+        if (name == "broadcast-replace")
+        {
+            CHECK(size == 2);
+            H5Eset_auto2(H5E_DEFAULT, nullptr, nullptr);
+            exercise_broadcast(rank);
+            MPI_Finalize();
+            return EXIT_SUCCESS;
+        }
         MPI_Comm local, intercomm;
         const int color = grouped_consumers && rank > 0 ? 1 : rank;
         CHECK(MPI_Comm_split(MPI_COMM_WORLD, color, rank, &local) ==
