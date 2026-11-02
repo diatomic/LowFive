@@ -39,7 +39,6 @@ struct MetadataVOL: public LowFive::VOLBase
     using Files             = std::map<std::string, Object*>;       // Object*, to support both File and RemoteFile
     using LocationPatterns  = std::vector<LocationPattern>;
 
-    using AfterFileCreate   = std::function<void()>;
     using AfterFileClose    = std::function<void(const std::string&)>;
     using BeforeFileOpen    = std::function<void(const std::string&)>;
     using AfterDatasetWrite = std::function<void()>;
@@ -53,7 +52,6 @@ struct MetadataVOL: public LowFive::VOLBase
     bool                        retaining_reference_file = false;
 
     // callbacks
-    AfterFileCreate             after_file_create;
     AfterFileClose              after_file_close;
     BeforeFileOpen              before_file_open;
     AfterDatasetWrite           after_dataset_write;
