@@ -6,6 +6,24 @@ int main(int argc, char** argv)
 {
     return test::run(argc, argv, [](const std::string& mode)
     {
+        if (mode == "patterns")
+        {
+            CHECK(LowFive::MetadataVOL::match("", ""));
+            CHECK(!LowFive::MetadataVOL::match("", "a"));
+            CHECK(LowFive::MetadataVOL::match("***", ""));
+            CHECK(!LowFive::MetadataVOL::match("?", ""));
+            CHECK(LowFive::MetadataVOL::match("?", "*"));
+            CHECK(!LowFive::MetadataVOL::match("a?x", "a"));
+            CHECK(LowFive::MetadataVOL::match("data/*.h?", "data/run.h5"));
+            CHECK(!LowFive::MetadataVOL::match("data/*.h?", "data/run.h55"));
+            CHECK(LowFive::MetadataVOL::match("*ab*ac", "ababac"));
+            CHECK(LowFive::MetadataVOL::match("**a**?*", "*ab"));
+            const std::string long_path(100000, 'a');
+            CHECK(LowFive::MetadataVOL::match("*a", long_path.c_str()));
+            CHECK(!LowFive::MetadataVOL::match("*a*a*a*a*a*a*a*a*a*a*b",
+                                               long_path.c_str()));
+            return;
+        }
         test::Connector connector("api-" + mode, mode);
         auto file = connector.file();
         test::Id group(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);

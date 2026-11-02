@@ -143,23 +143,34 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void clear_files();
 
-    // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
-    // checks if two given strings match; the first string may contain wildcard characters
-    static bool match(const char *first, const char * second)
+    // Match '*' (any sequence) and '?' (one character) without recursive branching.
+    static bool match(const char* pattern, const char* text)
     {
-        if (*first == '\0' && *second == '\0')
-            return true;
-
-        if (*second == '\0')
-            return *first == '*' && match(first + 1, second);
-
-        if (*first == '?' || *first == *second)
-            return match(first+1, second+1);
-
-        if (*first == '*')
-            return match(first+1, second) || match(first, second+1);
-
-        return false;
+        const char* star = nullptr;
+        const char* retry = nullptr;
+        while (*text)
+        {
+            if (*pattern == '*')
+            {
+                star = pattern++;
+                retry = text;
+            }
+            else if (*pattern == '?' || *pattern == *text)
+            {
+                ++pattern;
+                ++text;
+            }
+            else if (star)
+            {
+                pattern = star + 1;
+                text = ++retry;
+            }
+            else
+                return false;
+        }
+        while (*pattern == '*')
+            ++pattern;
+        return *pattern == '\0';
     }
 
     // in the next 4 functions, partial means don't check full_path (for dataset)

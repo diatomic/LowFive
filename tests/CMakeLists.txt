@@ -9,7 +9,7 @@ function(lowfive_test target source)
     endforeach()
 endfunction()
 
-lowfive_test(lowfive-api api.cpp memory file dual native)
+lowfive_test(lowfive-api api.cpp memory file dual native patterns)
 lowfive_test(lowfive-base base.cpp
     hard hard-same-dst hard-same-src copy-same-dst copy-same-src move-same-dst move-same-src
     reopen-native reopen-metadata exceptions property-lifetime info-independent
