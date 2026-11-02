@@ -557,6 +557,17 @@ void run(const std::string& name)
         CHECK(next == 3 && names.size() == 2);
         return;
     }
+    if (name == "metadata_optional_contract")
+    {
+        CHECK(H5Oset_comment(file, "not stored") < 0);
+        char comment[] = "unchanged";
+        CHECK(H5Oget_comment(file, comment, sizeof(comment)) < 0);
+        CHECK(std::strcmp(comment, "unchanged") == 0);
+        hsize_t storage = 123;
+        CHECK(H5Fget_filesize(file, &storage) < 0);
+        CHECK(storage == 123);
+        return;
+    }
     if (name == "bounded_object_ids")
     {
         auto first = dataset(file, "first", scalar);

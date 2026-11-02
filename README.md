@@ -13,7 +13,10 @@ processes.
 
 ## Connector behavior
 
-Missing object, group, and attribute locations return HDF5 errors.
+Missing object, group, and attribute locations return HDF5 errors. Unsupported
+metadata-only optional operations also return errors rather than reporting
+success; optional-operation queries advertise only implemented operations.
+Native-backed objects continue to forward operations to the underlying connector.
 
 ## Testing
 

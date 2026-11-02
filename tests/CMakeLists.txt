@@ -30,7 +30,7 @@ lowfive_test(lowfive-model model.cpp
     persist-unwritten-attribute)
 lowfive_test(lowfive-callbacks callbacks.cpp
     wildcard file_plist_ownership file_failure file_access file_exclusive
-    missing_callback_names
+    missing_callback_names metadata_optional_contract
     file_accessible bounded_object_ids datatype_failures
     committed_datatype_attributes group_plist_copy attr_iteration
     lifetime multiple_files dual_reopen link_name group_failure dataset_failure

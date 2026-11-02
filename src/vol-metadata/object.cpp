@@ -349,68 +349,7 @@ object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_ar
 
     if (!unwrap(obj))               // memory
     {
-        ObjectPointers* obj_        = (ObjectPointers*) obj;
-        Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj); (void)mdata_obj;
-
-        // see HDF5's H5VL__native_object_optional() in H5VLnative_object.c
-        // TODO: not implemented yet
-        switch(op_type)
-        {
-            // H5Oget_comment / H5Oget_comment_by_name
-        case H5VL_NATIVE_OBJECT_GET_COMMENT:
-        {
-            // TODO
-            throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_GET_COMMENT not implemented in metadata yet"));
-        }
-
-            // H5Oset_comment
-        case H5VL_NATIVE_OBJECT_SET_COMMENT:
-        {
-            // TODO
-            //throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_SET_COMMENT not implemented in metadata yet"));
-            log->warn("OBJECT_SET_COMMENT not implemented in object_optional; skipping silently");
-            return 0;
-        }
-
-            // H5Odisable_mdc_flushes
-        case H5VL_NATIVE_OBJECT_DISABLE_MDC_FLUSHES:
-        {
-            // TODO
-            throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_DISABLE_MDC_FLUSHES not implemented in metadata yet"));
-        }
-
-            // H5Oenable_mdc_flushes
-        case H5VL_NATIVE_OBJECT_ENABLE_MDC_FLUSHES:
-        {
-            // TODO
-            throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_ENABLE_MDC_FLUSHES not implemented in metadata yet"));
-        }
-
-            // H5Oare_mdc_flushes_disabled
-        case H5VL_NATIVE_OBJECT_ARE_MDC_FLUSHES_DISABLED:
-        {
-            // TODO
-            throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_ARE_MDC_FLUSHES_DISABLED not implemented in metadata yet"));
-        }
-
-            // H5Oget_native_info(_name|_by_idx)
-        case H5VL_NATIVE_OBJECT_GET_NATIVE_INFO:
-        {
-//            H5O_native_info_t *native_info = args->args va_arg(arguments, H5O_native_info_t *);
-//            unsigned           fields      = va_arg(arguments, unsigned);
-
-//            log->trace("get_native_info: fields = {}", fields);
-//            log->warn("get_native_info not implemented, nothing is set");
-
-            // TODO
-            //throw MetadataError(fmt::format("object_optional: optional_type H5VL_NATIVE_OBJECT_GET_NATIVE_INFO not implemented in metadata yet"));
-            return 0;
-        }
-
-        default:
-            throw MetadataError(fmt::format("object_optional: invalid optional type"));
-        }
-
+        return -1;
     }
     else                            // passthru
     {

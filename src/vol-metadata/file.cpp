@@ -332,7 +332,7 @@ file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
     log->trace("file_optional: file = {}, opt_type = {}", *file_, args->op_type);
     // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_FILE_* constants)
 
-    herr_t res = 0;
+    herr_t res = -1;
     if (unwrap(file_))
     {
         // warn if metadata are available but won't be used

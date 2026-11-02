@@ -182,8 +182,7 @@ LowFive::MetadataVOL::datatype_specific(void* obj, H5VL_datatype_specific_args_t
     if (unwrap(obj_))
         return VOLBase::datatype_specific(unwrap(obj_), args, dxpl_id, req);
 
-    // nothing to do in-memory
-    return 0;
+    return -1;
 }
 
 herr_t
@@ -193,6 +192,5 @@ LowFive::MetadataVOL::datatype_optional(void* obj, H5VL_optional_args_t* args, h
     if (unwrap(obj_))
         return VOLBase::datatype_optional(unwrap(obj_), args, dxpl_id, req);
 
-    // nothing to do in-memory
-    return 0;
+    return -1;
 }

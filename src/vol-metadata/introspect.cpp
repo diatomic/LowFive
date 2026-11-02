@@ -30,6 +30,12 @@ herr_t
 LowFive::MetadataVOL::
 introspect_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported, uint64_t *flags)
 {
-    return VOLBase::introspect_opt_query(unwrap(obj), cls, opt_type, supported, flags);
+    if (obj && unwrap(obj))
+        return VOLBase::introspect_opt_query(unwrap(obj), cls, opt_type, supported, flags);
+    const bool available = cls == H5VL_SUBCLS_GROUP &&
+                           opt_type == H5VL_NATIVE_GROUP_ITERATE_OLD;
+    if (supported) *supported = available;
+    if (flags) *flags = available ? H5VL_OPT_QUERY_SUPPORTED : 0;
+    return 0;
 }
 

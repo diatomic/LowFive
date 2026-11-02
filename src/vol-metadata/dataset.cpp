@@ -365,6 +365,9 @@ dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, v
         case H5VL_DATASET_REFRESH:
             log->trace("dataset_specific specific_type H5VL_DATASET_REFRESH is a no-op in metadata");
             break;
+        default:
+            if (!unwrap(obj_)) return -1;
+            break;
         }
     }
     else if (!unwrap(obj_))
@@ -395,8 +398,7 @@ dataset_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **re
     }
     else if (obj_->mdata_obj)
     {
-        // the meaning of opt_type is defined in H5VLnative.h (H5VL_NATIVE_DATASET_* constants)
-        log->warn("Warning: dataset_optional not implemented in metadata yet");
+        return -1;
     }
     else
         throw MetadataError(fmt::format("dataset_optional(): either passthru or metadata must be specified"));

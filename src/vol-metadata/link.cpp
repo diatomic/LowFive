@@ -366,7 +366,7 @@ LowFive::MetadataVOL::link_optional(void* obj, const H5VL_loc_params_t* loc_para
         res = VOLBase::link_optional(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
     }
     else if (obj_->mdata_obj)
-        log->warn("Warning: link_optional not implemented in metadata yet");
+        return -1;
     else
         throw MetadataError(fmt::format("link_optional(): either passthru or metadata must be specified"));
 

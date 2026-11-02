@@ -450,6 +450,7 @@ LowFive::MetadataVOL::
 attr_optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*) obj;
+    if (!unwrap(obj)) return -1;
     auto log = get_logger();
 
     // warn if metadata are available but won't be used
