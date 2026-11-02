@@ -81,7 +81,8 @@ lowfive_mpi_test(lowfive-distributed distributed.cpp
     contents repeated-open object-open conversion memory-all irregular multifile bounds
     empty mpio-resources missing native-missing hard-link-replace hard-link-serialized
     object-hard-link-serialized remote-unlinked-alias hard-link-parent-relative
-    object-alias-policy)
+    object-alias-policy vlen vlen-compound vlen-compound-selection scalar
+    no-index)
 lowfive_mpi_test(lowfive-rpc rpc.cpp destroy-first destroy-second)
 set(lowfive_saved_mpi_postflags ${MPIEXEC_POSTFLAGS})
 set(MPIEXEC_POSTFLAGS --lowfive-mpi-postflag)

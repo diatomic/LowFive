@@ -38,7 +38,9 @@ struct Dataset : public Object
     Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own,
             Hid dcpl_, Hid dapl_, bool is_passthru_, bool is_memory_):
             Object(ObjectType::Dataset, name), type(dtype_id),
-            space(H5Scopy(space_id), true), ownership(own),
+            space(space_id == H5S_ALL ? H5Screate(H5S_NULL) :
+                                        H5Scopy(space_id), true),
+            ownership(own),
             dcpl(dcpl_.id == H5P_DEFAULT ? H5Pcreate(H5P_DATASET_CREATE) :
                                           H5Pcopy(dcpl_.id), true),
             dapl(dapl_.id == H5P_DEFAULT ? H5Pcreate(H5P_DATASET_ACCESS) :

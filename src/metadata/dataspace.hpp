@@ -166,6 +166,11 @@ struct Dataspace: Hid
 
     bool    intersects(const Dataspace& other) const
     {
+        if (cls == Class::null || other.cls == Class::null)
+            return false;
+        if (cls == Class::scalar || other.cls == Class::scalar)
+            return cls == Class::scalar && other.cls == Class::scalar;
+
         std::vector<hsize_t> start, end;
         for (int i = 0; i < other.dim; ++i)
         {

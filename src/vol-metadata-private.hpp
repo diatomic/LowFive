@@ -91,6 +91,12 @@ Object* replace_metadata(MetadataVOL& vol, File& file, Object* previous,
 // using different names to avoid confusion
 void serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool include_data = false);
 Object* deserialize(diy::MemoryBuffer& bb, MetadataVOL& vol);
+void serialize_values(diy::MemoryBuffer& bb, const Datatype& type,
+                      size_t count, const void* values,
+                      File::References* references = nullptr);
+void deserialize_values(diy::MemoryBuffer& bb, const Datatype& type,
+                        size_t count, void* values,
+                        File::References* references = nullptr);
 void unlink_metadata(MetadataVOL& vol, Object* object);
 File::PendingReference describe_reference(H5R_ref_t& reference,
                                           MetadataVOL* vol = nullptr,

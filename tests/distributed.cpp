@@ -3,6 +3,47 @@
 #include <array>
 #include <algorithm>
 
+
+struct VLenRecord
+{
+    int tag;
+    hvl_t values;
+};
+
+test::Id vlen_record_type()
+{
+    test::Id type(H5Tcreate(H5T_COMPOUND, sizeof(VLenRecord)), H5Tclose);
+    test::Id values(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+    CHECK(H5Tinsert(type, "tag", offsetof(VLenRecord, tag),
+                    H5T_NATIVE_INT) >= 0);
+    CHECK(H5Tinsert(type, "values", offsetof(VLenRecord, values),
+                    values) >= 0);
+    return type;
+}
+
+struct WideVLenRecord
+{
+    int tag;
+    hvl_t values;
+    int sentinel;
+    hvl_t preserved;
+};
+
+test::Id wide_vlen_record_type()
+{
+    test::Id type(
+        H5Tcreate(H5T_COMPOUND, sizeof(WideVLenRecord)), H5Tclose);
+    test::Id values(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+    CHECK(H5Tinsert(type, "tag", offsetof(WideVLenRecord, tag),
+                    H5T_NATIVE_INT) >= 0);
+    CHECK(H5Tinsert(type, "values", offsetof(WideVLenRecord, values),
+                    values) >= 0);
+    CHECK(H5Tinsert(type, "sentinel", offsetof(WideVLenRecord, sentinel),
+                    H5T_NATIVE_INT) >= 0);
+    CHECK(H5Tinsert(type, "preserved", offsetof(WideVLenRecord, preserved),
+                    values) >= 0);
+    return type;
+}
 namespace
 {
 int copies = 0;
@@ -52,6 +93,64 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
     auto create = [&](const std::string& filename)
     {
         test::Id file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, fapl), H5Fclose);
+        if (name == "scalar")
+        {
+            test::Id scalar(H5Screate(H5S_SCALAR), H5Sclose);
+            test::Id ds(H5Dcreate2(file, "values", H5T_NATIVE_INT, scalar,
+                                   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                        H5Dclose);
+            int value = 37;
+            CHECK(H5Dwrite(ds, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                           H5P_DEFAULT, &value) >= 0);
+            return;
+        }
+        if (name == "vlen")
+        {
+            auto extent = test::space(1);
+            test::Id type(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+            test::Id ds(H5Dcreate2(file, "values", type, extent, H5P_DEFAULT,
+                                   H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+            int values[] = {4, 5, 6};
+            hvl_t value {3, values};
+            CHECK(H5Dwrite(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &value) >= 0);
+            return;
+        }
+        if (name == "vlen-compound")
+        {
+            auto extent = test::space(1);
+            auto type = vlen_record_type();
+            test::Id ds(H5Dcreate2(file, "values", type, extent, H5P_DEFAULT,
+                                   H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+            int values[] = {7, 8, 9};
+            VLenRecord value {42, hvl_t {3, values}};
+            CHECK(H5Dwrite(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &value) >= 0);
+            return;
+        }
+        if (name == "vlen-compound-selection")
+        {
+            auto extent = test::space(2);
+            auto type = vlen_record_type();
+            test::Id ds(H5Dcreate2(file, "values", type, extent, H5P_DEFAULT,
+                                   H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+            int first_values[] = {1, 2};
+            int second_values[] = {3, 4, 5};
+            VLenRecord values[] = {
+                {10, hvl_t {2, first_values}},
+                {20, hvl_t {3, second_values}}
+            };
+            CHECK(H5Dwrite(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           values) >= 0);
+
+            auto one = test::space(1);
+            select(extent, 0, 1);
+            int replacement_values[] = {6};
+            VLenRecord replacement {11, hvl_t {1, replacement_values}};
+            CHECK(H5Dwrite(ds, type, one, extent, H5P_DEFAULT,
+                           &replacement) >= 0);
+            return;
+        }
         auto extent = test::space(4);
         test::Id ds(H5Dcreate2(file, "values", H5T_NATIVE_DOUBLE, extent, H5P_DEFAULT,
                              H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
@@ -96,7 +195,7 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
             if (name == "native-missing")
                 CHECK(std::remove(first.c_str()) == 0);
             if (name == "multifile") create(second);
-            vol.serve_all();
+            vol.serve_all(true, name != "no-index");
             vol.clear_files();
         }
         else if (name == "native-missing")
@@ -105,7 +204,12 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
         }
         else
         {
-            test::Id file(H5Fopen(first.c_str(), H5F_ACC_RDONLY, fapl), H5Fclose);
+            const unsigned open_flags =
+                name == "remote-unlinked-alias" ? H5F_ACC_RDWR :
+                                                  H5F_ACC_RDONLY;
+            const hid_t file_id = H5Fopen(first.c_str(), open_flags, fapl);
+            CHECK(file_id >= 0);
+            test::Id file(file_id, H5Fclose);
             const bool object_alias = name == "object-hard-link-serialized" ||
                                       name == "object-alias-policy";
             const bool detached_alias = name == "hard-link-serialized" ||
@@ -113,9 +217,11 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
             const char* dataset_name =
                 detached_alias || name == "object-alias-policy" ?
                     "alias" : "values";
-            test::Id ds(object_alias ? H5Oopen(file, dataset_name, H5P_DEFAULT) :
-                                       H5Dopen2(file, dataset_name, H5P_DEFAULT),
-                        object_alias ? H5Oclose : H5Dclose);
+            const hid_t dataset_id =
+                object_alias ? H5Oopen(file, dataset_name, H5P_DEFAULT) :
+                               H5Dopen2(file, dataset_name, H5P_DEFAULT);
+            CHECK(dataset_id >= 0);
+            test::Id ds(dataset_id, object_alias ? H5Oclose : H5Dclose);
             auto read_all = [&](hid_t dataset)
             {
                 std::array<double, 6> result;
@@ -124,7 +230,82 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
                 CHECK(result.front() == -91 && result.back() == -91);
                 CHECK(std::equal(expected.begin(), expected.end(), result.begin() + 1));
             };
-            if (name == "repeated-open" || name == "object-open")
+            if (name == "no-index")
+            {
+                test::Id type(H5Dget_type(ds), H5Tclose);
+                test::Id space(H5Dget_space(ds), H5Sclose);
+                CHECK(H5Tequal(type, H5T_NATIVE_DOUBLE) > 0);
+                CHECK(H5Sget_simple_extent_ndims(space) == 1);
+            }
+            else if (name == "scalar")
+            {
+                int result = -1;
+                CHECK(H5Dread(ds, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                              H5P_DEFAULT, &result) >= 0);
+                CHECK(result == 37);
+            }
+            else if (name == "vlen")
+            {
+                test::Id type(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+                hvl_t result {};
+                CHECK(H5Dread(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                              &result) >= 0);
+                CHECK(result.len == 3);
+                const auto* values = static_cast<const int*>(result.p);
+                CHECK(values[0] == 4 && values[1] == 5 && values[2] == 6);
+                test::Id space(H5Dget_space(ds), H5Sclose);
+                CHECK(H5Treclaim(type, space, H5P_DEFAULT, &result) >= 0);
+            }
+            else if (name == "vlen-compound")
+            {
+                auto type = vlen_record_type();
+                VLenRecord result {-1, hvl_t {}};
+                CHECK(H5Dread(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                              &result) >= 0);
+                CHECK(result.tag == 42 && result.values.len == 3);
+                const auto* values =
+                    static_cast<const int*>(result.values.p);
+                CHECK(values[0] == 7 && values[1] == 8 &&
+                      values[2] == 9);
+                test::Id space(H5Dget_space(ds), H5Sclose);
+                CHECK(H5Treclaim(type, space, H5P_DEFAULT, &result) >= 0);
+            }
+            else if (name == "vlen-compound-selection")
+            {
+                auto type = wide_vlen_record_type();
+                auto file_space = test::space(2);
+                auto memory_space = test::space(3);
+                select(memory_space, 0, 2, 2);
+                int preserved0[] = {90, 91};
+                int preserved1[] = {92};
+                int preserved2[] = {93, 94, 95};
+                std::array<WideVLenRecord, 3> result {{
+                    {-1, hvl_t {}, 100, hvl_t {2, preserved0}},
+                    {-1, hvl_t {}, 200, hvl_t {1, preserved1}},
+                    {-1, hvl_t {}, 300, hvl_t {3, preserved2}}
+                }};
+                CHECK(H5Dread(ds, type, memory_space, file_space,
+                              H5P_DEFAULT, result.data()) >= 0);
+                CHECK(result[0].tag == 11 && result[0].values.len == 1);
+                CHECK(static_cast<const int*>(
+                          result[0].values.p)[0] == 6);
+                CHECK(result[0].sentinel == 100);
+                CHECK(result[0].preserved.p == preserved0);
+                CHECK(result[1].tag == -1 &&
+                      result[1].values.p == nullptr);
+                CHECK(result[1].sentinel == 200);
+                CHECK(result[1].preserved.p == preserved1);
+                CHECK(result[2].tag == 20 && result[2].values.len == 3);
+                const auto* values =
+                    static_cast<const int*>(result[2].values.p);
+                CHECK(values[0] == 3 && values[1] == 4 &&
+                      values[2] == 5);
+                CHECK(result[2].sentinel == 300);
+                CHECK(result[2].preserved.p == preserved2);
+                CHECK(H5free_memory(result[0].values.p) >= 0);
+                CHECK(H5free_memory(result[2].values.p) >= 0);
+            }
+            else if (name == "repeated-open" || name == "object-open")
             {
                 test::Id again(name == "object-open" ? H5Oopen(file, "values", H5P_DEFAULT) :
                                                       H5Dopen2(file, "values", H5P_DEFAULT),

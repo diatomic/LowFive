@@ -43,6 +43,28 @@ struct Datatype: Hid
                H5Tget_size(id) == sizeof(H5R_ref_t);
     }
 
+    bool has_variable_length_values() const
+    {
+        if (id == 0 || H5Iis_valid(id) <= 0) return false;
+        const auto cls = H5Tget_class(id);
+        if (cls == H5T_STRING) return H5Tis_variable_str(id) > 0;
+        if (cls == H5T_VLEN) return true;
+        if (cls == H5T_ARRAY)
+        {
+            Datatype base(H5Tget_super(id), true);
+            return base.has_variable_length_values();
+        }
+        if (cls == H5T_COMPOUND)
+        {
+            for (int member = 0; member < H5Tget_nmembers(id); ++member)
+            {
+                Datatype member_type(H5Tget_member_type(id, member), true);
+                if (member_type.has_variable_length_values()) return true;
+            }
+        }
+        return false;
+    }
+
     bool owns_indirect_values() const
     {
         if (id == 0 || H5Iis_valid(id) <= 0) return false;

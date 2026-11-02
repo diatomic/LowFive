@@ -168,6 +168,25 @@ std::vector<LowFive::Object*> reachable_unlinked(LowFive::File& file)
 }
 
 void
+LowFive::serialize_values(diy::MemoryBuffer& bb, const Datatype& type,
+                          size_t count, const void* values,
+                          File::References* references)
+{
+    serialized_values<false>(
+        bb, type, count, const_cast<char*>(static_cast<const char*>(values)),
+        references);
+}
+
+void
+LowFive::deserialize_values(diy::MemoryBuffer& bb, const Datatype& type,
+                            size_t count, void* values,
+                            File::References* references)
+{
+    serialized_values<true>(
+        bb, type, count, static_cast<char*>(values), references);
+}
+
+void
 LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool include_data)
 {
     std::vector<Object*> unlinked;

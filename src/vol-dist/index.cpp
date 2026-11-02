@@ -14,29 +14,30 @@ Index::Index(MPI_Comm local_, std::vector<MPI_Comm> intercomms_, Files* files, M
     auto log = get_logger();
     log->trace("Index ctor, number of intercomms: {}, files.size = {}", intercomms_.size(), files->size());
 
-    if(perform_indexing)
+    // Dataset metadata is always needed by remote opens. Building the
+    // redistribution boxes remains optional.
+    for (auto& f : *(idx_srv.files))
     {
-        // traverse all datasets
-        for (auto& f : *(idx_srv.files))
+        if (!dynamic_cast<File*>(f.second)) continue;   // skip DummyFile
+        auto datasets = find_datasets(dynamic_cast<File*>(f.second));
+        for (auto& x : datasets)
         {
-            if (!dynamic_cast<File*>(f.second)) continue;   // skip DummyFile
-            auto datasets = find_datasets(dynamic_cast<File*>(f.second));
-            for (auto& x : datasets)
+            auto* ds = x.second;
+            auto* ids = new IndexedDataset(ds, IndexQuery::local);
+
+            if (perform_indexing)
             {
-                auto* ds = x.second;
-
-                IndexedDataset* ids = new IndexedDataset(ds, IndexQuery::local);
-
                 // skip empty datasets (if they are not indicated by the user as noncollective)
-                if (ds->data.empty() && noncollective_datasets.find(ds->name) == noncollective_datasets.end())
+                if (ds->data.empty() &&
+                    noncollective_datasets.find(ds->name) ==
+                        noncollective_datasets.end())
                     log->warn("Skipping indexing empty dataset: {}", ds->name);
                 else
                     index(*ids);
-
-                ds->extra = ids;
-
-                ++indexed_datasets;
             }
+
+            ds->extra = ids;
+            ++indexed_datasets;
         }
     }
 }
