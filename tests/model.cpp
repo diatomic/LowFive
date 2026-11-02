@@ -74,6 +74,257 @@ void dataset_conversion()
     CHECK(H5Dread(integral, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out) >= 0);
     CHECK(out[0] == 1 && out[1] == -2 && out[2] == 3 && out[3] == 4);
 }
+void dataspace_ownership()
+{
+    test::Connector c("model-dataspace-ownership");
+    auto file = c.file();
+    hsize_t extent = 1, maximum = 2;
+    Id space(H5Screate_simple(1, &extent, &maximum), H5Sclose);
+    Id attribute(H5Acreate2(file, "attribute", H5T_NATIVE_INT, space,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    Id dataset(H5Dcreate2(file, "dataset", H5T_NATIVE_INT, space,
+                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    int input = 17;
+    CHECK(H5Awrite(attribute, H5T_NATIVE_INT, &input) >= 0);
+    CHECK(H5Dwrite(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                   H5P_DEFAULT, &input) >= 0);
+
+    extent = 2;
+    CHECK(H5Sset_extent_simple(space, 1, &extent, &maximum) >= 0);
+    std::array<int, 2> attribute_output{{-1, -7}};
+    std::array<int, 2> dataset_output{{-1, -7}};
+    CHECK(H5Aread(attribute, H5T_NATIVE_INT, attribute_output.data()) >= 0);
+    CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, dataset_output.data()) >= 0);
+    CHECK(attribute_output[0] == 17 && attribute_output[1] == -7);
+    CHECK(dataset_output[0] == 17 && dataset_output[1] == -7);
+}
+void compound_background()
+{
+    test::Connector c("model-compound-background");
+    auto file = c.file();
+    auto scalar = test::scalar();
+    struct Full { int a; int b; };
+    Id full(H5Tcreate(H5T_COMPOUND, sizeof(Full)), H5Tclose);
+    CHECK(H5Tinsert(full, "a", HOFFSET(Full, a), H5T_NATIVE_INT) >= 0);
+    CHECK(H5Tinsert(full, "b", HOFFSET(Full, b), H5T_NATIVE_INT) >= 0);
+    Id only_a(H5Tcreate(H5T_COMPOUND, sizeof(int)), H5Tclose);
+    CHECK(H5Tinsert(only_a, "a", 0, H5T_NATIVE_INT) >= 0);
+
+    Id dataset(H5Dcreate2(file, "full", full, scalar, H5P_DEFAULT,
+                          H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    Full initial{1, 2};
+    CHECK(H5Dwrite(dataset, full, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                   &initial) >= 0);
+    int replacement = 9;
+    CHECK(H5Dwrite(dataset, only_a, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                   &replacement) >= 0);
+    Full output{};
+    CHECK(H5Dread(dataset, full, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                  &output) >= 0);
+    CHECK(output.a == 9 && output.b == 2);
+
+    Id narrow(H5Dcreate2(file, "narrow", only_a, scalar, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    CHECK(H5Dwrite(narrow, only_a, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                   &replacement) >= 0);
+    output = {-1, -7};
+    CHECK(H5Dread(narrow, full, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                  &output) >= 0);
+    CHECK(output.a == 9 && output.b == -7);
+
+    Id attribute(H5Acreate2(file, "full-attribute", full, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    CHECK(H5Awrite(attribute, full, &initial) >= 0);
+    CHECK(H5Awrite(attribute, only_a, &replacement) >= 0);
+    output = {};
+    CHECK(H5Aread(attribute, full, &output) >= 0);
+    CHECK(output.a == 9 && output.b == 2);
+}
+void compound_indirect_background()
+{
+    test::Connector c("model-compound-indirect-background");
+    auto file = c.file();
+    auto scalar = test::scalar();
+
+    struct Indirect
+    {
+        hvl_t values;
+        int retained;
+    };
+    Id full(H5Tcreate(H5T_COMPOUND, sizeof(Indirect)), H5Tclose);
+    Id vlen(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+    CHECK(H5Tinsert(full, "values", HOFFSET(Indirect, values), vlen) >= 0);
+    CHECK(H5Tinsert(full, "retained", HOFFSET(Indirect, retained),
+                    H5T_NATIVE_INT) >= 0);
+    Id only_values(H5Tcreate(H5T_COMPOUND, sizeof(hvl_t)), H5Tclose);
+    CHECK(H5Tinsert(only_values, "values", 0, vlen) >= 0);
+
+    int old_values[] = {1, 2};
+    int new_values[] = {8, 9, 10};
+    Indirect initial{{2, old_values}, 73};
+    hvl_t replacement{3, new_values};
+    auto check_indirect = [&](hid_t object, bool attribute)
+    {
+        if (attribute)
+        {
+            CHECK(H5Awrite(object, full, &initial) >= 0);
+            CHECK(H5Awrite(object, only_values, &replacement) >= 0);
+        }
+        else
+        {
+            CHECK(H5Dwrite(object, full, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &initial) >= 0);
+            CHECK(H5Dwrite(object, only_values, H5S_ALL, H5S_ALL,
+                           H5P_DEFAULT, &replacement) >= 0);
+        }
+        Indirect output{};
+        if (attribute)
+            CHECK(H5Aread(object, full, &output) >= 0);
+        else
+            CHECK(H5Dread(object, full, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                          &output) >= 0);
+        CHECK(output.retained == 73 && output.values.len == 3);
+        CHECK(static_cast<int*>(output.values.p)[0] == 8 &&
+              static_cast<int*>(output.values.p)[2] == 10);
+        CHECK(H5Treclaim(full, scalar, H5P_DEFAULT, &output) >= 0);
+    };
+
+    Id attribute(H5Acreate2(file, "indirect-attribute", full, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    check_indirect(attribute, true);
+    Id dataset(H5Dcreate2(file, "indirect-dataset", full, scalar,
+                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    check_indirect(dataset, false);
+
+    struct Referenced
+    {
+        int value;
+        H5R_ref_t reference;
+    };
+    Id reference_type(H5Tcreate(H5T_COMPOUND, sizeof(Referenced)), H5Tclose);
+    CHECK(H5Tinsert(reference_type, "value", HOFFSET(Referenced, value),
+                    H5T_NATIVE_INT) >= 0);
+    CHECK(H5Tinsert(reference_type, "reference",
+                    HOFFSET(Referenced, reference), H5T_STD_REF) >= 0);
+    Id only_value(H5Tcreate(H5T_COMPOUND, sizeof(int)), H5Tclose);
+    CHECK(H5Tinsert(only_value, "value", 0, H5T_NATIVE_INT) >= 0);
+    Id target(H5Dcreate2(file, "target", H5T_NATIVE_INT, scalar, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    Referenced referenced{};
+    referenced.value = 1;
+    CHECK(H5Rcreate_object(file, "target", H5P_DEFAULT,
+                           &referenced.reference) >= 0);
+    int new_value = 9;
+    auto check_reference = [&](hid_t object, bool attribute)
+    {
+        if (attribute)
+        {
+            CHECK(H5Awrite(object, reference_type, &referenced) >= 0);
+            CHECK(H5Awrite(object, only_value, &new_value) >= 0);
+        }
+        else
+        {
+            CHECK(H5Dwrite(object, reference_type, H5S_ALL, H5S_ALL,
+                           H5P_DEFAULT, &referenced) >= 0);
+            CHECK(H5Dwrite(object, only_value, H5S_ALL, H5S_ALL,
+                           H5P_DEFAULT, &new_value) >= 0);
+        }
+        Referenced output{};
+        if (attribute)
+            CHECK(H5Aread(object, reference_type, &output) >= 0);
+        else
+            CHECK(H5Dread(object, reference_type, H5S_ALL, H5S_ALL,
+                          H5P_DEFAULT, &output) >= 0);
+        CHECK(output.value == 9);
+        Id opened(H5Ropen_object(&output.reference, H5P_DEFAULT,
+                                 H5P_DEFAULT), H5Oclose);
+        CHECK(H5Rdestroy(&output.reference) >= 0);
+    };
+    Id reference_attribute(
+        H5Acreate2(file, "reference-attribute", reference_type, scalar,
+                   H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    check_reference(reference_attribute, true);
+    Id reference_dataset(
+        H5Dcreate2(file, "reference-dataset", reference_type, scalar,
+                   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    check_reference(reference_dataset, false);
+    CHECK(H5Rdestroy(&referenced.reference) >= 0);
+}
+void dataset_fill()
+{
+    test::Connector c("model-dataset-fill");
+    auto file = c.file();
+    auto space = test::space(4);
+    Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    int fill = 42;
+    CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_INT, &fill) >= 0);
+    Id dataset(H5Dcreate2(file, "values", H5T_NATIVE_INT, space,
+                          H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+    int changed_fill = 99;
+    CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_INT, &changed_fill) >= 0);
+    std::array<int, 4> output{{-7, -7, -7, -7}};
+    CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, output.data()) >= 0);
+    CHECK((output == std::array<int, 4>{{42, 42, 42, 42}}));
+
+    auto scalar = test::scalar();
+    Id converted_dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    double fractional_fill = 1.75;
+    CHECK(H5Pset_fill_value(converted_dcpl, H5T_NATIVE_DOUBLE,
+                            &fractional_fill) >= 0);
+    Id converted(H5Dcreate2(file, "converted", H5T_NATIVE_INT, scalar,
+                            H5P_DEFAULT, converted_dcpl, H5P_DEFAULT),
+                 H5Dclose);
+    double converted_output = -1;
+    CHECK(H5Dread(converted, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, &converted_output) >= 0);
+    CHECK(converted_output == 1.0);
+
+    struct Full
+    {
+        int a;
+        int b;
+    };
+    Id narrow(H5Tcreate(H5T_COMPOUND, sizeof(int)), H5Tclose);
+    CHECK(H5Tinsert(narrow, "a", 0, H5T_NATIVE_INT) >= 0);
+    Id full(H5Tcreate(H5T_COMPOUND, sizeof(Full)), H5Tclose);
+    CHECK(H5Tinsert(full, "a", HOFFSET(Full, a), H5T_NATIVE_INT) >= 0);
+    CHECK(H5Tinsert(full, "b", HOFFSET(Full, b), H5T_NATIVE_INT) >= 0);
+    Id compound_dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    int compound_fill = 5;
+    CHECK(H5Pset_fill_value(compound_dcpl, narrow, &compound_fill) >= 0);
+    Id compound(H5Dcreate2(file, "compound", narrow, scalar, H5P_DEFAULT,
+                           compound_dcpl, H5P_DEFAULT), H5Dclose);
+    Full compound_output{-1, -7};
+    CHECK(H5Dread(compound, full, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                  &compound_output) >= 0);
+    CHECK(compound_output.a == 5 && compound_output.b == -7);
+}
+void dataset_shrink()
+{
+    test::Connector c("model-dataset-shrink");
+    auto file = c.file();
+    hsize_t extent = 4, maximum = 4, chunk = 2;
+    Id space(H5Screate_simple(1, &extent, &maximum), H5Sclose);
+    Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    int fill = 42;
+    CHECK(H5Pset_chunk(dcpl, 1, &chunk) >= 0);
+    CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_INT, &fill) >= 0);
+    Id dataset(H5Dcreate2(file, "values", H5T_NATIVE_INT, space,
+                          H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+    std::array<int, 4> input{{1, 2, 3, 4}};
+    CHECK(H5Dwrite(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                   H5P_DEFAULT, input.data()) >= 0);
+    extent = 2;
+    CHECK(H5Dset_extent(dataset, &extent) >= 0);
+    extent = 4;
+    CHECK(H5Dset_extent(dataset, &extent) >= 0);
+    std::array<int, 4> output{};
+    CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, output.data()) >= 0);
+    CHECK((output == std::array<int, 4>{{1, 2, 42, 42}}));
+}
 void dataset_all(bool writing)
 {
     test::Connector c(writing ? "model-write-all" : "model-read-all"); auto f = c.file(); auto s = test::space(4);
@@ -103,6 +354,11 @@ void dataset_strings(bool zerocopy)
     CHECK(H5Dwrite(d, type, ms, fs, H5P_DEFAULT, input) >= 0);
     input[0] = "changed"; auto one = test::space(1); char* out = nullptr;
     CHECK(H5Dread(d, type, one, fs, H5P_DEFAULT, &out) >= 0); CHECK(out && std::string(out) == "selected");
+    CHECK(H5Treclaim(type, one, H5P_DEFAULT, &out) >= 0);
+    const char* replacement[] = {"replacement", nullptr};
+    CHECK(H5Dwrite(d, type, ms, fs, H5P_DEFAULT, replacement) >= 0);
+    CHECK(H5Dread(d, type, one, fs, H5P_DEFAULT, &out) >= 0);
+    CHECK(out && std::string(out) == "replacement");
     CHECK(H5Treclaim(type, one, H5P_DEFAULT, &out) >= 0);
 }
 void datatype_ownership()
@@ -820,6 +1076,12 @@ int main(int argc, char** argv)
         else if (name == "attribute-compound") attribute_compound();
         else if (name == "attribute-strings") attribute_strings();
         else if (name == "dataset-conversion") dataset_conversion();
+        else if (name == "dataspace-ownership") dataspace_ownership();
+        else if (name == "compound-background") compound_background();
+        else if (name == "compound-indirect-background")
+            compound_indirect_background();
+        else if (name == "dataset-fill") dataset_fill();
+        else if (name == "dataset-shrink") dataset_shrink();
         else if (name == "read-all") dataset_all(false);
         else if (name == "write-all") dataset_all(true);
         else if (name == "selected-strings") dataset_strings(false);

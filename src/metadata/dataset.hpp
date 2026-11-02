@@ -35,13 +35,67 @@ struct Dataset : public Object
 
     std::vector<std::string>        strings;
 
-    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own, Hid dcpl_, Hid dapl_, bool is_passthru_, bool is_memory_):
-            Object(ObjectType::Dataset, name), type(dtype_id), space(space_id), ownership(own), dcpl(dcpl_), dapl(dapl_),
+    Dataset(std::string name, hid_t dtype_id, hid_t space_id, Ownership own,
+            Hid dcpl_, Hid dapl_, bool is_passthru_, bool is_memory_):
+            Object(ObjectType::Dataset, name), type(dtype_id),
+            space(H5Scopy(space_id), true), ownership(own),
+            dcpl(dcpl_.id == H5P_DEFAULT ? H5Pcreate(H5P_DATASET_CREATE) :
+                                          H5Pcopy(dcpl_.id), true),
+            dapl(dapl_.id == H5P_DEFAULT ? H5Pcreate(H5P_DATASET_ACCESS) :
+                                          H5Pcopy(dapl_.id), true),
             is_passthru(is_passthru_),
             is_memory(is_memory_)
     {
         if (type.is_var_length_string())
             ownership = Ownership::lowfive;     // strings must be copied into the serializable string table
+    }
+
+    void set_extent(const hsize_t* size)
+    {
+        bool shrinking = false;
+        for (int i = 0; i < space.dim; ++i)
+            shrinking = shrinking || size[i] < space.dims[i];
+
+        space.set_extent(size);
+        H5Sselect_all(space.id);
+        if (!shrinking) return;
+
+        for (auto& triple : data)
+        {
+            const int rank = H5Sget_simple_extent_ndims(triple.file.id);
+            std::vector<hsize_t> file_dims(rank);
+            H5Sget_simple_extent_dims(triple.file.id, file_dims.data(), nullptr);
+            std::vector<hsize_t> start(rank, 0);
+            std::vector<hsize_t> retained_dims(rank);
+            bool empty = false;
+            for (int i = 0; i < rank; ++i)
+            {
+                retained_dims[i] = std::min(file_dims[i], size[i]);
+                empty = empty || retained_dims[i] == 0;
+            }
+
+            Dataspace retained(triple.file.copy(), true);
+            const herr_t selected =
+                empty ? H5Sselect_none(retained.id) :
+                        H5Sselect_hyperslab(retained.id, H5S_SELECT_SET,
+                                            start.data(), nullptr,
+                                            retained_dims.data(), nullptr);
+            if (selected < 0)
+                throw MetadataError("Could not select retained dataset extent");
+
+            hid_t file_id = Dataspace::project_intersection(
+                triple.file.id, triple.file.id, retained.id);
+            hid_t memory_id = Dataspace::project_intersection(
+                triple.file.id, triple.memory.id, retained.id);
+            if (file_id < 0 || memory_id < 0)
+            {
+                if (file_id >= 0) H5Sclose(file_id);
+                if (memory_id >= 0) H5Sclose(memory_id);
+                throw MetadataError("Could not discard data outside dataset extent");
+            }
+            triple.file = Dataspace(file_id, true);
+            triple.memory = Dataspace(memory_id, true);
+        }
     }
 
     void unregister_references()
@@ -81,39 +135,76 @@ struct Dataset : public Object
             return;
         }
 
-        auto owned = std::unique_ptr<char[]>(new char[memory_ds.size() * type.dtype_size]());
+        auto owned = std::unique_ptr<char[]>(
+            new char[memory_ds.size() * type.dtype_size]());
         char* values = owned.get();
-        Dataspace::iterate(memory_ds, 1, [&](size_t offset, size_t count)
+        const bool preserve_background =
+            memory_type.needs_background(type);
+        std::unique_ptr<char[]> current;
+        if (preserve_background)
         {
-            if (type.is_var_length_string())
+            current.reset(new char[memory_ds.size() * type.dtype_size]());
+            read(type.id, memory_ds.id, file_ds.id, current.get());
+        }
+        try
+        {
+            Dataspace::iterate(memory_ds, 1, [&](size_t offset, size_t count)
             {
-                auto* indices = reinterpret_cast<intptr_t*>(values);
-                std::vector<char*> converted;
-                const char* const* input = nullptr;
-                if (memory_type.is_var_length_string())
-                    input = static_cast<const char* const*>(buf) + offset;
+                if (type.is_var_length_string())
+                {
+                    auto* indices = reinterpret_cast<intptr_t*>(values);
+                    std::vector<char*> converted;
+                    const char* const* input = nullptr;
+                    if (memory_type.is_var_length_string())
+                        input = static_cast<const char* const*>(buf) + offset;
+                    else
+                    {
+                        converted.resize(count, nullptr);
+                        memory_type.convert(
+                            type, count,
+                            static_cast<const char*>(buf) +
+                                offset * memory_type.dtype_size,
+                            converted.data());
+                        input = converted.data();
+                    }
+                    for (size_t i = 0; i < count; ++i)
+                    {
+                        strings.emplace_back(input[i] ? input[i] : "");
+                        indices[offset + i] = strings.size() - 1;
+                    }
+                    if (!converted.empty())
+                        type.destroy_values(count, converted.data());
+                }
                 else
                 {
-                    converted.resize(count, nullptr);
-                    memory_type.convert(type, count,
-                                        static_cast<const char*>(buf) + offset * memory_type.dtype_size,
-                                        converted.data());
-                    input = converted.data();
+                    if (current)
+                        memory_type.prepare_conversion_background(
+                            type, count,
+                            current.get() + offset * type.dtype_size,
+                            values + offset * type.dtype_size);
+                    memory_type.convert(
+                        type, count,
+                        static_cast<const char*>(buf) +
+                            offset * memory_type.dtype_size,
+                        values + offset * type.dtype_size);
                 }
-                for (size_t i = 0; i < count; ++i)
-                {
-                    strings.emplace_back(input[i] ? input[i] : "");
-                    indices[offset + i] = strings.size() - 1;
-                }
-                if (!converted.empty())
-                    type.destroy_values(count, converted.data());
+            });
+        }
+        catch (...)
+        {
+            if (!type.is_var_length_string())
+            {
+                if (current)
+                    type.destroy_values(memory_ds.size(), current.get());
+                type.destroy_values(memory_ds.size(), values);
             }
-            else
-                memory_type.convert(type, count,
-                                    static_cast<const char*>(buf) + offset * memory_type.dtype_size,
-                                    values + offset * type.dtype_size);
+            throw;
+        }
+        if (current && !type.is_var_length_string())
+            type.destroy_values(memory_ds.size(), current.get());
+        data.emplace_back(DataTriple {
+            type, memory_ds, file_ds, values, std::move(owned)
         });
-        data.emplace_back(DataTriple { type, memory_ds, file_ds, values, std::move(owned) });
     }
     template<class Visitor>
     void visit_read_references(hid_t memory_space_id, hid_t file_space_id,
@@ -169,9 +260,8 @@ struct Dataset : public Object
         std::vector<const char*> selected_strings;
         if (type.is_var_length_string())
             selected_strings.resize(memory.size(), nullptr);
-        std::vector<bool> initialized;
-        if (!type.is_var_length_string() && requested.owns_indirect_values())
-            initialized.resize(memory.size(), false);
+        const bool indirect = requested.owns_indirect_values();
+        std::vector<bool> initialized(memory.size(), false);
 
         auto read_triple = [&](auto& dt)
         {
@@ -183,12 +273,22 @@ struct Dataset : public Object
                 {
                     const auto* indices = static_cast<const intptr_t*>(dt.data);
                     for (size_t i = 0; i < count; ++i)
-                        selected_strings[to + i] = strings[indices[from + i]].c_str();
+                    {
+                        const size_t destination_index = to + i;
+                        if (initialized[destination_index]) continue;
+                        selected_strings[destination_index] =
+                            strings[indices[from + i]].c_str();
+                        initialized[destination_index] = true;
+                    }
                 }
-                else if (initialized.empty())
+                else if (!indirect)
+                {
                     dt.type.convert(requested, count,
                                     static_cast<const char*>(dt.data) + from * dt.type.dtype_size,
                                     static_cast<char*>(buf) + to * requested.dtype_size);
+                    for (size_t i = 0; i < count; ++i)
+                        initialized[to + i] = true;
+                }
                 else
                 {
                     for (size_t i = 0; i < count; ++i)
@@ -206,11 +306,13 @@ struct Dataset : public Object
                 }
             });
         };
-        if (initialized.empty())
-            for (auto& dt : data) read_triple(dt);
-        else
+        if (indirect)
             for (auto dt = data.rbegin(); dt != data.rend(); ++dt)
                 read_triple(*dt);
+        else
+            for (auto& dt : data)
+                read_triple(dt);
+
         if (type.is_var_length_string())
             Dataspace::iterate(memory, 1, [&](size_t offset, size_t count)
             {
@@ -219,6 +321,38 @@ struct Dataset : public Object
                         type.convert(requested, 1, &selected_strings[i],
                                      static_cast<char*>(buf) + i * requested.dtype_size);
             });
+
+        H5D_fill_value_t fill_status = H5D_FILL_VALUE_DEFAULT;
+        if (dcpl.id != H5P_DEFAULT &&
+            H5Pfill_value_defined(dcpl.id, &fill_status) < 0)
+            throw MetadataError("Could not query dataset fill value");
+        if (fill_status != H5D_FILL_VALUE_UNDEFINED)
+        {
+            std::vector<char> fill(type.dtype_size, 0);
+            if (dcpl.id != H5P_DEFAULT &&
+                H5Pget_fill_value(dcpl.id, type.id, fill.data()) < 0)
+                throw MetadataError("Could not read dataset fill value");
+            try
+            {
+                Dataspace::iterate(memory, 1, [&](size_t offset, size_t count)
+                {
+                    for (size_t i = offset; i < offset + count; ++i)
+                        if (!initialized[i])
+                            type.convert(
+                                requested, 1, fill.data(),
+                                static_cast<char*>(buf) +
+                                    i * requested.dtype_size);
+                });
+            }
+            catch (...)
+            {
+                if (type.owns_indirect_values())
+                    type.destroy_values(1, fill.data());
+                throw;
+            }
+            if (type.owns_indirect_values())
+                type.destroy_values(1, fill.data());
+        }
     }
 
     void print(int depth) const override

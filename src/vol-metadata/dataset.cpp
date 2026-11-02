@@ -305,7 +305,10 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     {
         try
         {
-            metadata->write(Datatype(mem_type_id), Dataspace(mem_space_id),
+            Datatype memory_type(mem_type_id);
+            if (memory_type.needs_background(metadata->type))
+                resolve_references(metadata, mem_space_id, file_space_id);
+            metadata->write(memory_type, Dataspace(mem_space_id),
                             Dataspace(file_space_id), buf);
         }
         catch (...)
@@ -346,7 +349,7 @@ dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, v
         {
             // adapted from H5VLnative_dataset.c, H5VL__native_dataset_specific()
             const hsize_t *size = args->args.set_extent.size;
-            dataset->space.set_extent(size);
+            dataset->set_extent(size);
             break;
         }
         case H5VL_DATASET_FLUSH:
@@ -448,15 +451,13 @@ dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req
         {
             log->trace("GET_DCPL");
             auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
-            args->args.get_dcpl.dcpl_id = dset->dcpl.id;
-            dset->dcpl.inc_ref();
+            args->args.get_dcpl.dcpl_id = H5Pcopy(dset->dcpl.id);
             log->trace("arguments = {} -> {}", "args->args.get_dcpl.dcpl_id", args->args.get_dcpl.dcpl_id);
         } else if (get_type == H5VL_DATASET_GET_DAPL)
         {
             log->trace("GET_DAPL");
             auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
-            args->args.get_dapl.dapl_id = dset->dapl.id;
-            dset->dapl.inc_ref();
+            args->args.get_dapl.dapl_id = H5Pcopy(dset->dapl.id);
             log->trace("arguments = {} -> {}", "args->args.get_dapl.dapl_id", args->args.get_dapl.dapl_id);
         } else
         {

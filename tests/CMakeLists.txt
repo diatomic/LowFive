@@ -16,6 +16,8 @@ lowfive_test(lowfive-base base.cpp
     info-nested info-malformed singleton)
 lowfive_test(lowfive-model model.cpp
     attribute-conversion attribute-compound attribute-strings dataset-conversion
+    dataspace-ownership compound-background compound-indirect-background
+    dataset-fill dataset-shrink
     read-all write-all selected-strings zerocopy-strings datatype-ownership
     persist-attributes persist-strings vlen-rewrite dataset-vlen-overlap
     dataset-vlen-serialization dataset-vlen-sparse-serialization shutdown-cleanup

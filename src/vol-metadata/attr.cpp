@@ -309,8 +309,10 @@ attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void *
         herr_t result = VOLBase::attr_write(unwrap(attr), mem_type_id, buf, dxpl_id, req);
         if (result < 0) return result;
     }
-    if (auto* metadata = dynamic_cast<Attribute*>(static_cast<Object*>(pointers->mdata_obj)))
+    if (auto* metadata = dynamic_cast<Attribute*>(
+            static_cast<Object*>(pointers->mdata_obj)))
     {
+        resolve_references(metadata);
         try
         {
             metadata->write(Datatype(mem_type_id), buf);

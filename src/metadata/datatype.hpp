@@ -226,6 +226,89 @@ struct Datatype: Hid
         }
     }
 
+    H5T_bkg_t background_requirement(const Datatype& destination) const
+    {
+        if (equal(destination)) return H5T_BKG_NO;
+        H5T_cdata_t* conversion = nullptr;
+        if (!H5Tfind(id, destination.id, &conversion))
+            throw MetadataError("Could not find HDF5 datatype conversion");
+        return conversion->need_bkg;
+    }
+
+    // Populate only destination fields that H5Tconvert preserves from its
+    // background buffer. The copied values become owned by target.
+    void prepare_conversion_background(const Datatype& destination, size_t count,
+                                       const void* source, void* target) const
+    {
+        if (!count || background_requirement(destination) != H5T_BKG_YES)
+            return;
+
+        const auto source_class = H5Tget_class(id);
+        const auto destination_class = H5Tget_class(destination.id);
+        if (source_class == H5T_COMPOUND &&
+            destination_class == H5T_COMPOUND)
+        {
+            const auto* old_values = static_cast<const char*>(source);
+            auto* new_values = static_cast<char*>(target);
+            for (int member = 0; member < H5Tget_nmembers(destination.id);
+                 ++member)
+            {
+                char* raw_name = H5Tget_member_name(destination.id, member);
+                if (!raw_name)
+                    throw MetadataError("Could not inspect compound member");
+                std::string name(raw_name);
+                H5free_memory(raw_name);
+
+                Datatype destination_member(
+                    H5Tget_member_type(destination.id, member), true);
+                const size_t destination_offset =
+                    H5Tget_member_offset(destination.id, member);
+                const int source_index =
+                    H5Tget_member_index(id, name.c_str());
+                if (source_index < 0)
+                {
+                    for (size_t i = 0; i < count; ++i)
+                        destination_member.copy_values(
+                            1,
+                            old_values + i * destination.dtype_size +
+                                destination_offset,
+                            new_values + i * destination.dtype_size +
+                                destination_offset);
+                    continue;
+                }
+
+                Datatype source_member(
+                    H5Tget_member_type(id, source_index), true);
+                for (size_t i = 0; i < count; ++i)
+                    source_member.prepare_conversion_background(
+                        destination_member, 1,
+                        old_values + i * destination.dtype_size +
+                            destination_offset,
+                        new_values + i * destination.dtype_size +
+                            destination_offset);
+            }
+            return;
+        }
+
+        if (source_class == H5T_ARRAY && destination_class == H5T_ARRAY)
+        {
+            Datatype source_base(H5Tget_super(id), true);
+            Datatype destination_base(H5Tget_super(destination.id), true);
+            const size_t elements =
+                destination.dtype_size / destination_base.dtype_size;
+            source_base.prepare_conversion_background(
+                destination_base, count * elements, source, target);
+            return;
+        }
+
+        destination.copy_values(count, source, target);
+    }
+
+    bool needs_background(const Datatype& destination) const
+    {
+        return background_requirement(destination) != H5T_BKG_NO;
+    }
+
     // Source and destination are packed arrays; selection mapping belongs to the caller.
     void convert(const Datatype& destination, size_t count, const void* source, void* target) const
     {
@@ -240,19 +323,18 @@ struct Datatype: Hid
             throw MetadataError("Could not find HDF5 datatype conversion");
         std::vector<char> background;
         if (conversion->need_bkg != H5T_BKG_NO)
-            background.resize(count * destination.dtype_size, 0);
-        std::vector<char> buffer;
-        void* values = target;
-        if (destination.dtype_size < dtype_size)
         {
-            buffer.resize(count * dtype_size);
-            values = buffer.data();
+            background.resize(count * destination.dtype_size);
+            std::memcpy(background.data(), target, background.size());
         }
-        std::memcpy(values, source, count * dtype_size);
-        if (H5Tconvert(id, destination.id, count, values, background.empty() ? nullptr : background.data(), H5P_DEFAULT) < 0)
+        const size_t value_size = std::max(dtype_size, destination.dtype_size);
+        std::vector<char> buffer(count * value_size, 0);
+        std::memcpy(buffer.data(), source, count * dtype_size);
+        if (H5Tconvert(id, destination.id, count, buffer.data(),
+                       background.empty() ? nullptr : background.data(),
+                       H5P_DEFAULT) < 0)
             throw MetadataError("Could not convert HDF5 datatype");
-        if (values != target)
-            std::memcpy(target, values, count * destination.dtype_size);
+        std::memcpy(target, buffer.data(), count * destination.dtype_size);
     }
 
     std::string class_string() const

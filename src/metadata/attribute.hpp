@@ -10,7 +10,8 @@ struct Attribute: public Object
 {
 
     Attribute(std::string name, hid_t type_id, hid_t space_id):
-        Object(ObjectType::Attribute, name), type(type_id), space(space_id)         {}
+        Object(ObjectType::Attribute, name), type(type_id),
+        space(H5Scopy(space_id), true)                                          {}
 
     Datatype                        type;
     Dataspace                       space;
@@ -39,13 +40,36 @@ struct Attribute: public Object
 
     void write(Datatype mem_type_, const void* buf)
     {
+        const size_t count = space.size();
+        auto replacement =
+            std::unique_ptr<char[]>(new char[count * type.dtype_size]());
+        std::unique_ptr<char[]> current;
+        try
+        {
+            if (data && mem_type_.needs_background(type))
+            {
+                current.reset(new char[count * type.dtype_size]());
+                mem_type.convert(type, count, data.get(), current.get());
+                mem_type_.prepare_conversion_background(
+                    type, count, current.get(), replacement.get());
+            }
+            mem_type_.convert(type, count, buf, replacement.get());
+        }
+        catch (...)
+        {
+            if (current)
+                type.destroy_values(count, current.get());
+            type.destroy_values(count, replacement.get());
+            throw;
+        }
+        if (current)
+            type.destroy_values(count, current.get());
+
         unregister_references();
         if (data)
-            mem_type.destroy_values(space.size(), data.get());
-        data.reset();
+            mem_type.destroy_values(count, data.get());
+        data = std::move(replacement);
         mem_type = type;
-        data.reset(new char[space.size() * mem_type.dtype_size]());
-        mem_type_.convert(mem_type, space.size(), buf, data.get());
     }
 
     void read(Datatype mem_type_, void* buf)
