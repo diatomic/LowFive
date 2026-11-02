@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <type_traits>
 
 namespace
 {
@@ -366,6 +367,44 @@ void datatype_ownership()
     hid_t raw = H5Tcopy(H5T_NATIVE_INT); CHECK(raw >= 0);
     { LowFive::Datatype owned(raw, true); CHECK(H5Iis_valid(raw) > 0); }
     CHECK(H5Iis_valid(raw) == 0);
+}
+void hid_moves()
+{
+    static_assert(std::is_nothrow_move_constructible<LowFive::Hid>::value);
+    static_assert(std::is_nothrow_move_assignable<LowFive::Hid>::value);
+    const hid_t raw = H5Pcreate(H5P_DATASET_CREATE);
+    const hid_t old_target = H5Pcreate(H5P_DATASET_ACCESS);
+    CHECK(raw >= 0 && old_target >= 0);
+    {
+        LowFive::Hid source(raw, true);
+        CHECK(H5Iget_ref(raw) == 1);
+        LowFive::Hid moved(std::move(source));
+        CHECK(source.id == 0 && moved.id == raw && H5Iget_ref(raw) == 1);
+        LowFive::Hid target(old_target, true);
+        target = std::move(moved);
+        CHECK(moved.id == 0 && target.id == raw && H5Iget_ref(raw) == 1);
+        CHECK(H5Iis_valid(old_target) == 0);
+        auto* self = &target;
+        target = std::move(*self);
+        CHECK(target.id == raw && H5Iget_ref(raw) == 1);
+        LowFive::Hid shared(target);
+        CHECK(H5Iget_ref(raw) == 2);
+        target = std::move(shared);
+        CHECK(shared.id == 0 && target.id == raw && H5Iget_ref(raw) == 1);
+        LowFive::Hid empty(0);
+        target = std::move(empty);
+        CHECK(target.id == 0 && empty.id == 0 && H5Iis_valid(raw) == 0);
+        LowFive::Hid moved_empty(std::move(target));
+        CHECK(target.id == 0 && moved_empty.id == 0);
+    }
+    const hid_t final = H5Screate(H5S_SCALAR);
+    CHECK(final >= 0);
+    {
+        LowFive::Hid source(final, true);
+        LowFive::Hid destination(std::move(source));
+        CHECK(source.id == 0 && destination.id == final && H5Iget_ref(final) == 1);
+    }
+    CHECK(H5Iis_valid(final) == 0);
 }
 void persistence(bool strings)
 {
@@ -1087,6 +1126,7 @@ int main(int argc, char** argv)
         else if (name == "selected-strings") dataset_strings(false);
         else if (name == "zerocopy-strings") dataset_strings(true);
         else if (name == "datatype-ownership") datatype_ownership();
+        else if (name == "hid-moves") hid_moves();
         else if (name == "persist-attributes") persistence(false);
         else if (name == "persist-strings") persistence(true);
         else if (name == "vlen-rewrite") vlen_rewrite();
