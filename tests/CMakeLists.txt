@@ -91,7 +91,7 @@ lowfive_mpi_test(lowfive-distributed distributed.cpp
     hard-link-parent-relative object-alias-policy vlen vlen-compound
     vlen-compound-selection scalar no-index
     fill-unwritten fill-partial fill-default fill-vlen fill-string
-    broadcast-replace dummy-real)
+    broadcast-replace dummy-real intercomm-indices)
 foreach(case copy-whole dummy-copy-whole)
     add_test(NAME lowfive-distributed-${case}
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 ${MPIEXEC_PREFLAGS}

@@ -61,11 +61,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     static DistMetadataVOL&         create_DistMetadataVOL(communicator local_, communicators intercomms_);
 
     // record intercomm to use for a dataset
-    void set_intercomm(std::string filename, std::string full_path, int intercomm_index)
-    {
-        intercomm_locations.emplace_back(LocationPattern { filename, full_path });
-        intercomm_indices.emplace_back(intercomm_index);
-    }
+    void set_intercomm(std::string filename, std::string full_path, int intercomm_index);
 
     void set_serve_indices(ServeIndices si)
     {
@@ -117,6 +113,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     private:
         friend struct RemoteFile;
         std::map<int, size_t> remote_file_counts_;
+        communicator checked_intercomm(int intercomm_index) const;
         void        make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath);
 };
 

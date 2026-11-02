@@ -52,6 +52,11 @@ The metadata wire format carries unwritten attribute state and dataset fill
 values; communicating processes must use the same LowFive version. Distributed
 modern-reference values remain unsupported.
 
+Distributed communicator indices must be nonnegative and smaller than the
+configured communicator count. Invalid indices in mappings, direct calls, or
+`set_serve_indices` callback results throw `std::out_of_range` in C++ and raise
+`IndexError` in Python before entering MPI communication.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:

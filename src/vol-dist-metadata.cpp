@@ -7,6 +7,7 @@
 #include "metadata/serialization.hpp"
 
 #include "vol-metadata-private.hpp"     // ObjectPointers
+#include <stdexcept>
 
 namespace LowFive {
 
@@ -63,18 +64,38 @@ DistMetadataVOL::DistMetadataVOL(communicator  local_, communicator  intercomm_)
     log->trace("DistMetadataVOL ctor: this = {}", fmt::ptr(this));
 }
 
+DistMetadataVOL::communicator
+DistMetadataVOL::
+checked_intercomm(int intercomm_index) const
+{
+    if (intercomm_index < 0 || static_cast<size_t>(intercomm_index) >= intercomms.size())
+        throw std::out_of_range(fmt::format("Invalid intercomm index {} for {} communicators",
+                                            intercomm_index, intercomms.size()));
+    return intercomms[intercomm_index];
+}
+
+void
+DistMetadataVOL::
+set_intercomm(std::string filename, std::string full_path, int intercomm_index)
+{
+    checked_intercomm(intercomm_index);
+    intercomm_locations.emplace_back(LocationPattern { std::move(filename), std::move(full_path) });
+    intercomm_indices.emplace_back(intercomm_index);
+}
+
 
 int
 DistMetadataVOL::
 remote_size(int intercomm_index)
 {
+    const auto comm = checked_intercomm(intercomm_index);
     // get the remote size of the intercomm: different logic for inter- and intra-comms
     int remote_size;
-    int is_inter; MPI_Comm_test_inter(intercomms[intercomm_index], &is_inter);
+    int is_inter; MPI_Comm_test_inter(comm, &is_inter);
     if (!is_inter)
-        MPI_Comm_size(intercomms[intercomm_index], &remote_size);
+        MPI_Comm_size(comm, &remote_size);
     else
-        MPI_Comm_remote_size(intercomms[intercomm_index], &remote_size);
+        MPI_Comm_remote_size(comm, &remote_size);
 
     return remote_size;
 }
@@ -96,7 +117,7 @@ serve_all(bool delete_data, bool perform_indexing)
 
     std::vector<MPI_Comm> selected_intercomms;
     for (auto idx : indices)
-        selected_intercomms.push_back(intercomms[idx]);
+        selected_intercomms.push_back(checked_intercomm(idx));
 
     if (!selected_intercomms.empty())
     {
@@ -569,7 +590,7 @@ producer_signal_done()
 
     std::vector<MPI_Comm> selected_intercomms;
     for (auto idx : indices)
-        selected_intercomms.push_back(intercomms[idx]);
+        selected_intercomms.push_back(checked_intercomm(idx));
 
     Files files;        // empty files
     Index index(local, selected_intercomms, &files, this);

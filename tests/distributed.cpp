@@ -8,6 +8,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <limits>
 
 
 struct VLenRecord
@@ -52,6 +53,43 @@ test::Id wide_vlen_record_type()
 }
 namespace
 {
+void exercise_intercomm_indices()
+{
+    auto& vol = LowFive::DistMetadataVOL::create_DistMetadataVOL(
+        MPI_COMM_SELF, LowFive::DistMetadataVOL::communicators { MPI_COMM_SELF });
+    vol.serve_on_close = false;
+    CHECK(vol.remote_size(0) == 1);
+    const auto rejects = [](const auto& operation)
+    {
+        bool rejected = false;
+        try { operation(); }
+        catch (const std::out_of_range&) { rejected = true; }
+        CHECK(rejected);
+    };
+    for (int index : { -1, 1, std::numeric_limits<int>::max() })
+    {
+        rejects([&] { vol.set_intercomm("indices.h5", "*", index); });
+        CHECK(vol.intercomm_locations.empty());
+        CHECK(vol.intercomm_indices.empty());
+        rejects([&] { vol.remote_size(index); });
+        rejects([&] { vol.get_filenames(index); });
+        rejects([&] { vol.send_done(index); });
+        vol.set_serve_indices([index] { return LowFive::DistMetadataVOL::DataIntercomms { 0, index }; });
+        rejects([&] { vol.serve_all(false); });
+        rejects([&] { vol.producer_signal_done(); });
+    }
+    vol.unset_dist_callbacks();
+    vol.set_intercomm("indices.h5", "*", 0);
+    vol.set_memory("indices.h5", "*");
+    const hid_t connector = vol.register_plugin();
+    test::Id fapl(H5Pcreate(H5P_FILE_ACCESS), H5Pclose);
+    CHECK(H5Pset_vol(fapl, connector, vol.info) >= 0);
+    vol.intercomms.clear();
+    CHECK(H5Fopen("indices.h5", H5F_ACC_RDONLY, fapl) < 0);
+    fapl.reset();
+    CHECK(H5VLunregister_connector(connector) >= 0);
+}
+
 int copies = 0;
 int copy_comm(MPI_Comm, int, void*, void* attribute, void* output, int* flag)
 {
@@ -759,6 +797,12 @@ int main(int argc, char** argv)
             name == "copy-whole" || name == "dummy-copy-whole";
         CHECK(size == (grouped_consumers ? 3 : 2));
         H5Eset_auto2(H5E_DEFAULT, nullptr, nullptr);
+        if (name == "intercomm-indices")
+        {
+            exercise_intercomm_indices();
+            MPI_Finalize();
+            return EXIT_SUCCESS;
+        }
         if (name == "broadcast-replace")
         {
             CHECK(size == 2);
