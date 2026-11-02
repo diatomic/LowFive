@@ -90,6 +90,85 @@ void exercise_intercomm_indices()
     CHECK(H5VLunregister_connector(connector) >= 0);
 }
 
+void exercise_serving_cleanup(int rank, MPI_Comm local, MPI_Comm intercomm)
+{
+    auto& vol = LowFive::DistMetadataVOL::create_DistMetadataVOL(local, intercomm);
+    vol.keep = rank == 0;
+    vol.serve_on_close = false;
+    const std::string filename = "distributed-serving-cleanup.h5";
+    vol.set_memory(filename, "*");
+    vol.set_intercomm(filename, "*", 0);
+    const hid_t connector = vol.register_plugin();
+    test::Id fapl(H5Pcreate(H5P_FILE_ACCESS), H5Pclose);
+    CHECK(H5Pset_vol(fapl, connector, vol.info) >= 0);
+    for (int step = 0; step < 3; ++step)
+    {
+        const int expected = step == 2 ? 73 : 42;
+        if (rank == 0)
+        {
+            test::Id file(
+                step == 1 ? H5Fopen(filename.c_str(), H5F_ACC_RDWR, fapl) :
+                            H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, fapl),
+                H5Fclose);
+            auto space = test::space(1);
+            test::Id dataset(
+                step == 1 ? H5Dopen2(file, "values", H5P_DEFAULT) :
+                            H5Dcreate2(file, "values", H5T_NATIVE_INT, space,
+                                       H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                H5Dclose);
+            if (step != 1)
+                CHECK(H5Dwrite(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                               H5P_DEFAULT, &expected) >= 0);
+            auto* metadata = dynamic_cast<LowFive::Dataset*>(vol.locate(filename, "/values"));
+            CHECK(metadata);
+            const hid_t stored_dcpl = metadata->dcpl.id;
+            if (step == 0)
+            {
+                dataset.reset();
+                file.reset();
+                vol.serve_all(false);
+                CHECK(vol.files.count(filename) == 1);
+                CHECK(metadata->extra == nullptr);
+                CHECK(H5Iis_valid(stored_dcpl) > 0);
+            }
+            else if (step == 1)
+            {
+                vol.serve_all();
+                CHECK(vol.files.empty());
+                CHECK(metadata->extra == nullptr);
+                int actual = 0;
+                CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                              H5P_DEFAULT, &actual) >= 0);
+                CHECK(actual == expected);
+                file.reset();
+                CHECK(H5Iis_valid(stored_dcpl) > 0);
+                dataset.reset();
+                CHECK(H5Iis_valid(stored_dcpl) == 0);
+            }
+            else
+            {
+                dataset.reset();
+                vol.serve_on_close = true;
+                file.reset();
+                CHECK(vol.files.empty());
+                CHECK(H5Iis_valid(stored_dcpl) == 0);
+            }
+        }
+        else
+        {
+            test::Id file(H5Fopen(filename.c_str(), H5F_ACC_RDONLY, fapl), H5Fclose);
+            test::Id dataset(H5Dopen2(file, "values", H5P_DEFAULT), H5Dclose);
+            int actual = 0;
+            CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                          H5P_DEFAULT, &actual) >= 0);
+            CHECK(actual == expected);
+        }
+        CHECK(MPI_Barrier(MPI_COMM_WORLD) == MPI_SUCCESS);
+    }
+    fapl.reset();
+    CHECK(H5VLunregister_connector(connector) >= 0);
+}
+
 int copies = 0;
 int copy_comm(MPI_Comm, int, void*, void* attribute, void* output, int* flag)
 {
@@ -418,7 +497,7 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
                 source->copy_whole = true;
             }
             vol.serve_all(true, name != "no-index");
-            vol.clear_files();
+            CHECK(vol.files.empty());
         }
         else if (name == "native-missing")
         {
@@ -818,8 +897,11 @@ int main(int argc, char** argv)
         const int remote_leader = color == 0 ? 1 : 0;
         CHECK(MPI_Intercomm_create(local, 0, MPI_COMM_WORLD, remote_leader,
                                    17, &intercomm) == MPI_SUCCESS);
-        exercise(name == "postflag-order" ? "contents" : name,
-                 rank, local, intercomm);
+        if (name == "serving-cleanup")
+            exercise_serving_cleanup(rank, local, intercomm);
+        else
+            exercise(name == "postflag-order" ? "contents" : name,
+                     rank, local, intercomm);
         CHECK(MPI_Comm_free(&intercomm) == MPI_SUCCESS);
         CHECK(MPI_Comm_free(&local) == MPI_SUCCESS);
         MPI_Finalize();

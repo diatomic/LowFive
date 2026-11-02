@@ -93,6 +93,8 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     void            broadcast_files(int root = 0);
 
+    // Retire file snapshots after serving unless delete_data is false.
+    // Open handles retain their snapshots until closed.
     void            serve_all(bool delete_data = true, bool perform_indexing = true);
 
     void*           object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;

@@ -135,10 +135,8 @@ serve_all(bool delete_data, bool perform_indexing)
 
     }
 
-    // TODO: what do we do about delete_data? Probably should become "clear files"
-    //if (delete_data)
-    //    for (auto* ds : serve_data)
-    //        delete ds;
+    if (delete_data)
+        clear_files();
 
     log->trace("serve_all done");
 }

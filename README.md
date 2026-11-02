@@ -57,6 +57,13 @@ configured communicator count. Invalid indices in mappings, direct calls, or
 `set_serve_indices` callback results throw `std::out_of_range` in C++ and raise
 `IndexError` in Python before entering MPI communication.
 
+`serve_all(delete_data=true)` retires the file snapshots and their stored writes
+after serving completes and the redistribution index is released, even when
+`keep` is enabled. Existing producer handles remain valid until closed; their
+snapshots are released when the last handle closes. Pass `delete_data=false` to
+retain snapshots for another serving round. Automatic serving on file close uses
+the default cleanup behavior.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:
