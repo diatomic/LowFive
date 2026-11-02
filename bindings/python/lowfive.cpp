@@ -174,8 +174,11 @@ PYBIND11_MODULE(_lowfive, m)
 
         .def("unset_dist_callbacks",    [](LowFive::DistMetadataVOL* self)
                                         {
-                                          py::gil_scoped_acquire acq;
-                                          self->unset_dist_callbacks();
+                                          if (LowFive::VOLBase::info_t::vol == self)
+                                          {
+                                              py::gil_scoped_acquire acq;
+                                              self->unset_dist_callbacks();
+                                          }
                                         },                                                              "unset DistMetadataVOL callbacks")
 
     ;

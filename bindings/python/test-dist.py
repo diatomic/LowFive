@@ -42,11 +42,23 @@ if memory:
 
 import numpy as np
 import h5py
-if producer:
-    print(f"Producer: {local.rank} out of {local.size}")
-    with h5py.File("out.h5", "w") as f:
+def write_dataset(mode):
+    with h5py.File("out.h5", mode) as f:
         f.create_dataset(f"data{local.rank}", data=np.ones((4, 3, 2), 'f'))
         vol.print_files()
+
+
+if producer:
+    print(f"Producer: {local.rank} out of {local.size}")
+    if file:
+        # Serial HDF5 cannot safely truncate one file from multiple processes.
+        # Create it once, then let each remaining producer append its dataset.
+        for writer in range(local.size):
+            if local.rank == writer:
+                write_dataset("w" if writer == 0 else "a")
+            local.Barrier()
+    else:
+        write_dataset("w")
 
     if file:
         intercomm.Barrier()
@@ -59,3 +71,14 @@ else:
         data = f[f"data{local.rank % producer_ranks}"]
         assert np.all(data[...] == 1)
         print("Consumer:", data)
+
+# Exercise Python wrappers after HDF5 has destroyed the connector singleton.
+# Both callback cleanup methods must treat the stale wrapper as a no-op.
+world.Barrier()
+import ctypes
+from lowfive import _lowfive
+hdf5 = ctypes.CDLL(_lowfive.__file__)
+hdf5.H5close.restype = ctypes.c_int
+assert hdf5.H5close() >= 0
+vol.unset_dist_callbacks()
+vol.unset_callbacks()
