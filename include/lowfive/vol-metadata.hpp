@@ -8,7 +8,6 @@
 #include    <functional>
 #include    <ostream>
 
-#include    <fmt/core.h>
 #include    "vol-base.hpp"
 
 namespace LowFive

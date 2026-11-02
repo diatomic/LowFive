@@ -80,6 +80,23 @@ foreach                     (case permissions python)
                              "$<TARGET_FILE_NAME:lowfive>" "$<TARGET_FILE_NAME:lowfive-dist>")
     set_tests_properties    (lowfive-install-${case} PROPERTIES TIMEOUT 60 LABELS install)
 endforeach                  ()
+set                         (lowfive_public_header_include_dirs
+                             ${HDF5_INCLUDE_DIR}
+                             ${HDF5_INCLUDE_DIRS}
+                             ${MPI_C_INCLUDE_PATH}
+                             ${MPI_C_INCLUDE_DIRS})
+list                        (REMOVE_DUPLICATES lowfive_public_header_include_dirs)
+set                         (lowfive_public_header_args)
+foreach                     (include_dir IN LISTS lowfive_public_header_include_dirs)
+    list                    (APPEND lowfive_public_header_args "--include=${include_dir}")
+endforeach                  ()
+add_test                    (NAME lowfive-install-public-header
+                             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/install.py"
+                             "${PROJECT_BINARY_DIR}" "${CMAKE_INSTALL_PREFIX}" public-header
+                             "--compiler=${CMAKE_CXX_COMPILER}"
+                             "--toolchain=${CMAKE_TOOLCHAIN_FILE}"
+                             ${lowfive_public_header_args})
+set_tests_properties        (lowfive-install-public-header PROPERTIES TIMEOUT 60 LABELS install)
 add_test                    (NAME lowfive-cmake-mpi4py-stale-cache
                              COMMAND "${CMAKE_COMMAND}"
                              "-DMPI4PY_FINDER=${CMAKE_CURRENT_SOURCE_DIR}/FindMPI4Py.cmake"
