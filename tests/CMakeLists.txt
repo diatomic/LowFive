@@ -24,7 +24,7 @@ lowfive_test(lowfive-model model.cpp
     attribute-unwritten attribute-unwritten-serialization hid-moves
     dataspace-ownership compound-background compound-indirect-background
     dataset-fill dataset-fill-reference-serialization dataset-properties-stale-reference dataset-shrink
-    read-all write-all selected-strings zerocopy-strings datatype-ownership
+    read-all write-all scalar-selections selected-strings zerocopy-strings datatype-ownership
     persist-attributes persist-strings vlen-rewrite dataset-vlen-overlap
     dataset-vlen-serialization dataset-vlen-sparse-serialization shutdown-cleanup
     reference-top reference-compound reference-region-serialization

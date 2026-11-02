@@ -23,6 +23,9 @@ copies keep modern-reference fill values alive; references obtained with
 `H5Pget_fill_value` are borrowed and require `H5Rcopy` before being owned or
 destroyed independently.
 
+Scalar and null datasets accept explicit HDF5 dataspaces as well as `H5S_ALL`.
+Empty selections leave the destination buffer unchanged.
+
 Missing object, group, and attribute locations return HDF5 errors. Unsupported
 metadata-only optional operations also return errors rather than reporting
 success; optional-operation queries advertise only implemented operations.

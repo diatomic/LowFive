@@ -489,6 +489,36 @@ void dataset_shrink()
                   H5P_DEFAULT, output.data()) >= 0);
     CHECK((output == std::array<int, 4>{{1, 2, 42, 42}}));
 }
+void scalar_selections()
+{
+    test::Connector c("model-scalar-selections");
+    auto file = c.file();
+    auto scalar = test::scalar();
+    Id dataset(H5Dcreate2(file, "value", H5T_NATIVE_INT, scalar,
+                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    const int expected = 42;
+    CHECK(H5Dwrite(dataset, H5T_NATIVE_INT, scalar, scalar,
+                   H5P_DEFAULT, &expected) >= 0);
+    Id file_space(H5Dget_space(dataset), H5Sclose);
+    int actual = -1;
+    CHECK(H5Dread(dataset, H5T_NATIVE_INT, scalar, file_space,
+                  H5P_DEFAULT, &actual) >= 0);
+    CHECK(actual == expected);
+
+    CHECK(H5Sselect_none(scalar) >= 0);
+    CHECK(H5Sselect_none(file_space) >= 0);
+    actual = -7;
+    CHECK(H5Dread(dataset, H5T_NATIVE_INT, scalar, file_space,
+                  H5P_DEFAULT, &actual) >= 0);
+    CHECK(actual == -7);
+
+    Id null_space(H5Screate(H5S_NULL), H5Sclose);
+    Id empty(H5Dcreate2(file, "empty", H5T_NATIVE_INT, null_space,
+                        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    CHECK(H5Dread(empty, H5T_NATIVE_INT, null_space, null_space,
+                  H5P_DEFAULT, &actual) >= 0);
+    CHECK(actual == -7);
+}
 void dataset_all(bool writing)
 {
     test::Connector c(writing ? "model-write-all" : "model-read-all"); auto f = c.file(); auto s = test::space(4);
@@ -1430,6 +1460,7 @@ int main(int argc, char** argv)
             compound_indirect_background();
         else if (name == "dataset-fill") dataset_fill();
         else if (name == "dataset-shrink") dataset_shrink();
+        else if (name == "scalar-selections") scalar_selections();
         else if (name == "read-all") dataset_all(false);
         else if (name == "write-all") dataset_all(true);
         else if (name == "selected-strings") dataset_strings(false);
