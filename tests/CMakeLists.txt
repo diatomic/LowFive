@@ -79,10 +79,15 @@ function(lowfive_mpi_test target source)
 endfunction()
 lowfive_mpi_test(lowfive-distributed distributed.cpp
     contents repeated-open object-open conversion memory-all irregular multifile bounds
-    empty mpio-resources missing native-missing hard-link-replace hard-link-serialized
-    object-hard-link-serialized remote-unlinked-alias hard-link-parent-relative
-    object-alias-policy vlen vlen-compound vlen-compound-selection scalar
-    no-index)
+    empty mpio-resources missing native-missing remote-missing hard-link-replace
+    hard-link-serialized object-hard-link-serialized remote-unlinked-alias
+    hard-link-parent-relative object-alias-policy vlen vlen-compound
+    vlen-compound-selection scalar no-index)
+add_test(NAME lowfive-distributed-copy-whole
+         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 ${MPIEXEC_PREFLAGS}
+                 $<TARGET_FILE:lowfive-distributed> ${MPIEXEC_POSTFLAGS} copy-whole)
+set_tests_properties(lowfive-distributed-copy-whole PROPERTIES
+                     TIMEOUT 30 PROCESSORS 3 LABELS mpi)
 lowfive_mpi_test(lowfive-rpc rpc.cpp destroy-first destroy-second)
 set(lowfive_saved_mpi_postflags ${MPIEXEC_POSTFLAGS})
 set(MPIEXEC_POSTFLAGS --lowfive-mpi-postflag)

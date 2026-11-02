@@ -1,7 +1,6 @@
 #include <lowfive/vol-metadata.hpp>
 #include "metadata.hpp"
 #include "vol-metadata-private.hpp"
-#include "metadata/remote.hpp"
 
 #include <unordered_set>
 
@@ -135,9 +134,9 @@ std::unordered_set<LowFive::Object*> reachable_files(
     for (const auto& entry : vol.files)
     {
         auto* root = entry.second;
+        auto* file = dynamic_cast<LowFive::File*>(root);
         if (has_wrapper(vol, root, ignored) ||
-            (vol.keep && dynamic_cast<LowFive::File*>(root) &&
-             !dynamic_cast<LowFive::RemoteFile*>(root)))
+            (vol.keep && file && !file->remote))
             mark(root);
     }
     for (size_t i = 0; i < pending.size(); ++i)

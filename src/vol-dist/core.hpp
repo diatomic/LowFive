@@ -187,7 +187,11 @@ struct IndexServe
     diy::MemoryBuffer           get_file_hierarchy(std::string name)
     {
         diy::MemoryBuffer result;
-        serialize(result, files->at(name), *vol);
+        auto found = files->find(name);
+        if (found == files->end() ||
+            !dynamic_cast<File*>(found->second))
+            return result;
+        serialize(result, found->second, *vol);
         return result;
     }
 

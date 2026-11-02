@@ -18,6 +18,7 @@ RemoteFile::RemoteFile(DistMetadataVOL& vol_, const File& f,
     query_(std::move(q))
 {
     ++vol.remote_file_counts_[query_->intercomm_index];
+    File::remote = true;
 }
 
 RemoteFile::~RemoteFile()
@@ -408,13 +409,23 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     std::string name_ = name;
     std::unique_ptr<Query> query(new Query(local, intercomms, remote_size(intercomm_index), intercomm_index));
     diy::MemoryBuffer hierarchy = query->c.call<diy::MemoryBuffer>("get_file_hierarchy", name_);
+    if (hierarchy.size() == 0 && hierarchy.nblobs() == 0)
+    {
+        MPI_Barrier(local);
+        if (remote_file_counts_.find(intercomm_index) ==
+            remote_file_counts_.end())
+            query->send_done();
+        return nullptr;
+    }
     hierarchy.reset();
     Object* hf = deserialize(hierarchy, *this);
 
     auto* hff = static_cast<File*>(hf);
     if (hff->copy_whole) {
-        if (remote_file_counts_.find(intercomm_index) == remote_file_counts_.end())
-            query->c.finish(0);
+        MPI_Barrier(local);
+        if (remote_file_counts_.find(intercomm_index) ==
+            remote_file_counts_.end())
+            query->send_done();
         files.emplace(name, hff);
         result_mdata = hff;
     } else {

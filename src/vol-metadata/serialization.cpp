@@ -1,5 +1,4 @@
 #include "../vol-metadata-private.hpp"
-#include "../metadata/remote.hpp"       // DM: I don't remember why remote.hpp wasn't included in metadata.hpp
 #include <unordered_set>
 
 
@@ -203,7 +202,8 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
 
     if (o->type == ObjectType::File)
     {
-        if (dynamic_cast<DummyFile*>(o) || dynamic_cast<RemoteFile*>(o))
+        if (dynamic_cast<DummyFile*>(o) ||
+            static_cast<File*>(o)->remote)
         {
             diy::save(bb, false);
             return;

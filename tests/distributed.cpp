@@ -1,7 +1,10 @@
 #include "test.hpp"
+#include "metadata.hpp"
 #include <lowfive/vol-dist-metadata.hpp>
 #include <array>
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 
 struct VLenRecord
@@ -68,9 +71,15 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
     vol.keep = rank == 0;
     const std::string first = "distributed-" + name + "-a.h5";
     const std::string second = "distributed-" + name + "-b.h5";
+    const std::string absent = "distributed-" + name + "-absent.h5";
     vol.set_memory(first, name == "object-alias-policy" ? "/values" : "*");
     vol.set_memory(second, "*");
     vol.set_intercomm(first, "*", 0);
+    if (name == "remote-missing")
+    {
+        vol.set_memory(absent, "*");
+        vol.set_intercomm(absent, "*", 0);
+    }
     if (name == "native-missing")
         vol.set_passthru(first, "*");
     vol.set_intercomm(second, "*", 0);
@@ -195,6 +204,13 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
             if (name == "native-missing")
                 CHECK(std::remove(first.c_str()) == 0);
             if (name == "multifile") create(second);
+            if (name == "copy-whole")
+            {
+                auto* source =
+                    dynamic_cast<LowFive::File*>(vol.files.at(first));
+                CHECK(source);
+                source->copy_whole = true;
+            }
             vol.serve_all(true, name != "no-index");
             vol.clear_files();
         }
@@ -202,8 +218,20 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
         {
             CHECK(H5Fopen(first.c_str(), H5F_ACC_RDONLY, fapl) < 0);
         }
+        else if (name == "remote-missing")
+        {
+            CHECK(H5Fopen(absent.c_str(), H5F_ACC_RDONLY, fapl) < 0);
+        }
         else
         {
+            if (name == "copy-whole")
+            {
+                int local_rank = 0;
+                CHECK(MPI_Comm_rank(local, &local_rank) == MPI_SUCCESS);
+                if (local_rank == 1)
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(100));
+            }
             const unsigned open_flags =
                 name == "remote-unlinked-alias" ? H5F_ACC_RDWR :
                                                   H5F_ACC_RDONLY;
@@ -454,12 +482,18 @@ int main(int argc, char** argv)
         else if (argc == 3 &&
                  std::string(argv[1]) == "--lowfive-mpi-postflag")
             selected = argv[2];
-        CHECK(selected && size == 2);
+        CHECK(selected);
+        const std::string name = selected;
+        const bool grouped_consumers = name == "copy-whole";
+        CHECK(size == (grouped_consumers ? 3 : 2));
         H5Eset_auto2(H5E_DEFAULT, nullptr, nullptr);
         MPI_Comm local, intercomm;
-        CHECK(MPI_Comm_split(MPI_COMM_WORLD, rank, 0, &local) == MPI_SUCCESS);
-        CHECK(MPI_Intercomm_create(local, 0, MPI_COMM_WORLD, 1 - rank, 17, &intercomm) == MPI_SUCCESS);
-        const std::string name = selected;
+        const int color = grouped_consumers && rank > 0 ? 1 : rank;
+        CHECK(MPI_Comm_split(MPI_COMM_WORLD, color, rank, &local) ==
+              MPI_SUCCESS);
+        const int remote_leader = color == 0 ? 1 : 0;
+        CHECK(MPI_Intercomm_create(local, 0, MPI_COMM_WORLD, remote_leader,
+                                   17, &intercomm) == MPI_SUCCESS);
         exercise(name == "postflag-order" ? "contents" : name,
                  rank, local, intercomm);
         CHECK(MPI_Comm_free(&intercomm) == MPI_SUCCESS);

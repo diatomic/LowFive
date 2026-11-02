@@ -28,6 +28,7 @@ struct File: public Object
 
     bool            copy_whole = false;
     bool            copy_of_remote = false;
+    bool            remote = false;
 
     File(std::string filename_, Hid fcpl_, Hid fapl_):
         Object(ObjectType::File, filename_), fcpl(H5Pcopy(fcpl_.id), true), fapl(H5Pcopy(fapl_.id), true)
@@ -39,7 +40,8 @@ struct File: public Object
         fapl(other.fapl),
         references(other.references),
         copy_whole(other.copy_whole),
-        copy_of_remote(other.copy_of_remote)
+        copy_of_remote(other.copy_of_remote),
+        remote(other.remote)
     {
         token = other.token;
     }
