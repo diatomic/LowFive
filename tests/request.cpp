@@ -626,7 +626,67 @@ void notifications(const std::string& name)
     CHECK(fixture.value(1) == 82 && fixture.value(2) == 83);
 }
 
-
+struct ContextVOL : Base
+{
+    int mode = 0;
+    int acquired = 0;
+    int released = 0;
+    bool fail_release = false;
+    herr_t get_wrap_ctx(void*, void** context) override
+    {
+        *context = new int(17);
+        ++acquired;
+        if (mode == 1) return -1;
+        if (mode == 2) throw std::runtime_error("context failure");
+        return 0;
+    }
+    herr_t free_wrap_ctx(void* context) override
+    {
+        if (fail_release) { fail_release = false; return -1; }
+        delete static_cast<int*>(context);
+        ++released;
+        return 0;
+    }
+};
+void wrapping_failures()
+{
+    auto& vol = *new ContextVOL;
+    const hid_t connector = vol.register_plugin();
+    const hid_t underlying = H5VL_NATIVE;
+    auto* object = new Wrapper(reinterpret_cast<void*>(1), underlying, &vol);
+    const int references = H5Iget_ref(underlying);
+    for (int mode : {1, 2})
+    {
+        vol.mode = mode;
+        void* context = reinterpret_cast<void*>(1);
+        CHECK(Base::connector.wrap_cls.get_wrap_ctx(object, &context) < 0);
+        CHECK(context == nullptr);
+        CHECK(vol.acquired == vol.released);
+        CHECK(H5Iget_ref(underlying) == references);
+    }
+    void* context = reinterpret_cast<void*>(1);
+    CHECK(Base::connector.wrap_cls.get_wrap_ctx(nullptr, &context) < 0);
+    CHECK(context == nullptr);
+    const int acquired = vol.acquired;
+    object->under_vol_id = H5I_INVALID_HID;
+    CHECK(Base::connector.wrap_cls.get_wrap_ctx(object, &context) < 0);
+    CHECK(context == nullptr && vol.acquired == acquired);
+    object->under_vol_id = underlying;
+    vol.mode = 0;
+    CHECK(Base::connector.wrap_cls.get_wrap_ctx(object, &context) >= 0);
+    CHECK(context != nullptr && H5Iget_ref(underlying) == references + 1);
+    vol.fail_release = true;
+    CHECK(Base::connector.wrap_cls.free_wrap_ctx(context) < 0);
+    CHECK(H5Iget_ref(underlying) == references + 1);
+    CHECK(Base::connector.wrap_cls.free_wrap_ctx(context) >= 0);
+    CHECK(H5Iget_ref(underlying) == references);
+    CHECK(vol.acquired == vol.released);
+    CHECK(Base::connector.wrap_cls.wrap_object(reinterpret_cast<void*>(1), H5I_DATASET, nullptr) == nullptr);
+    CHECK(Base::connector.wrap_cls.unwrap_object(nullptr) == nullptr);
+    CHECK(Base::connector.wrap_cls.free_wrap_ctx(nullptr) < 0);
+    Wrapper::destroy_wrapper(object);
+    CHECK(H5VLunregister_connector(connector) >= 0);
+}
 }
 
 int main(int argc, char** argv)
@@ -644,6 +704,7 @@ int main(int argc, char** argv)
         else if (name == "forwarding-errors") forwarding_errors();
         else if (name == "bounded-cleanup") bounded_cleanup();
         else if (name == "notify-singleton") singleton_notification();
+        else if (name == "wrap-failures") wrapping_failures();
         else notifications(name);
     });
 }

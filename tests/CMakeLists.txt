@@ -18,7 +18,7 @@ lowfive_test(lowfive-request request.cpp
     singleton multiple cancel-free event-success event-failure
     submission-failure submission-request-failure forwarding-errors bounded-cleanup
     notify-singleton notify-immediate notify-out-of-order notify-error notify-partial
-    notify-retry notify-exception)
+    notify-retry notify-exception wrap-failures)
 lowfive_test(lowfive-model model.cpp
     attribute-conversion attribute-compound attribute-strings dataset-conversion
     attribute-unwritten attribute-unwritten-serialization hid-moves
