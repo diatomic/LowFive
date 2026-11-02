@@ -24,6 +24,8 @@ struct VOLBase
     //            ~UnderObject()                  { hid_t err_id; err_id = H5Eget_current_stack(); H5Idec_ref(under_vol_id); H5Eset_current_stack(err_id); }
     //};
 
+    struct request_state_t;
+
     // The pass through VOL info object;
     // it increments the reference count for the under_vold_id on creation and decrements on destruction
     struct pass_through_t
@@ -53,6 +55,9 @@ struct VOLBase
         VOLBase*            vol;                                // pointer to this
         pass_through_t*     wrapped_previous = nullptr;
         pass_through_t*     wrapped_next = nullptr;
+        // Ordinary requests retain the same wrapper as objects. Only batched
+        // dataset operations and notifications need additional shared state.
+        std::shared_ptr<request_state_t> request_state;
     };
 
     // The pass through VOL wrapper context
@@ -266,13 +271,19 @@ struct VOLBase
     //void token_to_str               {}
     //void token_from_str             {}
 
-    //// request
-    //void req_wait()                 {}
-    //void req_notify()               {}
-    //void req_cancel()               {}
-    //void req_specific()             {}
-    //void req_optional()             {}
-    //void req_free()                 {}
+    // Wait and cancel retain requests for subsequent timing/error queries.
+    // Explicit free or successful notification transfer releases ownership.
+    static herr_t          _request_wait(void *req, uint64_t timeout, H5VL_request_status_t *status);
+    static herr_t          _request_notify(void *req, H5VL_request_notify_t callback, void *context);
+    static herr_t          _request_cancel(void *req, H5VL_request_status_t *status);
+    static herr_t          _request_specific(void *req, H5VL_request_specific_args_t *args);
+    static herr_t          _request_optional(void *req, H5VL_optional_args_t *args);
+    static herr_t          _request_free(void *req);
+
+    // Prepare storage before submitting any asynchronous dataset operation.
+    static pass_through_t* create_request(size_t count, void *objects[]);
+    static void            set_request(pass_through_t* request, size_t index, void* underlying);
+    static void            drain_request(pass_through_t* request);
 
     static herr_t          _optional(void *obj, H5VL_optional_args_t* arg, hid_t dxpl_id, void **req);
     virtual herr_t          optional(void *obj, H5VL_optional_args_t* arg, hid_t dxpl_id, void **req);

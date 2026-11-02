@@ -123,12 +123,12 @@ H5VL_class_t LowFive::VOLBase::connector =
                         &Callback<&_introspect_opt_query>::invoke                       /* opt_query */
                 },
                 {                                           /* request_cls */
-                        NULL, // OUR_pass_through_request_wait,             /* wait */
-                        NULL, // OUR_pass_through_request_notify,           /* notify */
-                        NULL, // OUR_pass_through_request_cancel,           /* cancel */
-                        NULL, // OUR_pass_through_request_specific,         /* specific */
-                        NULL, // OUR_pass_through_request_optional,         /* optional */
-                        NULL  // OUR_pass_through_request_free              /* free */
+                        &Callback<&_request_wait>::invoke,              /* wait */
+                        &Callback<&_request_notify>::invoke,            /* notify */
+                        &Callback<&_request_cancel>::invoke,            /* cancel */
+                        &Callback<&_request_specific>::invoke,          /* specific */
+                        &Callback<&_request_optional>::invoke,          /* optional */
+                        &Callback<&_request_free>::invoke               /* free */
                 },
                 {                                                       /* blob_cls */
                         &Callback<&_blob_put>::invoke,            /* put */
@@ -324,6 +324,8 @@ _optional(void *obj, H5VL_optional_args_t* args, hid_t dxpl_id, void **req)
     log->debug("------- PASS THROUGH VOL generic Optional");
 
     ret_value = o->vol->optional(o->under_object, args, dxpl_id, req);
+    if (req && *req)
+        *req = o->create(*req);
 
     return ret_value;
 }

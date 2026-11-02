@@ -199,6 +199,10 @@ _object_optional(void *obj, const H5VL_loc_params_t *loc_params, H5VL_optional_a
 
     ret_value = o->vol->object_optional(o->under_object, loc_params, args, dxpl_id, req);
 
+    /* Check for async request */
+    if(req && *req)
+        *req = o->create(*req);
+
     return ret_value;
 } /* end _object_optional() */
 

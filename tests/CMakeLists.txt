@@ -14,6 +14,11 @@ lowfive_test(lowfive-base base.cpp
     hard hard-same-dst hard-same-src copy-same-dst copy-same-src move-same-dst move-same-src
     reopen-native reopen-metadata exceptions property-lifetime info-independent
     info-nested info-malformed singleton)
+lowfive_test(lowfive-request request.cpp
+    singleton multiple cancel-free event-success event-failure
+    submission-failure submission-request-failure forwarding-errors bounded-cleanup
+    notify-singleton notify-immediate notify-out-of-order notify-error notify-partial
+    notify-retry notify-exception)
 lowfive_test(lowfive-model model.cpp
     attribute-conversion attribute-compound attribute-strings dataset-conversion
     attribute-unwritten attribute-unwritten-serialization hid-moves

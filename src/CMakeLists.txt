@@ -14,6 +14,7 @@ add_library             (lowfive SHARED
                             vol-base/group.cpp
                             vol-base/introspect.cpp
                             vol-base/wrap.cpp
+                            vol-base/request.cpp
                             vol-base/object.cpp
                             vol-base/blob.cpp
                             vol-base/token.cpp

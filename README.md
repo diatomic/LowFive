@@ -30,6 +30,17 @@ Native-backed objects continue to forward operations to the underlying connector
 Open-object counts and ID lists are scoped to the requested file;
 `H5F_OBJ_LOCAL` restricts them to the originating file handle.
 
+Asynchronous underlying connectors are supported through request wait, notify,
+cancel, specific, optional, and free callbacks. Multi-dataset submissions retain
+each underlying request and share the caller's wait timeout across the aggregate.
+Connector-specific optional request operations can be forwarded for a single
+request, but are unsupported for aggregates because their outputs have no generic
+merge contract. Failed submissions poll accepted work and cancel pending
+operations before releasing ownership. If the underlying connector fails both
+wait and cancellation without establishing completion, LowFive reports an error
+and retains the unreleasable request rather than freeing an operation that may
+still be active.
+
 `broadcast_files()` replaces the receiver's metadata snapshot. Existing handles
 keep their previous snapshot and its same-file reference targets until closed;
 subsequent opens use the replacement.
@@ -50,9 +61,12 @@ ctest --test-dir build --output-on-failure
 
 The isolated API tests cover storage modes, datatype conversion, selections,
 attributes, links and paths, object lifetimes, VOL wrapping, connector
-configuration, distributed queries, and RPC teardown. Checks remain enabled in
-Release builds. The MPI matrix additionally exercises redistribution between
-one or two producers and consumers.
+configuration, asynchronous request lifecycles, distributed queries, and RPC
+teardown. Regression coverage includes missing locations, unsupported operations,
+file-scoped IDs, unwritten attributes, fill-value serialization, partial remote
+reads, and snapshot replacement. Checks remain enabled in Release builds. The
+MPI matrix additionally exercises redistribution between one or two producers
+and consumers.
 
 Use CTest labels to select a layer:
 
