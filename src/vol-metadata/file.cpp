@@ -7,6 +7,10 @@ void*
 LowFive::MetadataVOL::
 file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    if ((flags & H5F_ACC_EXCL) &&
+        match_any(name, "", memory, true) &&
+        files.find(name) != files.end())
+        return nullptr;
     void* underlying = nullptr;
     if (match_any(name, "", passthru, true))
     {
@@ -20,6 +24,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     result->mdata_obj = metadata;
     result->file_wrapper = true;
     result->primary_file_wrapper = true;
+    result->access_flags = H5F_ACC_RDWR;
     return result;
 }
 
@@ -47,6 +52,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     result->mdata_obj = it->second;
     result->file_wrapper = true;
     result->primary_file_wrapper = true;
+    result->access_flags = flags;
     return result;
 }
 
@@ -97,24 +103,20 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
 
             std::string name = args->args.is_accessible.filename;
 
-            hbool_t result = true;
+            hbool_t result = false;
             if (match_any(name, "", passthru, true))
             {
-                VOLBase::file_specific(file, args, dxpl_id, req);
-                result = result and (*args->args.is_accessible.accessible);
+                *args->args.is_accessible.accessible = false;
+                auto status = VOLBase::file_specific(file, args, dxpl_id, req);
+                if (status < 0) return status;
+                result = *args->args.is_accessible.accessible;
                 log->trace("file_specific: passthru result = {}", result);
             }
-
-            if (match_any(name, "", memory, true))
+            else if (match_any(name, "", memory, true))
             {
-                result = result and (files.find(name) != files.end());
+                result = files.find(name) != files.end();
                 log->trace("file_specific: memory result = {}", result);
             }
-
-            // DM (2024-02-13): temporary "fix" for moab. Assume that if we are
-            // asked, the file should be there. The proper fix requires remote
-            // querying in DistMetadataVOL. (FIXME)
-            result = true;
 
             *args->args.is_accessible.accessible = result;
 
@@ -142,6 +144,7 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
             reopened->mdata_obj = file_->mdata_obj;
             reopened->file_wrapper = true;
             reopened->primary_file_wrapper = true;
+            reopened->access_flags = file_->access_flags;
             *args->args.reopen.file = reopened;
         }
         return result;
@@ -159,6 +162,7 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
             reopened->mdata_obj = file_->mdata_obj;
             reopened->file_wrapper = true;
             reopened->primary_file_wrapper = true;
+            reopened->access_flags = file_->access_flags;
             *args->args.reopen.file = reopened;
             return 0;
         }
@@ -228,8 +232,7 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
             throw MetadataError(fmt::format("file_get(): H5VL_FILE_GET_FILENO not implemented in memory yet"));
         else if (get_type == H5VL_FILE_GET_INTENT)          // file intent
         {
-            log->warn("file_get(): H5VL_FILE_GET_INTENT forces H5F_ACC_RDWR as a response");
-            *args->args.get_intent.flags = H5F_ACC_RDWR;
+            *args->args.get_intent.flags = file_->access_flags;
         }
         else if (get_type == H5VL_FILE_GET_NAME)            // file name
         {
@@ -310,7 +313,7 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
             //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, get_objs, &list_info);
             if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     get_objs, &list_info);
 
-            *ret = (ssize_t)obj_count;
+            *ret = std::get<3>(list_info);
         }
         else
             throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));

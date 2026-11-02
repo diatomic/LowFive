@@ -108,6 +108,8 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         hid_t space_id, hid_t dcpl_id,
         hid_t dapl_id,  hid_t dxpl_id, void **req)
 {
+    auto* parent_pointers = static_cast<ObjectPointers*>(obj);
+    if (!parent_pointers->writable()) return nullptr;
     auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
     std::string dataset_name = name ? name : "";
     auto path = parent->search(dataset_name);
@@ -136,6 +138,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         metadata = static_cast<Dataset*>(path.obj->add_child(metadata));
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
+    result->access_flags = parent_pointers->access_flags;
     return result;
 }
 
@@ -188,6 +191,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     }
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
+    result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
     return result;
 }
 
@@ -279,6 +283,7 @@ LowFive::MetadataVOL::
 dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t plist_id, const void *buf, void **req)
 {
     auto* pointers = static_cast<ObjectPointers*>(dset);
+    if (!pointers->writable()) return -1;
     if (unwrap(dset))
     {
         herr_t result = VOLBase::dataset_write(unwrap(dset), mem_type_id, mem_space_id, file_space_id, plist_id, buf, req);
@@ -328,6 +333,8 @@ LowFive::MetadataVOL::
 dataset_specific(void *obj, H5VL_dataset_specific_args_t* args, hid_t dxpl_id, void **req)
 {
     ObjectPointers* obj_ = (ObjectPointers*)obj;
+    if (args->op_type == H5VL_DATASET_SET_EXTENT && !obj_->writable())
+        return -1;
 
     auto specific_type = args->op_type;
 

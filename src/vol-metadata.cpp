@@ -204,30 +204,42 @@ void retarget_links(LowFive::Object* object, LowFive::Object* previous,
         retarget_links(child, previous, replacement);
 }
 
-LowFive::Object* replace_metadata(
+LowFive::Object* replace_metadata_impl(
     LowFive::MetadataVOL& vol, LowFive::File& file,
     LowFive::Object* previous, LowFive::Object* replacement)
 {
     auto* parent = previous->parent;
-    if (!parent)
+    if (parent)
     {
-        delete replacement;
-        return nullptr;
+        auto position = std::find(parent->children.begin(),
+                                  parent->children.end(), previous);
+        if (position == parent->children.end())
+        {
+            delete replacement;
+            return nullptr;
+        }
+        *position = replacement;
     }
-    auto position = std::find(parent->children.begin(), parent->children.end(),
-                              previous);
-    if (position == parent->children.end())
+    else
     {
-        delete replacement;
-        return nullptr;
+        auto position =
+            std::find(file.unlinked.begin(), file.unlinked.end(), previous);
+        if (position == file.unlinked.end())
+        {
+            delete replacement;
+            return nullptr;
+        }
+        *position = replacement;
     }
 
     replacement->name = previous->name;
     replacement->extra = std::exchange(previous->extra, nullptr);
+    replacement->token = previous->token;
+    replacement->connector_token = previous->connector_token;
+    replacement->has_connector_token = previous->has_connector_token;
     replacement->parent = parent;
     replacement->set_root(&file);
     replacement->move_children(previous);
-    *position = replacement;
 
     retarget_links(&file, previous, replacement);
     for (auto* detached : file.unlinked)
@@ -292,7 +304,7 @@ LowFive::Object* cache_reference_target(
     {
         LowFive::Hid gcpl(H5Gget_create_plist(target_id), true);
         if (gcpl.id < 0) return nullptr;
-        target = new LowFive::Group("", gcpl);
+        target = new LowFive::Group("", gcpl.id);
     }
     else if (type == H5I_DATATYPE)
     {
@@ -308,7 +320,7 @@ LowFive::Object* cache_reference_target(
         return nullptr;
 
     target = existing ?
-        replace_metadata(vol, *file, existing, target) :
+        replace_metadata_impl(vol, *file, existing, target) :
         file->add_path(target, state.path);
     if (!target) return nullptr;
     target->token = state.token;
@@ -354,6 +366,13 @@ void collect_files(LowFive::MetadataVOL& vol)
 }
 
 }
+LowFive::Object*
+LowFive::replace_metadata(MetadataVOL& vol, File& file, Object* previous,
+                          Object* replacement)
+{
+    return replace_metadata_impl(vol, file, previous, replacement);
+}
+
 
 LowFive::Object::ObjectPath
 LowFive::metadata_target_path(Object* parent, const std::string& path)

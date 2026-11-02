@@ -17,6 +17,9 @@ struct ObjectPointers
     bool            file_wrapper = false;
     bool            primary_file_wrapper = false;
     bool            reference_file_wrapper = false;
+    unsigned        access_flags = H5F_ACC_RDWR;
+
+    bool writable() const { return (access_flags & H5F_ACC_RDWR) != 0; }
 
     ObjectPointers() = default;
     ObjectPointers(void* h5_obj_): h5_obj(h5_obj_)     {}
@@ -82,6 +85,8 @@ std::optional<DatasetMetadata> query_dataset_metadata(Getter&& get)
 
 Object::ObjectPath metadata_target_path(Object* parent,
                                         const std::string& path);
+Object* replace_metadata(MetadataVOL& vol, File& file, Object* previous,
+                         Object* replacement);
 
 // using different names to avoid confusion
 void serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool include_data = false);

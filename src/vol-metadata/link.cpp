@@ -12,6 +12,7 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
     if (!destination) destination = source;
     if (!source) source = destination;
     if (!destination) return -1;
+    if (!destination->writable()) return -1;
     const bool native_destination = unwrap(destination);
     const bool native_source = unwrap(source);
     if (!destination->mdata_obj ||
@@ -94,6 +95,7 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     auto* source = static_cast<ObjectPointers*>(src_obj ? src_obj : dst_obj);
     auto* destination = static_cast<ObjectPointers*>(dst_obj ? dst_obj : src_obj);
     if (!source || !destination) return -1;
+    if (!destination->writable()) return -1;
     const bool native_source = unwrap(source);
     const bool native_destination = unwrap(destination);
     if (native_source != native_destination) return -1;
@@ -140,6 +142,7 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     auto* source = static_cast<ObjectPointers*>(src_obj ? src_obj : dst_obj);
     auto* destination = static_cast<ObjectPointers*>(dst_obj ? dst_obj : src_obj);
     if (!source || !destination) return -1;
+    if (!source->writable() || !destination->writable()) return -1;
     const bool native_source = unwrap(source);
     const bool native_destination = unwrap(destination);
     if (native_source != native_destination) return -1;
@@ -244,6 +247,7 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
     auto* temporary = wrap(nullptr);
     temporary->mdata_obj = metadata;
     temporary->tmp = true;
+    temporary->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
     hid_t id = H5VLwrap_register(temporary, get_identifier_type(metadata));
     if (id < 0) { drop(temporary); return -1; }
     herr_t result = 0;
@@ -272,6 +276,8 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
 herr_t
 LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, H5VL_link_specific_args_t* args, hid_t dxpl_id, void** req)
 {
+    auto* pointers = static_cast<ObjectPointers*>(obj);
+    if (args->op_type == H5VL_LINK_DELETE && !pointers->writable()) return -1;
     auto* metadata = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
     Object* entry = nullptr;
     if (args->op_type == H5VL_LINK_DELETE && metadata)

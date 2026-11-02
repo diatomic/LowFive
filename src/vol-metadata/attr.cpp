@@ -52,6 +52,8 @@ void*
 LowFive::MetadataVOL::
 attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req)
 {
+    auto* parent_pointers = static_cast<ObjectPointers*>(obj);
+    if (!parent_pointers->writable()) return nullptr;
     auto* owner = attribute_owner(*this, obj, loc_params, dxpl_id, req);
     if (!owner || owner->attribute(name)) return nullptr;
     void* underlying = nullptr;
@@ -62,6 +64,7 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     }
     auto* result = wrap(underlying);
     result->mdata_obj = owner->add_child(new Attribute(name, type_id, space_id));
+    result->access_flags = parent_pointers->access_flags;
     return result;
 }
 
@@ -79,7 +82,12 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
         if (!underlying) return nullptr;
     }
     if (!owner)
-        return underlying ? wrap(underlying) : nullptr;
+    {
+        if (!underlying) return nullptr;
+        auto* result = wrap(underlying);
+        result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
+        return result;
+    }
 
     Object* metadata = owner->attribute(name);
     if (!metadata)
@@ -89,6 +97,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     }
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
+    result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
     return result;
 }
 
@@ -218,85 +227,61 @@ attr_exists(Object *mdata_obj, const char* attr_name, htri_t* ret)
 
 herr_t
 LowFive::MetadataVOL::
-attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data)
+attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_index_t index,
+          H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op,
+          void* op_data)
 {
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
-    Object* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
+    auto* pointers = static_cast<ObjectPointers*>(obj);
+    auto* metadata = static_cast<Object*>(pointers->mdata_obj);
+    try { metadata = metadata->locate(*loc_params).exact(); }
+    catch (...) { return -1; }
 
-    mdata_obj = mdata_obj->locate(*loc_params).exact();
+    std::vector<std::pair<Object*, int64_t>> attributes;
+    int64_t creation_order = 0;
+    for (auto* child : metadata->children)
+        if (child->type == ObjectType::Attribute)
+            attributes.emplace_back(child, creation_order++);
+    if (index == H5_INDEX_NAME)
+        std::sort(attributes.begin(), attributes.end(),
+                  [](const auto& lhs, const auto& rhs)
+                  { return lhs.first->name < rhs.first->name; });
+    else if (index != H5_INDEX_CRT_ORDER)
+        return -1;
+    if (order == H5_ITER_DEC)
+        std::reverse(attributes.begin(), attributes.end());
+    else if (order != H5_ITER_INC && order != H5_ITER_NATIVE)
+        return -1;
 
-    // get object type in HDF format and use that to get an HDF hid_t to the object
-    std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
-    int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-    ObjectPointers* obj_tmp = wrap(nullptr);
-    obj_tmp->mdata_obj = mdata_obj;
-    obj_tmp->tmp = true;
-    auto log = get_logger();
-    log->trace("attr_iter: wrapping {} object type {}", *obj_tmp, mdata_obj->type);
-
-    hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
-    //log->trace("wrap_object = {}", fmt::ptr(H5VLobject(obj_loc_id)));
-    //log->trace("dec_ref, refcount = {}", H5Idec_ref(obj_loc_id));
-
-    // info for attribute, defined in HDF5 H5Apublic.h  TODO: assigned with some defaults, not sure if they're corrent
-    H5A_info_t ainfo;
-    ainfo.corder_valid  = true;                     // whether creation order is valid
-    ainfo.corder        = 0;                        // creation order (TODO: no idea what this is)
-    ainfo.cset          = H5T_CSET_ASCII;           // character set of attribute names
-
-    // check direct children of the parent object, not full search all the way down the tree
-    bool found      = false;                        // some attributes were found
-    herr_t retval   = 0;                            // return value
-
-    // TODO: currently ignores the iteration order, increment direction, and current index
-    // just blindly goes through all the attributes in the order they were created
-    for (auto& c : mdata_obj->children)
+    auto* temporary = wrap(nullptr);
+    temporary->mdata_obj = metadata;
+    temporary->tmp = true;
+    temporary->access_flags = pointers->access_flags;
+    hid_t id = H5VLwrap_register(temporary, get_identifier_type(metadata));
+    if (id < 0)
     {
-        if (c->type == LowFive::ObjectType::Attribute)
-        {
-            auto* attribute = dynamic_cast<Attribute*>(c);
-            ainfo.data_size = attribute ? attribute->space.size() * attribute->type.dtype_size : 0;
-            found = true;
-            log->trace("attr_iter: found attribute {} with data_size {} as a child of the parent {}", c->name, ainfo.data_size, mdata_obj->name);
-            if (idx)
-                log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", order, *idx);
-            else
-                log->trace("attr_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", order);
-
-            std::vector<char> c_name(c->name.size() + 1);
-            strcpy(c_name.data(), c->name.c_str());
-
-            // make the application callback, copied from H5Aint.c, H5A__attr_iterate_table()
-            retval = (op)(obj_loc_id, c_name.data(), &ainfo, op_data);
-            if (retval > 0)
-            {
-                log->trace("attr_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
-                break;
-            }
-            else if (retval < 0)
-            {
-                log->trace("attr_iter: terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
-                break;
-            }
-        }   // child is type attribute
-
-        // we should be incrementing idx, but it's more nuanced; in the native VOL, on return it's set to the last accessed attribute index
-        //++(*idx);
-
-    }   // for all children
-
-    auto refcount = H5Idec_ref(obj_loc_id);
-    log->trace("refcount = {}", refcount);
-    // NB: don't need to delete obj_tmp; it gets deleted (via
-    //     MetadataVOL::drop()) automagically, when refcount reaches 0,
-    //     i.e., this part works as expected
-
-    if (!found)
-    {
-        log->trace("attr_iter: did not find any attributes as direct children of the parent {} when trying to iterate over attributes", mdata_obj->name);
+        drop(temporary);
+        return -1;
     }
 
-    return retval;
+    herr_t result = 0;
+    const hsize_t start = idx ? *idx : 0;
+    for (hsize_t position = start; position < attributes.size(); ++position)
+    {
+        auto [attribute, corder] = attributes[position];
+        auto* value = dynamic_cast<Attribute*>(attribute);
+        H5A_info_t info {};
+        info.corder_valid = true;
+        info.corder = corder;
+        info.cset = H5T_CSET_ASCII;
+        info.data_size = value ?
+            value->space.size() * value->type.dtype_size : 0;
+        result = op(id, attribute->name.c_str(), &info, op_data);
+        if (idx) *idx = position + 1;
+        if (result != 0) break;
+    }
+
+    H5Idec_ref(id);
+    return result;
 }
 
 herr_t
@@ -304,6 +289,7 @@ LowFive::MetadataVOL::
 attr_write(void *attr, hid_t mem_type_id, const void *buf, hid_t dxpl_id, void **req)
 {
     auto* pointers = static_cast<ObjectPointers*>(attr);
+    if (!pointers->writable()) return -1;
     if (unwrap(attr))
     {
         herr_t result = VOLBase::attr_write(unwrap(attr), mem_type_id, buf, dxpl_id, req);
@@ -351,6 +337,12 @@ herr_t
 LowFive::MetadataVOL::
 attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t* args, hid_t dxpl_id, void **req)
 {
+    auto* pointers = static_cast<ObjectPointers*>(obj);
+    const bool mutating =
+        args->op_type == H5VL_ATTR_RENAME ||
+        args->op_type == H5VL_ATTR_DELETE ||
+        args->op_type == H5VL_ATTR_DELETE_BY_IDX;
+    if (mutating && !pointers->writable()) return -1;
     auto* owner = attribute_owner(*this, obj, loc_params, dxpl_id, req);
     if (!owner)
         return unwrap(obj) ?
@@ -444,7 +436,8 @@ attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific
         return 0;
     }
     case H5VL_ATTR_ITER:
-        return attr_iter(obj, loc_params, args->args.iterate.order, args->args.iterate.idx,
+        return attr_iter(obj, loc_params, args->args.iterate.idx_type,
+                         args->args.iterate.order, args->args.iterate.idx,
                          args->args.iterate.op, args->args.iterate.op_data);
     default:
         return -1;

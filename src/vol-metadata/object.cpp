@@ -89,6 +89,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     }
     auto* result = wrap(underlying);
     result->mdata_obj = metadata ? metadata : parent;
+    result->access_flags = pointers->access_flags;
     return result;
 }
 
@@ -97,6 +98,7 @@ LowFive::MetadataVOL::
 object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params,
     const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
 {
+    if (!static_cast<ObjectPointers*>(dst_obj)->writable()) return -1;
     auto log = get_logger();
 
     if (!unwrap(src_obj) && !unwrap(dst_obj))   // memory
@@ -157,6 +159,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
                 res_pair->file_wrapper = true;
                 res_pair->reference_file_wrapper =
                     retaining_reference_file;
+                res_pair->access_flags = obj_->access_flags;
                 log->trace("MetadataVOL: temporary file = {}, mdata = {}",
                            fmt::ptr(res_pair), fmt::ptr(res));
                 *args->args.get_file.file = res_pair;
@@ -267,8 +270,10 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
         if (result >= 0 && get_type == H5VL_OBJECT_GET_FILE &&
             loc_params->type == H5VL_OBJECT_BY_SELF && wrapped->mdata_obj &&
             *args->args.get_file.file)
-            pending_wrap_metadata[*args->args.get_file.file] =
-                static_cast<Object*>(wrapped->mdata_obj)->find_root();
+            pending_wrap_metadata[*args->args.get_file.file] = {
+                static_cast<Object*>(wrapped->mdata_obj)->find_root(),
+                wrapped->access_flags
+            };
         else if (wrapped->mdata_obj)
             log->warn("Warning: object_get: obj = {} metadata are available "
                       "but won't be used", *wrapped);

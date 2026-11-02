@@ -124,13 +124,35 @@ void native_callbacks(const std::string& name)
         CHECK(H5Aexists(datatype, "renamed") > 0);
         CHECK(H5Adelete(datatype, "renamed") >= 0);
         CHECK(H5Aexists(datatype, "renamed") == 0);
+        int created_value = 131;
+        Id created(H5Acreate2(datatype, "created", H5T_NATIVE_INT, scalar,
+                              H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(created.id >= 0);
+        CHECK(H5Awrite(created, H5T_NATIVE_INT, &created_value) >= 0);
+        int created_actual = -1;
+        CHECK(H5Aread(created, H5T_NATIVE_INT, &created_actual) >= 0);
+        CHECK(created_actual == created_value);
+    }
+    else if (name == "native_datatype_commit_parent")
+    {
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "group/type", datatype, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        Id opened(H5Topen2(file, "group/type", H5P_DEFAULT), H5Tclose);
+        CHECK(opened.id >= 0);
+        CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
     }
     else if (name == "native_datatype_object_open")
     {
-        Id datatype(H5Topen2(file, "native-type", H5P_DEFAULT), H5Tclose);
-        Id object(H5Oopen(datatype, ".", H5P_DEFAULT), H5Oclose);
+        Id object(H5Oopen(file, "native-type", H5P_DEFAULT), H5Oclose);
         CHECK(object.id >= 0);
         CHECK(H5Iget_type(object) == H5I_DATATYPE);
+        CHECK(H5Olink(object, file, "type-alias", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        CHECK(H5Ldelete(file, "native-type", H5P_DEFAULT) >= 0);
+        Id datatype(H5Topen2(file, "type-alias", H5P_DEFAULT), H5Tclose);
+        CHECK(datatype.id >= 0);
+        CHECK(H5Tequal(datatype, H5T_NATIVE_INT) > 0);
     }
     else if (name == "native_datatype_link_create")
     {
@@ -360,6 +382,7 @@ void run(const std::string& name)
     if (name == "native_datatype_attr" ||
         name == "native_datatype_object_open" ||
         name == "native_datatype_link_create" ||
+        name == "native_datatype_commit_parent" ||
         name == "native_object_dataset_extent" ||
         name == "native_attr_iteration" || name == "native_attr_open_delete" ||
         name == "native_attr_delete_idx" ||
@@ -405,6 +428,82 @@ void run(const std::string& name)
         CHECK(vol.files.count(missing) == 0);
         return;
     }
+    if (name == "file_accessible")
+    {
+        CHECK(H5Fis_accessible(connector.filename.c_str(), connector.fapl) == 0);
+        auto writable = connector.file();
+        CHECK(H5Fis_accessible(connector.filename.c_str(), connector.fapl) > 0);
+        return;
+    }
+    if (name == "file_exclusive")
+    {
+        auto writable = connector.file();
+        auto original = dataset(writable, "original", test::scalar());
+        write(original, 31);
+        CHECK(H5Fcreate(connector.filename.c_str(), H5F_ACC_EXCL,
+                        H5P_DEFAULT, connector.fapl) < 0);
+        value(original, 31);
+        CHECK(H5Lexists(writable, "original", H5P_DEFAULT) > 0);
+        return;
+    }
+    if (name == "file_access")
+    {
+        auto writable = connector.file();
+        hsize_t current = 1, maximum = 2, chunk = 1;
+        Id extensible(H5Screate_simple(1, &current, &maximum), H5Sclose);
+        Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+        CHECK(H5Pset_chunk(dcpl, 1, &chunk) >= 0);
+        Id values(H5Dcreate2(writable, "values", H5T_NATIVE_INT, extensible,
+                             H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+        write(values, 4);
+        Id attribute(H5Acreate2(writable, "attribute", H5T_NATIVE_INT,
+                                test::scalar(), H5P_DEFAULT, H5P_DEFAULT),
+                     H5Aclose);
+        int attribute_value = 7;
+        CHECK(H5Awrite(attribute, H5T_NATIVE_INT, &attribute_value) >= 0);
+        CHECK(H5Lcreate_soft("/values", writable, "alias",
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+
+        Id readonly(H5Fopen(connector.filename.c_str(), H5F_ACC_RDONLY,
+                            connector.fapl), H5Fclose);
+        unsigned intent = H5F_ACC_RDWR;
+        CHECK(H5Fget_intent(readonly, &intent) >= 0);
+        CHECK(intent == H5F_ACC_RDONLY);
+        Id readonly_values(H5Dopen2(readonly, "values", H5P_DEFAULT), H5Dclose);
+        int replacement = 9;
+        CHECK(H5Dwrite(readonly_values, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                       H5P_DEFAULT, &replacement) < 0);
+        hsize_t extended = 2;
+        CHECK(H5Dset_extent(readonly_values, &extended) < 0);
+        Id readonly_attribute(H5Aopen(readonly, "attribute", H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(readonly_attribute, H5T_NATIVE_INT, &replacement) < 0);
+        CHECK(H5Arename(readonly, "attribute", "renamed") < 0);
+        CHECK(H5Adelete(readonly, "attribute") < 0);
+        CHECK(H5Gcreate2(readonly, "group", H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) < 0);
+        CHECK(H5Dcreate2(readonly, "dataset", H5T_NATIVE_INT, extensible,
+                         H5P_DEFAULT, dcpl, H5P_DEFAULT) < 0);
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(readonly, "datatype", datatype, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT) < 0);
+        CHECK(H5Lcreate_soft("/values", readonly, "second-alias",
+                             H5P_DEFAULT, H5P_DEFAULT) < 0);
+        CHECK(H5Ldelete(readonly, "alias", H5P_DEFAULT) < 0);
+
+        Id reopened(H5Freopen(readonly), H5Fclose);
+        CHECK(H5Fget_intent(reopened, &intent) >= 0);
+        CHECK(intent == H5F_ACC_RDONLY);
+        Id owning_file(H5Iget_file_id(readonly_values), H5Fclose);
+        CHECK(H5Fget_intent(owning_file, &intent) >= 0);
+        CHECK(intent == H5F_ACC_RDONLY);
+        value(readonly_values, 4);
+        int actual_attribute = 0;
+        CHECK(H5Aread(readonly_attribute, H5T_NATIVE_INT,
+                      &actual_attribute) >= 0);
+        CHECK(actual_attribute == attribute_value);
+        CHECK(H5Lexists(readonly, "alias", H5P_DEFAULT) > 0);
+        return;
+    }
     auto file = [&]()
     {
         if (name != "reference-opened-native") return connector.file();
@@ -418,6 +517,103 @@ void run(const std::string& name)
                           connector.fapl), H5Fclose);
     }();
     auto scalar = test::scalar();
+    if (name == "bounded_object_ids")
+    {
+        auto first = dataset(file, "first", scalar);
+        auto second = dataset(file, "second", scalar);
+        std::array<hid_t, 1> ids {H5I_INVALID_HID};
+        CHECK(H5Fget_obj_ids(file, H5F_OBJ_DATASET, ids.size(), ids.data()) == 1);
+        CHECK(ids[0] == first.id || ids[0] == second.id);
+        return;
+    }
+    if (name == "datatype_failures")
+    {
+        CHECK(H5Topen2(file, "missing", H5P_DEFAULT) < 0);
+        Id first(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", first, H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) >= 0);
+        Id duplicate(H5Tcopy(H5T_NATIVE_DOUBLE), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", duplicate, H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) < 0);
+        Id opened(H5Topen2(file, "type", H5P_DEFAULT), H5Tclose);
+        CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+        return;
+    }
+    if (name == "committed_datatype_attributes")
+    {
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", datatype, H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) >= 0);
+        Id attribute(H5Acreate2(datatype, "label", H5T_NATIVE_INT, scalar,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        std::vector<std::string> names;
+        hsize_t index = 0;
+        CHECK(H5Aiterate2(
+                  datatype, H5_INDEX_NAME, H5_ITER_INC, &index,
+                  [](hid_t object, const char* attribute_name,
+                     const H5A_info_t*, void* data) -> herr_t
+                  {
+                      CHECK(H5Iget_type(object) == H5I_DATATYPE);
+                      static_cast<std::vector<std::string>*>(data)->
+                          emplace_back(attribute_name);
+                      return 0;
+                  },
+                  &names) >= 0);
+        CHECK(names == std::vector<std::string>{"label"});
+        CHECK(index == 1);
+        return;
+    }
+    if (name == "group_plist_copy")
+    {
+        Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+        CHECK(H5Pset_attr_phase_change(gcpl, 5, 4) >= 0);
+        Id group(H5Gcreate2(file, "group", H5P_DEFAULT, gcpl, H5P_DEFAULT),
+                 H5Gclose);
+        CHECK(H5Pset_attr_phase_change(gcpl, 1, 1) >= 0);
+        Id first(H5Gget_create_plist(group), H5Pclose);
+        unsigned maximum = 0, minimum = 0;
+        CHECK(H5Pget_attr_phase_change(first, &maximum, &minimum) >= 0);
+        CHECK(maximum == 5 && minimum == 4);
+        CHECK(H5Pset_attr_phase_change(first, 2, 2) >= 0);
+        Id second(H5Gget_create_plist(group), H5Pclose);
+        CHECK(H5Pget_attr_phase_change(second, &maximum, &minimum) >= 0);
+        CHECK(maximum == 5 && minimum == 4);
+        return;
+    }
+    if (name == "attr_iteration")
+    {
+        Id z(H5Acreate2(file, "z", H5T_NATIVE_INT, scalar,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        Id a(H5Acreate2(file, "a", H5T_NATIVE_INT, scalar,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        std::vector<std::string> names;
+        hsize_t index = 0;
+        CHECK(H5Aiterate2(file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                          collect_attribute, &names) >= 0);
+        CHECK(names == (std::vector<std::string>{"a", "z"}));
+        CHECK(index == 2);
+
+        names.clear();
+        index = 0;
+        CHECK(H5Aiterate2(
+                  file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                  [](hid_t, const char* attribute_name, const H5A_info_t*,
+                     void* data) -> herr_t
+                  {
+                      static_cast<std::vector<std::string>*>(data)->
+                          emplace_back(attribute_name);
+                      return 1;
+                  },
+                  &names) == 1);
+        CHECK(names == std::vector<std::string>{"a"});
+        CHECK(index == 1);
+        names.clear();
+        CHECK(H5Aiterate2(file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                          collect_attribute, &names) >= 0);
+        CHECK(names == std::vector<std::string>{"z"});
+        CHECK(index == 2);
+        return;
+    }
     if (name == "lifetime" || name == "multiple_files")
     {
         auto d = dataset(file, "d", scalar); write(d, 17);

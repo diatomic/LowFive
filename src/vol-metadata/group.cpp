@@ -7,6 +7,8 @@ void*
 LowFive::MetadataVOL::
 group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
+    auto* parent_pointers = static_cast<ObjectPointers*>(obj);
+    if (!parent_pointers->writable()) return nullptr;
     auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
     auto path = parent->search(name);
     if (!path.obj || path.path.empty()) return nullptr;
@@ -27,6 +29,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     }
     auto* result = wrap(underlying);
     result->mdata_obj = path.obj;
+    result->access_flags = parent_pointers->access_flags;
     return result;
 }
 
@@ -61,7 +64,7 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
         Hid gcpl(get.args.get_gcpl.gcpl_id, true);
         auto target = metadata_target_path(parent, name);
         metadata = target.obj && !target.path.empty() ?
-            target.obj->add_path(new Group("", gcpl), target.path) : nullptr;
+            target.obj->add_path(new Group("", gcpl.id), target.path) : nullptr;
         if (!metadata)
         {
             VOLBase::group_close(underlying, dxpl_id, nullptr);
@@ -70,6 +73,7 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     }
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
+    result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
     return result;
 }
 
@@ -228,8 +232,7 @@ group_get(void *obj, H5VL_group_get_args_t* args, hid_t dxpl_id, void **req)
             else
             {
                 Group* group = static_cast<Group*>(obj_->mdata_obj);
-                args->args.get_gcpl.gcpl_id = group->gcpl.id;
-                group->gcpl.inc_ref();
+                args->args.get_gcpl.gcpl_id = H5Pcopy(group->gcpl.id);
             }
 
             log->trace("arguments = {} -> {}", "args->args.get_gcpl.gcpl_id", args->args.get_gcpl.gcpl_id);

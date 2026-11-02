@@ -28,10 +28,13 @@ lowfive_test(lowfive-model model.cpp
     persist-deleted-reference-path-reuse persist-selected-vlen-reference
     persist-unwritten-attribute)
 lowfive_test(lowfive-callbacks callbacks.cpp
-    wildcard file_plist_ownership file_failure lifetime multiple_files dual_reopen
-    link_name group_failure dataset_failure attr_failure missing_dataset tokens
-    attr_rename hard_links soft_links link_copy_move absolute_paths attr_by_name
-    native_parent_attr file_plists enumeration indexed_lookup object_names zero_file_name
+    wildcard file_plist_ownership file_failure file_access file_exclusive
+    file_accessible bounded_object_ids datatype_failures
+    committed_datatype_attributes group_plist_copy attr_iteration
+    lifetime multiple_files dual_reopen link_name group_failure dataset_failure
+    attr_failure missing_dataset tokens attr_rename hard_links soft_links
+    link_copy_move absolute_paths attr_by_name native_parent_attr file_plists
+    enumeration indexed_lookup object_names zero_file_name
     native_object_dataset_extent native_attr_iteration native_attr_open_delete
     native_attr_delete_idx native_attr_delete_idx_mixed native_link_delete
     native_link_delete_idx native_link_delete_idx_uncached native_link_copy_move
@@ -40,6 +43,7 @@ lowfive_test(lowfive-callbacks callbacks.cpp
     native_object_soft_link_uncached extent_failure reference_ids lifetime_group
     lifetime_attr datatype_conversion dataset-metadata-get-failure
     native_datatype_attr native_datatype_object_open
+    native_datatype_commit_parent
     native_datatype_link_create hard_link_unlink open_unlink_read
     anonymous_dataset_link detached-self-link
     file-id-root-group file-id-child file-id-child-file file-id-child-dual
