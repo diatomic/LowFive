@@ -780,6 +780,125 @@ void reference_roundtrip(bool compound)
     CHECK(H5Rget_type(&output) == H5R_OBJECT2);
     CHECK(H5Rdestroy(&output) >= 0);
 }
+void dataset_fill_reference_serialization()
+{
+    test::Connector c("model-dataset-fill-reference-serialization");
+    auto file = c.file();
+    auto scalar = test::scalar();
+    auto extent = test::space(2);
+    Id target(H5Dcreate2(file, "target", H5T_NATIVE_INT, scalar,
+                         H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    int input = 73;
+    CHECK(H5Dwrite(target, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                   H5P_DEFAULT, &input) >= 0);
+    H5R_ref_t reference{};
+    CHECK(H5Rcreate_object(file, "target", H5P_DEFAULT, &reference) >= 0);
+    Id properties(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    CHECK(H5Pset_fill_value(properties, H5T_STD_REF, &reference) >= 0);
+    Id dataset(H5Dcreate2(file, "references", H5T_STD_REF, extent,
+                          H5P_DEFAULT, properties, H5P_DEFAULT), H5Dclose);
+    std::array<H5R_ref_t, 2> initial{};
+    CHECK(H5Dread(dataset, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, initial.data()) >= 0);
+    for (auto& value : initial)
+    {
+        CHECK(H5Rget_type(&value) == H5R_OBJECT2);
+        CHECK(H5Rdestroy(&value) >= 0);
+    }
+    CHECK(H5Rget_type(&reference) == H5R_OBJECT2);
+
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(c.vol);
+    auto* source = dynamic_cast<LowFive::File*>(vol.files.at(c.filename));
+    CHECK(source);
+    source->copy_whole = true;
+    diy::MemoryBuffer buffer;
+    LowFive::serialize(buffer, source, vol);
+    buffer.reset();
+    std::unique_ptr<LowFive::Object> first(LowFive::deserialize(buffer, vol));
+    buffer.clear();
+    LowFive::serialize(buffer, first.get(), vol);
+    buffer.reset();
+    std::unique_ptr<LowFive::Object> copy(LowFive::deserialize(buffer, vol));
+    first.reset();
+    auto* tree = dynamic_cast<LowFive::File*>(copy.get());
+    CHECK(tree && tree->references.size() == 1);
+
+    CHECK(H5Rdestroy(&reference) >= 0);
+    properties.reset();
+    dataset.reset();
+    target.reset();
+    file.reset();
+    vol.clear_files();
+    CHECK(vol.files.emplace(c.filename, copy.release()).second);
+
+    Id reopened(H5Fopen(c.filename.c_str(), H5F_ACC_RDONLY, c.fapl), H5Fclose);
+    Id references(H5Dopen2(reopened, "references", H5P_DEFAULT), H5Dclose);
+    auto check_reference = [&](H5R_ref_t& value)
+    {
+        CHECK(H5Rget_type(&value) == H5R_OBJECT2);
+        Id opened(H5Ropen_object(&value, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+        int output = -1;
+        CHECK(H5Dread(opened, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, &output) >= 0);
+        CHECK(output == input);
+    };
+    std::array<H5R_ref_t, 2> output{};
+    CHECK(H5Dread(references, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, output.data()) >= 0);
+    for (auto& value : output)
+    {
+        check_reference(value);
+        CHECK(H5Rdestroy(&value) >= 0);
+    }
+    CHECK(tree->references.size() == 1);
+    CHECK(!tree->references.begin()->second.resolved);
+
+    Id copied_properties(H5Dget_create_plist(references), H5Pclose);
+    H5D_fill_value_t status;
+    CHECK(H5Pfill_value_defined(copied_properties, &status) >= 0);
+    CHECK(status == H5D_FILL_VALUE_USER_DEFINED);
+    H5R_ref_t borrowed{};
+    CHECK(H5Pget_fill_value(copied_properties, H5T_STD_REF, &borrowed) >= 0);
+    CHECK(H5Rcopy(&borrowed, &reference) >= 0);
+    check_reference(reference);
+    CHECK(H5Rdestroy(&reference) >= 0);
+    Id retained_properties(H5Pcopy(copied_properties), H5Pclose);
+    copied_properties.reset();
+    references.reset();
+    reopened.reset();
+    CHECK(H5Pget_fill_value(retained_properties, H5T_STD_REF, &borrowed) >= 0);
+    CHECK(H5Rcopy(&borrowed, &reference) >= 0);
+    check_reference(reference);
+    CHECK(H5Rdestroy(&reference) >= 0);
+    CHECK(!tree->references.begin()->second.resolved);
+}
+void dataset_properties_stale_reference()
+{
+    test::Connector c("model-dataset-properties-stale-reference");
+    auto file = c.file();
+    auto scalar = test::scalar();
+    Id first(H5Dcreate2(file, "first", H5T_NATIVE_INT, scalar, H5P_DEFAULT,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    Id second(H5Dcreate2(file, "second", H5T_NATIVE_INT, scalar, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    Id dataset(H5Dcreate2(file, "references", H5T_STD_REF, scalar,
+                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    H5R_ref_t reference{};
+    CHECK(H5Rcreate_object(file, "first", H5P_DEFAULT, &reference) >= 0);
+    CHECK(H5Dwrite(dataset, H5T_STD_REF, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                   &reference) >= 0);
+    CHECK(H5Rdestroy(&reference) >= 0);
+    CHECK(H5Rcreate_object(file, "second", H5P_DEFAULT, &reference) >= 0);
+    CHECK(H5Dwrite(dataset, H5T_STD_REF, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                   &reference) >= 0);
+    CHECK(H5Rdestroy(&reference) >= 0);
+    first.reset();
+    CHECK(H5Ldelete(file, "first", H5P_DEFAULT) >= 0);
+    Id properties(H5Dget_create_plist(dataset), H5Pclose);
+    H5D_fill_value_t status;
+    CHECK(H5Pfill_value_defined(properties, &status) >= 0);
+    CHECK(status == H5D_FILL_VALUE_DEFAULT);
+}
 void region_reference_serialization()
 {
     test::Connector c("model-region-reference-serialization");
@@ -1326,6 +1445,10 @@ int main(int argc, char** argv)
         else if (name == "shutdown-cleanup") shutdown_cleanup();
         else if (name == "reference-top") reference_roundtrip(false);
         else if (name == "reference-compound") reference_roundtrip(true);
+        else if (name == "dataset-fill-reference-serialization")
+            dataset_fill_reference_serialization();
+        else if (name == "dataset-properties-stale-reference")
+            dataset_properties_stale_reference();
         else if (name == "reference-region-serialization") region_reference_serialization();
         else if (name == "hard-link-serialization") hard_link_serialization();
         else if (name == "file-copy-root-token") file_copy_root_token();

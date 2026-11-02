@@ -179,6 +179,7 @@ make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string>
     ds->token = dset->token;
     ds->dcpl = dset->dcpl;
     ds->dapl = dset->dapl;
+    ds->fill_data = std::move(dset->fill_data);
     ds->extra = dset->extra;
     dset->extra = nullptr;
 

@@ -18,7 +18,7 @@ lowfive_test(lowfive-model model.cpp
     attribute-conversion attribute-compound attribute-strings dataset-conversion
     attribute-unwritten attribute-unwritten-serialization hid-moves
     dataspace-ownership compound-background compound-indirect-background
-    dataset-fill dataset-shrink
+    dataset-fill dataset-fill-reference-serialization dataset-properties-stale-reference dataset-shrink
     read-all write-all selected-strings zerocopy-strings datatype-ownership
     persist-attributes persist-strings vlen-rewrite dataset-vlen-overlap
     dataset-vlen-serialization dataset-vlen-sparse-serialization shutdown-cleanup
@@ -84,7 +84,8 @@ lowfive_mpi_test(lowfive-distributed distributed.cpp
     empty mpio-resources missing native-missing remote-missing hard-link-replace
     hard-link-serialized object-hard-link-serialized remote-unlinked-alias
     hard-link-parent-relative object-alias-policy vlen vlen-compound
-    vlen-compound-selection scalar no-index)
+    vlen-compound-selection scalar no-index
+    fill-unwritten fill-partial fill-default fill-vlen fill-string)
 add_test(NAME lowfive-distributed-copy-whole
          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 ${MPIEXEC_PREFLAGS}
                  $<TARGET_FILE:lowfive-distributed> ${MPIEXEC_POSTFLAGS} copy-whole)

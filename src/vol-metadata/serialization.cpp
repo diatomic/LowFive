@@ -132,6 +132,60 @@ void serialized_values(diy::MemoryBuffer& bb, const LowFive::Datatype& type, siz
             diy::save(bb, data, count * type.dtype_size);
     }
 }
+
+template<bool Load>
+void serialized_fill(diy::MemoryBuffer& bb, LowFive::Dataset& dataset,
+                     LowFive::File::References* references)
+{
+    H5D_fill_value_t status = H5D_FILL_VALUE_DEFAULT;
+    if constexpr (Load)
+        diy::load(bb, status);
+    else
+    {
+        if (H5Pfill_value_defined(dataset.dcpl.id, &status) < 0)
+            throw LowFive::MetadataError("Could not query serialized dataset fill value");
+        diy::save(bb, status);
+    }
+    if (status == H5D_FILL_VALUE_DEFAULT)
+        return;
+    if (status == H5D_FILL_VALUE_UNDEFINED)
+    {
+        if constexpr (Load)
+            if (H5Pset_fill_value(dataset.dcpl.id, dataset.type.id, nullptr) < 0)
+                throw LowFive::MetadataError("Could not restore undefined dataset fill value");
+        return;
+    }
+
+    const auto& type = dataset.type;
+    if constexpr (Load)
+    {
+        dataset.fill_data.reset(new char[type.dtype_size]());
+        serialized_values<true>(
+            bb, type, 1, dataset.fill_data.get(), references);
+        if (H5Pset_fill_value(dataset.dcpl.id, type.id, dataset.fill_data.get()) < 0)
+            throw LowFive::MetadataError("Could not restore serialized dataset fill value");
+    }
+    else if (dataset.fill_data)
+        serialized_values<false>(
+            bb, type, 1, dataset.fill_data.get(), references);
+    else
+    {
+        std::vector<char> value(type.dtype_size, 0);
+        try
+        {
+            if (H5Pget_fill_value(dataset.dcpl.id, type.id, value.data()) < 0)
+                throw LowFive::MetadataError("Could not read serialized dataset fill value");
+            serialized_values<false>(bb, type, 1, value.data(), references);
+        }
+        catch (...)
+        {
+            type.destroy_values(1, value.data(), false);
+            throw;
+        }
+        type.destroy_values(1, value.data(), false);
+    }
+}
+
 std::vector<LowFive::Object*> reachable_unlinked(LowFive::File& file)
 {
     std::unordered_set<LowFive::Object*> detached(file.unlinked.begin(),
@@ -225,6 +279,7 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
         diy::save(bb, d->type);
         diy::save(bb, d->space);
         diy::save(bb, d->ownership);
+        serialized_fill<false>(bb, *d, references);
 
         if (include_data)
         {
@@ -366,8 +421,11 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, Objects& obje
         diy::load(bb, s);
         diy::load(bb, own);
 
-        auto* d = new Dataset(name, dt.id, s.id, own, Hid(H5Pcreate(H5P_DATASET_CREATE), true),
-                              Hid(H5Pcreate(H5P_DATASET_ACCESS), true), is_passthru, is_memory);
+        auto dataset = std::make_unique<Dataset>(
+            name, dt.id, s.id, own, Hid(H5Pcreate(H5P_DATASET_CREATE), true),
+            Hid(H5Pcreate(H5P_DATASET_ACCESS), true), is_passthru, is_memory);
+        serialized_fill<true>(bb, *dataset, &references);
+        auto* d = dataset.release();
         o = d;
 
         // load triplets

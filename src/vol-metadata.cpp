@@ -81,6 +81,8 @@ void visit_stored_references(LowFive::Object* object, Visitor&& visit)
     }
     auto* dataset = dynamic_cast<LowFive::Dataset*>(object);
     if (!dataset) return;
+    if (dataset->fill_data)
+        dataset->type.visit_references(1, dataset->fill_data.get(), visit);
     for (auto& triple : dataset->data)
         if (triple.owned_data)
             triple.type.visit_references(
@@ -896,6 +898,13 @@ resolve_references(Dataset* dataset, hid_t memory_space, hid_t file_space)
     if (file->references.empty()) return;
     try
     {
+        if (dataset->fill_data)
+            dataset->type.visit_references(
+                1, dataset->fill_data.get(),
+                [&](H5R_ref_t* reference)
+                {
+                    resolve_reference(*file, reference);
+                });
         dataset->visit_read_references(
             memory_space, file_space,
             [&](H5R_ref_t* reference)

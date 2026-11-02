@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <vector>
 
 
 struct VLenRecord
@@ -111,6 +112,60 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
             int value = 37;
             CHECK(H5Dwrite(ds, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
                            H5P_DEFAULT, &value) >= 0);
+            return;
+        }
+        if (name == "fill-unwritten" || name == "fill-partial" ||
+            name == "fill-default")
+        {
+            auto extent = test::space(4);
+            test::Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+            const double fill = -7.5;
+            if (name != "fill-default")
+                CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_DOUBLE, &fill) >= 0);
+            test::Id ds(H5Dcreate2(file, "values", H5T_NATIVE_DOUBLE,
+                                   extent, H5P_DEFAULT, dcpl, H5P_DEFAULT),
+                        H5Dclose);
+            if (name != "fill-unwritten")
+            {
+                auto packed = test::space(2);
+                select(extent, 1, 2, 2);
+                const double values[] = {expected[1], expected[3]};
+                CHECK(H5Dwrite(ds, H5T_NATIVE_DOUBLE, packed, extent,
+                               H5P_DEFAULT, values) >= 0);
+            }
+            return;
+        }
+        if (name == "fill-vlen")
+        {
+            auto extent = test::space(3);
+            test::Id type(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+            test::Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+            int fill_values[] = {8, 9};
+            hvl_t fill {2, fill_values};
+            CHECK(H5Pset_fill_value(dcpl, type, &fill) >= 0);
+            test::Id ds(H5Dcreate2(file, "values", type, extent,
+                                   H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+            auto one = test::space(1);
+            select(extent, 1, 1);
+            int written[] = {42};
+            hvl_t value {1, written};
+            CHECK(H5Dwrite(ds, type, one, extent, H5P_DEFAULT, &value) >= 0);
+            return;
+        }
+        if (name == "fill-string")
+        {
+            auto extent = test::space(3);
+            test::Id type(H5Tcopy(H5T_C_S1), H5Tclose);
+            CHECK(H5Tset_size(type, H5T_VARIABLE) >= 0);
+            test::Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+            const char* fill = "unwritten";
+            CHECK(H5Pset_fill_value(dcpl, type, &fill) >= 0);
+            test::Id ds(H5Dcreate2(file, "values", type, extent,
+                                   H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+            auto one = test::space(1);
+            select(extent, 1, 1);
+            const char* value = "written";
+            CHECK(H5Dwrite(ds, type, one, extent, H5P_DEFAULT, &value) >= 0);
             return;
         }
         if (name == "vlen")
@@ -264,6 +319,69 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
                 test::Id space(H5Dget_space(ds), H5Sclose);
                 CHECK(H5Tequal(type, H5T_NATIVE_DOUBLE) > 0);
                 CHECK(H5Sget_simple_extent_ndims(space) == 1);
+            }
+            else if (name == "fill-unwritten" || name == "fill-partial" ||
+                     name == "fill-default")
+            {
+                const float fill = name == "fill-default" ? 0 : -7.5f;
+                auto expected_value = [&](size_t i)
+                {
+                    return name != "fill-unwritten" && i % 2 == 1 ?
+                               float(expected[i]) : fill;
+                };
+                std::array<float, 8> result;
+                result.fill(-91);
+                CHECK(H5Dread(ds, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL,
+                              H5P_DEFAULT, result.data() + 1) >= 0);
+                for (size_t i = 0; i < result.size(); ++i)
+                    CHECK(result[i] == (i >= 1 && i <= 4 ?
+                                            expected_value(i - 1) : -91));
+                auto fs = test::space(4);
+                select(fs, 0, 3);
+                auto ms = test::space(6);
+                select(ms, 1, 3, 2);
+                result.fill(-91);
+                CHECK(H5Dread(ds, H5T_NATIVE_FLOAT, ms, fs,
+                              H5P_DEFAULT, result.data() + 1) >= 0);
+                for (size_t i = 0; i < result.size(); ++i)
+                    CHECK(result[i] == (i == 2 || i == 4 || i == 6 ?
+                                            expected_value((i - 2) / 2) : -91));
+            }
+            else if (name == "fill-vlen")
+            {
+                test::Id type(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+                auto fs = test::space(3);
+                auto ms = test::space(7);
+                select(ms, 1, 3, 2);
+                std::array<hvl_t, 7> result {};
+                CHECK(H5Dread(ds, type, ms, fs, H5P_DEFAULT,
+                              result.data()) >= 0);
+                CHECK(result[1].len == 2 && result[3].len == 1 &&
+                      result[5].len == 2);
+                CHECK(static_cast<int*>(result[1].p)[0] == 8 &&
+                      static_cast<int*>(result[1].p)[1] == 9);
+                CHECK(static_cast<int*>(result[3].p)[0] == 42);
+                CHECK(static_cast<int*>(result[5].p)[0] == 8 &&
+                      static_cast<int*>(result[5].p)[1] == 9);
+                CHECK(result[1].p != result[5].p);
+                for (size_t i : {0, 2, 4, 6})
+                    CHECK(result[i].len == 0 && result[i].p == nullptr);
+                CHECK(H5Treclaim(type, ms, H5P_DEFAULT, result.data()) >= 0);
+            }
+            else if (name == "fill-string")
+            {
+                test::Id type(H5Tcopy(H5T_C_S1), H5Tclose);
+                CHECK(H5Tset_size(type, H5T_VARIABLE) >= 0);
+                std::array<char*, 3> result {};
+                CHECK(H5Dread(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                              result.data()) >= 0);
+                CHECK(std::string(result[0]) == "unwritten" &&
+                      std::string(result[1]) == "written" &&
+                      std::string(result[2]) == "unwritten");
+                CHECK(result[0] != result[2]);
+                auto extent = test::space(3);
+                CHECK(H5Treclaim(type, extent, H5P_DEFAULT,
+                                 result.data()) >= 0);
             }
             else if (name == "scalar")
             {

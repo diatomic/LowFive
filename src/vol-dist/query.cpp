@@ -35,6 +35,18 @@ query(const Datatype&   mem_type,
     auto log = get_logger();
     log->trace("RemoteDataset::query: file_space = {}", file_space);
 
+    // Reference-valued remote payloads are unsupported. Check the fill
+    // snapshot too, before any received values can modify caller memory.
+    if (fill_data)
+        if (auto* file = dynamic_cast<File*>(find_root()))
+            type.visit_references(1, fill_data.get(),
+                [&](H5R_ref_t* reference)
+                {
+                    if (file->references.find(reference) != file->references.end())
+                        throw MetadataError(
+                            "Distributed variable-length references are unsupported");
+                });
+
     // enqueue queried file dataspace to the ranks that are
     // responsible for the boxes that (might) intersect them
     Bounds b { dim };           // diy representation of the dataspace's bounding box
@@ -59,6 +71,7 @@ query(const Datatype&   mem_type,
     // request and receive data
     CALI_MARK_BEGIN("request_receive_data");
     std::set<int> blocks;
+    std::vector<bool> initialized(mem_space.size(), false);
     std::unordered_map<size_t, std::string> pending_strings;
     std::unordered_map<size_t, size_t> pending_offsets;
     struct PendingIndirectValues
@@ -140,6 +153,11 @@ query(const Datatype&   mem_type,
                     Dataspace::project_intersection(
                         file_space.id, mem_space.id, ds.id),
                     true);
+                Dataspace::iterate(mem_dst, 1, [&](size_t offset, size_t count)
+                {
+                    std::fill(initialized.begin() + offset,
+                              initialized.begin() + offset + count, true);
+                });
                 if (is_var_length_string)
                 {
                     Dataspace::iterate(
@@ -225,6 +243,7 @@ query(const Datatype&   mem_type,
         type.convert(
             mem_type, 1, pending_values.value(index),
             static_cast<char*>(buf) + offset);
+    fill_unwritten(mem_type, mem_space, initialized, buf);
     log->trace("Leaving RemoteDataset::query");
     CALI_MARK_END("request_receive_data");
 }

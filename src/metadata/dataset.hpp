@@ -27,6 +27,7 @@ struct Dataset : public Object
     Datatype                        type;
     Dataspace                       space;
     DataTriples                     data;
+    std::unique_ptr<char[]>          fill_data;              // stable storage for deserialized fill references
     Ownership                       ownership;
     Hid                             dcpl;                   // hdf5 id of dataset creation property list
     Hid                             dapl;                   // hdf5 id of dataset access property list
@@ -113,11 +114,19 @@ struct Dataset : public Object
                     {
                         file->references.erase(reference);
                     });
+        if (fill_data && H5Iis_valid(type.id) > 0)
+            type.visit_references(1, fill_data.get(),
+                [&](H5R_ref_t* reference)
+                {
+                    file->references.erase(reference);
+                });
     }
 
     ~Dataset() override
     {
         unregister_references();
+        if (fill_data && H5Iis_valid(type.id) > 0)
+            type.destroy_values(1, fill_data.get());
         for (auto& triple : data)
             if (triple.owned_data && H5Iis_valid(triple.type.id) > 0 &&
                 H5Iis_valid(triple.memory.id) > 0 && !triple.type.is_var_length_string())
@@ -324,16 +333,28 @@ struct Dataset : public Object
                                      static_cast<char*>(buf) + i * requested.dtype_size);
             });
 
+        fill_unwritten(requested, memory, initialized, buf);
+    }
+
+    void fill_unwritten(const Datatype& requested, const Dataspace& memory,
+                        const std::vector<bool>& initialized, void* buf) const
+    {
         H5D_fill_value_t fill_status = H5D_FILL_VALUE_DEFAULT;
         if (dcpl.id != H5P_DEFAULT &&
             H5Pfill_value_defined(dcpl.id, &fill_status) < 0)
             throw MetadataError("Could not query dataset fill value");
         if (fill_status != H5D_FILL_VALUE_UNDEFINED)
         {
-            std::vector<char> fill(type.dtype_size, 0);
-            if (dcpl.id != H5P_DEFAULT &&
-                H5Pget_fill_value(dcpl.id, type.id, fill.data()) < 0)
-                throw MetadataError("Could not read dataset fill value");
+            std::vector<char> fill;
+            const void* value = fill_data.get();
+            if (!value)
+            {
+                fill.resize(type.dtype_size, 0);
+                if (dcpl.id != H5P_DEFAULT &&
+                    H5Pget_fill_value(dcpl.id, type.id, fill.data()) < 0)
+                    throw MetadataError("Could not read dataset fill value");
+                value = fill.data();
+            }
             try
             {
                 Dataspace::iterate(memory, 1, [&](size_t offset, size_t count)
@@ -341,19 +362,19 @@ struct Dataset : public Object
                     for (size_t i = offset; i < offset + count; ++i)
                         if (!initialized[i])
                             type.convert(
-                                requested, 1, fill.data(),
+                                requested, 1, value,
                                 static_cast<char*>(buf) +
                                     i * requested.dtype_size);
                 });
             }
             catch (...)
             {
-                if (type.owns_indirect_values())
-                    type.destroy_values(1, fill.data());
+                if (!fill_data && type.owns_indirect_values())
+                    type.destroy_values(1, fill.data(), false);
                 throw;
             }
-            if (type.owns_indirect_values())
-                type.destroy_values(1, fill.data());
+            if (!fill_data && type.owns_indirect_values())
+                type.destroy_values(1, fill.data(), false);
         }
     }
 

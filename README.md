@@ -13,8 +13,15 @@ processes.
 
 ## Connector behavior
 
-Newly created, unwritten attributes read as zero-initialized values in the
-requested memory datatype.
+In-memory datasets apply their configured HDF5 fill value to unwritten selected
+elements, including distributed reads and datatype conversion. Unselected
+destination elements remain unchanged. Newly created, unwritten attributes read
+as zero-initialized values in the requested memory datatype.
+Creation-property queries depend only on dataset metadata, not obsolete stored
+writes. For datatypes without variable-length members, returned property-list
+copies keep modern-reference fill values alive; references obtained with
+`H5Pget_fill_value` are borrowed and require `H5Rcopy` before being owned or
+destroyed independently.
 
 Missing object, group, and attribute locations return HDF5 errors. Unsupported
 metadata-only optional operations also return errors rather than reporting
@@ -23,8 +30,9 @@ Native-backed objects continue to forward operations to the underlying connector
 Open-object counts and ID lists are scoped to the requested file;
 `H5F_OBJ_LOCAL` restricts them to the originating file handle.
 
-The metadata wire format carries unwritten attribute state; communicating
-processes must use the same LowFive version.
+The metadata wire format carries unwritten attribute state and dataset fill
+values; communicating processes must use the same LowFive version. Distributed
+modern-reference values remain unsupported.
 
 ## Testing
 

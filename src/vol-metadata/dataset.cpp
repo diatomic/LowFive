@@ -36,6 +36,92 @@ struct UnderConnector
         return connector >= 0;
     }
 };
+
+// HDF5 property-list copies borrow modern references. Keep an independent
+// materialized fill alive until the last returned property-list copy closes.
+struct PropertyFill
+{
+    LowFive::Datatype type;
+    std::unique_ptr<char[]> values;
+    size_t users = 1;
+
+    explicit PropertyFill(const LowFive::Datatype& type_):
+        type(type_), values(new char[type.dtype_size]()) {}
+
+    ~PropertyFill()
+    {
+        type.destroy_values(1, values.get());
+    }
+
+    static herr_t copy(const char*, size_t, void* value) noexcept
+    {
+        ++(*static_cast<PropertyFill**>(value))->users;
+        return 0;
+    }
+
+    static herr_t close(const char*, size_t, void* value) noexcept
+    {
+        auto* fill = *static_cast<PropertyFill**>(value);
+        if (--fill->users == 0) delete fill;
+        return 0;
+    }
+
+    static herr_t remove(hid_t, const char* name, size_t size, void* value) noexcept
+    {
+        return close(name, size, value);
+    }
+};
+
+void copy_fill_properties(LowFive::MetadataVOL& vol, LowFive::Dataset& dataset,
+                          hid_t properties)
+{
+    if (!dataset.fill_data) return;
+    auto* file = dynamic_cast<LowFive::File*>(dataset.find_root());
+    std::vector<const LowFive::File::PendingReference*> pending;
+    dataset.type.visit_references(
+        1, dataset.fill_data.get(), [&](H5R_ref_t* reference)
+        {
+            const auto found = file->references.find(reference);
+            pending.push_back(found == file->references.end() ? nullptr :
+                                                                &found->second);
+        });
+    if (pending.empty())
+    {
+        if (H5Pset_fill_value(properties, dataset.type.id,
+                              dataset.fill_data.get()) < 0)
+            throw LowFive::MetadataError("Could not copy dataset fill value");
+        return;
+    }
+
+    auto fill = std::make_unique<PropertyFill>(dataset.type);
+    dataset.type.copy_values(1, dataset.fill_data.get(), fill->values.get());
+    size_t index = 0;
+    dataset.type.visit_references(
+        1, fill->values.get(), [&](H5R_ref_t* reference)
+        {
+            const auto* state = pending[index++];
+            if (!state || state->resolved) return;
+            file->references.emplace(reference, *state);
+            try
+            {
+                vol.resolve_reference(*file, reference);
+            }
+            catch (...)
+            {
+                file->references.erase(reference);
+                throw;
+            }
+            file->references.erase(reference);
+        });
+    auto* owner = fill.get();
+    if (H5Pinsert2(properties, "lowfive.fill-owner", sizeof(owner), &owner,
+                   nullptr, nullptr, PropertyFill::remove, PropertyFill::copy,
+                   nullptr, PropertyFill::close) < 0)
+        throw LowFive::MetadataError("Could not retain dataset fill references");
+    fill.release();
+    if (H5Pset_fill_value(properties, dataset.type.id, owner->values.get()) < 0)
+        throw LowFive::MetadataError("Could not copy dataset fill value");
+}
 template<class Operation>
 herr_t with_native_dataset(LowFive::Dataset& dataset, void* native_dataset,
                            void* native_file, hid_t dxpl_id,
@@ -462,7 +548,11 @@ dataset_get(void *dset, H5VL_dataset_get_args_t* args, hid_t dxpl_id, void **req
         {
             log->trace("GET_DCPL");
             auto* dset = static_cast<Dataset*>(dset_->mdata_obj);
-            args->args.get_dcpl.dcpl_id = H5Pcopy(dset->dcpl.id);
+            Hid properties(H5Pcopy(dset->dcpl.id), true);
+            if (properties.id < 0)
+                throw MetadataError("Could not copy dataset creation properties");
+            copy_fill_properties(*this, *dset, properties.id);
+            args->args.get_dcpl.dcpl_id = std::exchange(properties.id, 0);
             log->trace("arguments = {} -> {}", "args->args.get_dcpl.dcpl_id", args->args.get_dcpl.dcpl_id);
         } else if (get_type == H5VL_DATASET_GET_DAPL)
         {

@@ -206,7 +206,9 @@ struct Datatype: Hid
         }
     }
 
-    void destroy_values(size_t count, void* values) const
+    // H5Pget_fill_value allocates variable-length storage but only borrows
+    // modern references through HDF5's memory-to-memory conversion.
+    void destroy_values(size_t count, void* values, bool owned_references = true) const
     {
         if (!values || H5Iis_valid(id) <= 0) return;
         const auto cls = H5Tget_class(id);
@@ -223,7 +225,7 @@ struct Datatype: Hid
             {
                 Datatype base(H5Tget_super(id), true);
                 auto& array = *reinterpret_cast<hvl_t*>(value);
-                base.destroy_values(array.len, array.p);
+                base.destroy_values(array.len, array.p, owned_references);
                 H5free_memory(array.p);
             }
             else if (cls == H5T_COMPOUND)
@@ -231,15 +233,16 @@ struct Datatype: Hid
                 for (int member = 0; member < H5Tget_nmembers(id); ++member)
                 {
                     Datatype member_type(H5Tget_member_type(id, member), true);
-                    member_type.destroy_values(1, value + H5Tget_member_offset(id, member));
+                    member_type.destroy_values(1, value + H5Tget_member_offset(id, member),
+                                               owned_references);
                 }
             }
             else if (cls == H5T_ARRAY)
             {
                 Datatype base(H5Tget_super(id), true);
-                base.destroy_values(dtype_size / base.dtype_size, value);
+                base.destroy_values(dtype_size / base.dtype_size, value, owned_references);
             }
-            else if (modern_reference)
+            else if (modern_reference && owned_references)
             {
                 auto* ref = reinterpret_cast<H5R_ref_t*>(value);
                 if (H5Rget_type(ref) != H5R_BADTYPE)
