@@ -20,7 +20,7 @@ struct LocationPattern {
 
 inline std::ostream& operator<<(std::ostream& out, const LocationPattern& p)
 {
-    out << "LocationPattern(filename = " << p.filename << ", pattern = " << p.pattern;
+    out << "LocationPattern(filename = " << p.filename << ", pattern = " << p.pattern << ')';
     return out;
 }
 
