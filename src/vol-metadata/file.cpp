@@ -25,6 +25,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     result->file_wrapper = true;
     result->primary_file_wrapper = true;
     result->access_flags = H5F_ACC_RDWR;
+    result->file_handle = next_file_handle++;
     return result;
 }
 
@@ -53,6 +54,7 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
     result->file_wrapper = true;
     result->primary_file_wrapper = true;
     result->access_flags = flags;
+    result->file_handle = next_file_handle++;
     return result;
 }
 
@@ -145,6 +147,7 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
             reopened->file_wrapper = true;
             reopened->primary_file_wrapper = true;
             reopened->access_flags = file_->access_flags;
+            reopened->file_handle = next_file_handle++;
             *args->args.reopen.file = reopened;
         }
         return result;
@@ -163,6 +166,7 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
             reopened->file_wrapper = true;
             reopened->primary_file_wrapper = true;
             reopened->access_flags = file_->access_flags;
+            reopened->file_handle = next_file_handle++;
             *args->args.reopen.file = reopened;
             return 0;
         }
@@ -249,71 +253,54 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
                     name[size - 1] = '\0';
             }
         }
-        else if (get_type == H5VL_FILE_GET_OBJ_COUNT)       // file object count
+        else if (get_type == H5VL_FILE_GET_OBJ_COUNT ||
+                 get_type == H5VL_FILE_GET_OBJ_IDS)
         {
-            size_t   obj_count = 0; /* Number of opened objects */
-
-            unsigned types     = args->args.get_obj_count.types;
-            size_t*  ret       = args->args.get_obj_count.count;
-            // TODO
-            log->warn("FILE_GET_OBJ_COUNT doesn't currently check whether objects belong to the given file");
-
-            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
-            auto count = [](hid_t, void* obj_count_) -> herr_t
+            const bool listing = get_type == H5VL_FILE_GET_OBJ_IDS;
+            const unsigned types = listing ? args->args.get_obj_ids.types :
+                                             args->args.get_obj_count.types;
+            struct Enumeration
             {
-              ++(*static_cast<size_t*>(obj_count_));
-              return 0;
-            };
-
-            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     count, &obj_count);
-            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    count, &obj_count);
-            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  count, &obj_count);
-            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
-            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, count, &obj_count);
-            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     count, &obj_count);
-
-            *ret = obj_count;
-        }
-        else if (get_type == H5VL_FILE_GET_OBJ_IDS)         // file object ids
-        {
-            unsigned types     = args->args.get_obj_ids.types;
-            size_t   max_objs  = args->args.get_obj_ids.max_objs;
-            hid_t *  oid_list  = args->args.get_obj_ids.oid_list;
-            size_t*  ret       = args->args.get_obj_ids.count;
-            size_t   obj_count = 0; /* Number of opened objects */
-
-            // TODO
-            log->warn("FILE_GET_OBJ_IDS doesn't currently check whether objects belong to the given file");
-
-            using ListInfo = std::tuple<size_t*, hid_t**, size_t*, size_t>;
-            ListInfo list_info(&max_objs, &oid_list, &obj_count, 0);
-
-            //typedef herr_t (*H5I_iterate_func_t)(hid_t id, void *udata);
-            auto get_objs = [](hid_t obj_id, void* list_info_) -> herr_t
+                MetadataVOL* vol;
+                Object* root;
+                uint64_t local_handle;
+                hid_t* ids;
+                size_t capacity;
+                size_t count = 0;
+            } state {this, static_cast<Object*>(file_->mdata_obj)->find_root(),
+                     (types & H5F_OBJ_LOCAL) ? file_->file_handle : 0,
+                     listing ? args->args.get_obj_ids.oid_list : nullptr,
+                     listing ? args->args.get_obj_ids.max_objs : 0};
+            if (listing && state.capacity && !state.ids) return -1;
+            auto visit = [](hid_t id, void* context) -> herr_t
             {
-              ListInfo* list_info = static_cast<ListInfo*>(list_info_);
-
-              size_t& max_objs  = *std::get<0>(*list_info);
-              hid_t*& oid_list  = *std::get<1>(*list_info);
-              size_t& obj_count = *std::get<2>(*list_info);
-              size_t& n         =  std::get<3>(*list_info);
-
-              ++obj_count;
-
-              if (n < max_objs)
-                  oid_list[n++] = obj_id;
-
-              return 0;        // TODO: could stop early
+                auto& state = *static_cast<Enumeration*>(context);
+                if (H5Iget_type(id) == H5I_DATATYPE && H5Tcommitted(id) <= 0)
+                    return 0;
+                void* raw = H5VLobject(id);
+                if (!raw || state.vol->our_objects.count(raw) == 0) return 0;
+                auto* wrapped = static_cast<ObjectPointers*>(raw);
+                auto* metadata = static_cast<Object*>(wrapped->mdata_obj);
+                if (!metadata || metadata->find_root() != state.root) return 0;
+                if (state.local_handle && wrapped->file_handle != state.local_handle)
+                    return 0;
+                if (state.ids && state.count < state.capacity)
+                    state.ids[state.count] = id;
+                ++state.count;
+                return 0;
             };
-
-            if (types & H5F_OBJ_FILE)       H5Iiterate(H5I_FILE,     get_objs, &list_info);
-            if (types & H5F_OBJ_GROUP)      H5Iiterate(H5I_GROUP,    get_objs, &list_info);
-            if (types & H5F_OBJ_DATASET)    H5Iiterate(H5I_DATASET,  get_objs, &list_info);
-            // TODO: datatypes are tricky; need to worry whether they are in the file, or immutable, etc.
-            //if (types & H5F_OBJ_DATATYPE)   H5Iiterate(H5I_DATATYPE, get_objs, &list_info);
-            if (types & H5F_OBJ_ATTR)       H5Iiterate(H5I_ATTR,     get_objs, &list_info);
-
-            *ret = std::get<3>(list_info);
+            const std::pair<unsigned, H5I_type_t> classes[] = {
+                {H5F_OBJ_FILE, H5I_FILE}, {H5F_OBJ_DATASET, H5I_DATASET},
+                {H5F_OBJ_GROUP, H5I_GROUP}, {H5F_OBJ_DATATYPE, H5I_DATATYPE},
+                {H5F_OBJ_ATTR, H5I_ATTR}
+            };
+            for (const auto& entry : classes)
+                if ((types & entry.first) &&
+                    H5Iiterate(entry.second, visit, &state) < 0) return -1;
+            if (listing)
+                *args->args.get_obj_ids.count = std::min(state.count, state.capacity);
+            else
+                *args->args.get_obj_count.count = state.count;
         }
         else
             throw MetadataError(fmt::format("requested file_get(), unrecognized get_type = {}", get_type));

@@ -17,6 +17,8 @@ Missing object, group, and attribute locations return HDF5 errors. Unsupported
 metadata-only optional operations also return errors rather than reporting
 success; optional-operation queries advertise only implemented operations.
 Native-backed objects continue to forward operations to the underlying connector.
+Open-object counts and ID lists are scoped to the requested file;
+`H5F_OBJ_LOCAL` restricts them to the originating file handle.
 
 ## Testing
 

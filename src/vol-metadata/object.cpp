@@ -90,6 +90,7 @@ object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_t
     auto* result = wrap(underlying);
     result->mdata_obj = metadata ? metadata : parent;
     result->access_flags = pointers->access_flags;
+    result->file_handle = pointers->file_handle;
     return result;
 }
 
@@ -160,6 +161,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
                 res_pair->reference_file_wrapper =
                     retaining_reference_file;
                 res_pair->access_flags = obj_->access_flags;
+                res_pair->file_handle = obj_->file_handle;
                 log->trace("MetadataVOL: temporary file = {}, mdata = {}",
                            fmt::ptr(res_pair), fmt::ptr(res));
                 *args->args.get_file.file = res_pair;
@@ -274,7 +276,7 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             *args->args.get_file.file)
             pending_wrap_metadata[*args->args.get_file.file] = {
                 static_cast<Object*>(wrapped->mdata_obj)->find_root(),
-                wrapped->access_flags
+                wrapped->access_flags, wrapped->file_handle
             };
         else if (wrapped->mdata_obj)
             log->warn("Warning: object_get: obj = {} metadata are available "

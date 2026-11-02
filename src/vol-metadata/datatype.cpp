@@ -42,6 +42,7 @@ datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     auto* result = wrap(underlying);
     result->access_flags = pointers->access_flags;
+    result->file_handle = pointers->file_handle;
     if (destination.obj)
         result->mdata_obj = destination.obj->add_path(
             new CommittedDatatype("", type_id), destination.path);
@@ -137,6 +138,7 @@ datatype_open(void *obj, const H5VL_loc_params_t *loc_params,
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
     result->access_flags = pointers->access_flags;
+    result->file_handle = pointers->file_handle;
     return result;
 }
 

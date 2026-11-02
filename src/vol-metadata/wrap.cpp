@@ -45,8 +45,9 @@ wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
     auto pending = pending_wrap_metadata.find(obj);
     if (pending != pending_wrap_metadata.end())
     {
-        wrapped->mdata_obj = pending->second.first;
-        wrapped->access_flags = pending->second.second;
+        wrapped->mdata_obj = pending->second.object;
+        wrapped->access_flags = pending->second.access_flags;
+        wrapped->file_handle = pending->second.file_handle;
         pending_wrap_metadata.erase(pending);
     }
     return wrapped;

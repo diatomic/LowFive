@@ -7,6 +7,7 @@
 #include    <unordered_set>
 #include    <functional>
 #include    <ostream>
+#include    <cstdint>
 
 #include    "vol-base.hpp"
 
@@ -74,7 +75,14 @@ struct MetadataVOL: public LowFive::VOLBase
 
     //bool dont_wrap = false;
     std::unordered_set<void*>   our_objects;
-    std::unordered_map<void*, std::pair<Object*, unsigned>> pending_wrap_metadata;
+    struct PendingWrapMetadata
+    {
+        Object* object;
+        unsigned access_flags;
+        std::uint64_t file_handle;
+    };
+    std::unordered_map<void*, PendingWrapMetadata> pending_wrap_metadata;
+    std::uint64_t next_file_handle = 1;
     bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }
 
     ObjectPointers* wrap(void* p);

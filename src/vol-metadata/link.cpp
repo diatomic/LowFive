@@ -248,6 +248,7 @@ link_iter(void *obj, H5VL_link_specific_args_t* args)
     temporary->mdata_obj = metadata;
     temporary->tmp = true;
     temporary->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
+    temporary->file_handle = static_cast<ObjectPointers*>(obj)->file_handle;
     hid_t id = H5VLwrap_register(temporary, get_identifier_type(metadata));
     if (id < 0) { drop(temporary); return -1; }
     herr_t result = 0;

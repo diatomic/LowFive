@@ -568,6 +568,59 @@ void run(const std::string& name)
         CHECK(storage == 123);
         return;
     }
+    if (name == "file_owned_object_ids")
+    {
+        uint64_t flags = H5VL_OPT_QUERY_SUPPORTED;
+        CHECK(H5VLquery_optional(file, H5VL_SUBCLS_OBJECT,
+                                  H5VL_NATIVE_OBJECT_SET_COMMENT, &flags) >= 0);
+        CHECK((flags & H5VL_OPT_QUERY_SUPPORTED) == 0);
+        const auto other_name = connector.filename + ".other";
+        vol.set_memory(other_name, "*");
+        Id other(H5Fcreate(other_name.c_str(), H5F_ACC_TRUNC,
+                           H5P_DEFAULT, connector.fapl), H5Fclose);
+        auto own_dataset = dataset(file, "own", scalar);
+        auto foreign_dataset = dataset(other, "foreign", scalar);
+        Id group(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        Id attr(H5Acreate2(group, "attribute", H5T_NATIVE_INT, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", datatype, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        Id transient(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_ALL) == 5);
+        CHECK(H5Fget_obj_count(other, H5F_OBJ_ALL) == 2);
+        const std::pair<unsigned, hid_t> expected[] = {
+            {H5F_OBJ_FILE, file.id}, {H5F_OBJ_GROUP, group.id},
+            {H5F_OBJ_DATASET, own_dataset.id}, {H5F_OBJ_ATTR, attr.id},
+            {H5F_OBJ_DATATYPE, datatype.id}
+        };
+        for (const auto& entry : expected)
+        {
+            CHECK(H5Fget_obj_count(file, entry.first) == 1);
+            std::array<hid_t, 2> ids {H5I_INVALID_HID, H5I_INVALID_HID};
+            CHECK(H5Fget_obj_ids(file, entry.first, 1, ids.data()) == 1);
+            CHECK(ids[0] == entry.second);
+            CHECK(ids[1] == H5I_INVALID_HID);
+        }
+        std::array<hid_t, 1> bounded {H5I_INVALID_HID};
+        CHECK(H5Fget_obj_ids(file, H5F_OBJ_ALL, 0, bounded.data()) == 0);
+        CHECK(bounded[0] == H5I_INVALID_HID);
+        Id reopened(H5Freopen(file), H5Fclose);
+        Id local_dataset(H5Dopen2(reopened, "own", H5P_DEFAULT), H5Dclose);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_DATASET) == 2);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_DATASET | H5F_OBJ_LOCAL) == 1);
+        CHECK(H5Fget_obj_count(reopened, H5F_OBJ_DATASET | H5F_OBJ_LOCAL) == 1);
+        CHECK(H5Fget_obj_ids(reopened, H5F_OBJ_DATASET | H5F_OBJ_LOCAL,
+                             1, bounded.data()) == 1);
+        CHECK(bounded[0] == local_dataset.id);
+        Id derived(H5Iget_file_id(local_dataset), H5Fclose);
+        CHECK(H5Fget_obj_count(derived, H5F_OBJ_DATASET | H5F_OBJ_LOCAL) == 1);
+        CHECK(H5Fget_obj_ids(derived, H5F_OBJ_DATASET | H5F_OBJ_LOCAL,
+                             1, bounded.data()) == 1);
+        CHECK(bounded[0] == local_dataset.id);
+        return;
+    }
     if (name == "bounded_object_ids")
     {
         auto first = dataset(file, "first", scalar);

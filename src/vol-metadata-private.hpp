@@ -18,6 +18,8 @@ struct ObjectPointers
     bool            primary_file_wrapper = false;
     bool            reference_file_wrapper = false;
     unsigned        access_flags = H5F_ACC_RDWR;
+    // Shared by objects opened through the same file handle (H5F_OBJ_LOCAL).
+    uint64_t file_handle = 0;
 
     bool writable() const { return (access_flags & H5F_ACC_RDWR) != 0; }
 

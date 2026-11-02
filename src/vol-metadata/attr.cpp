@@ -65,6 +65,7 @@ attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hi
     auto* result = wrap(underlying);
     result->mdata_obj = owner->add_child(new Attribute(name, type_id, space_id));
     result->access_flags = parent_pointers->access_flags;
+    result->file_handle = parent_pointers->file_handle;
     return result;
 }
 
@@ -86,6 +87,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
         if (!underlying) return nullptr;
         auto* result = wrap(underlying);
         result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
+        result->file_handle = static_cast<ObjectPointers*>(obj)->file_handle;
         return result;
     }
 
@@ -98,6 +100,7 @@ attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
     result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
+    result->file_handle = static_cast<ObjectPointers*>(obj)->file_handle;
     return result;
 }
 
@@ -257,6 +260,7 @@ attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_index_t index,
     temporary->mdata_obj = metadata;
     temporary->tmp = true;
     temporary->access_flags = pointers->access_flags;
+    temporary->file_handle = pointers->file_handle;
     hid_t id = H5VLwrap_register(temporary, get_identifier_type(metadata));
     if (id < 0)
     {
