@@ -17,7 +17,7 @@ struct Attribute: public Object
     Dataspace                       space;
 
     std::unique_ptr<char[]>          data     { nullptr };
-    Datatype                        mem_type { 0 };
+    Datatype                        mem_type { type };
 
     void unregister_references()
     {
@@ -74,7 +74,14 @@ struct Attribute: public Object
 
     void read(Datatype mem_type_, void* buf)
     {
-        mem_type.convert(mem_type_, space.size(), data.get(), buf);
+        const size_t count = space.size();
+        if (!count) return;
+        if (data)
+            mem_type.convert(mem_type_, count, data.get(), buf);
+        else
+            // Like native HDF5, initialize the requested representation
+            // directly, including null pointers, without a conversion buffer.
+            std::memset(buf, 0, count * mem_type_.dtype_size);
     }
 
     void print(int depth) const override

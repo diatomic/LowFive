@@ -80,9 +80,11 @@ void serialized_values(diy::MemoryBuffer& bb, const LowFive::Datatype& type, siz
                 diy::load(bb, present);
             else
             {
+                const H5R_ref_t empty {};
                 present = (references &&
                            references->find(refs + i) != references->end()) ||
-                          H5Rget_type(refs + i) != H5R_BADTYPE;
+                          (std::memcmp(refs + i, &empty, sizeof(empty)) != 0 &&
+                           H5Rget_type(refs + i) != H5R_BADTYPE);
                 diy::save(bb, present);
             }
             if (!present) continue;
@@ -254,8 +256,11 @@ LowFive::serialize(diy::MemoryBuffer& bb, Object* o, MetadataVOL& vol, bool incl
         diy::save(bb, a->type);
         diy::save(bb, a->space);
         diy::save(bb, a->mem_type);
-        serialized_values<false>(bb, a->mem_type, a->space.size(),
-                                 a->data.get(), references);
+        const bool has_data = static_cast<bool>(a->data);
+        diy::save(bb, has_data);
+        if (has_data)
+            serialized_values<false>(bb, a->mem_type, a->space.size(),
+                                     a->data.get(), references);
     }
     else if (o->type == ObjectType::HardLink)
     {
@@ -413,8 +418,13 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, Objects& obje
         auto* a = new Attribute(name, dt.id, s.id);
         diy::load(bb, a->mem_type);
 
-        a->data.reset(new char[a->mem_type.dtype_size * a->space.size()]());
-        serialized_values<true>(bb, a->mem_type, a->space.size(), a->data.get(), &references);
+        bool has_data;
+        diy::load(bb, has_data);
+        if (has_data)
+        {
+            a->data.reset(new char[a->mem_type.dtype_size * a->space.size()]());
+            serialized_values<true>(bb, a->mem_type, a->space.size(), a->data.get(), &references);
+        }
 
         o = a;
     }

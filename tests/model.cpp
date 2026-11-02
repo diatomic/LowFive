@@ -60,6 +60,169 @@ void attribute_strings()
     for (int i = 0; i < 3; ++i) CHECK(std::string(out[i] ? out[i] : "") == input[i]);
     CHECK(H5Treclaim(type, s, H5P_DEFAULT, out) >= 0);
 }
+struct UnwrittenValue
+{
+    int number;
+    char* text;
+    hvl_t sequence;
+    H5R_ref_t reference;
+};
+Id unwritten_type(hid_t number_type)
+{
+    auto text = string_type();
+    Id sequence(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+    Id record(H5Tcreate(H5T_COMPOUND, sizeof(UnwrittenValue)), H5Tclose);
+    CHECK(H5Tinsert(record, "number", HOFFSET(UnwrittenValue, number), number_type) >= 0);
+    CHECK(H5Tinsert(record, "text", HOFFSET(UnwrittenValue, text), text) >= 0);
+    CHECK(H5Tinsert(record, "sequence", HOFFSET(UnwrittenValue, sequence), sequence) >= 0);
+    CHECK(H5Tinsert(record, "reference", HOFFSET(UnwrittenValue, reference), H5T_STD_REF) >= 0);
+    hsize_t extent = 2;
+    return Id(H5Tarray_create2(record, 1, &extent), H5Tclose);
+}
+void check_unwritten(const UnwrittenValue& value)
+{
+    CHECK(value.number == 0 && value.text == nullptr);
+    CHECK(value.sequence.len == 0 && value.sequence.p == nullptr);
+    H5R_ref_t empty{};
+    CHECK(std::memcmp(&value.reference, &empty, sizeof empty) == 0);
+}
+void attribute_unwritten()
+{
+    test::Connector c("model-attribute-unwritten");
+    auto file = c.file();
+    auto space = test::space(2);
+    Id number(H5Acreate2(file, "number", H5T_STD_I32BE, space,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    std::array<double, 3> numbers{{-1, -2, -3}};
+    CHECK(H5Aread(number, H5T_NATIVE_DOUBLE, numbers.data()) >= 0);
+    CHECK(numbers[0] == 0 && numbers[1] == 0 && numbers[2] == -3);
+
+    auto text_type = string_type();
+    Id text(H5Acreate2(file, "text", text_type, space,
+                      H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    const char sentinel[] = "unchanged";
+    std::array<char*, 3> strings{{const_cast<char*>(sentinel),
+                                const_cast<char*>(sentinel),
+                                const_cast<char*>(sentinel)}};
+    CHECK(H5Aread(text, text_type, strings.data()) >= 0);
+    CHECK(!strings[0] && !strings[1] && strings[2] == sentinel);
+    CHECK(H5Treclaim(text_type, space, H5P_DEFAULT, strings.data()) >= 0);
+
+    Id sequence_type(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+    Id sequence(H5Acreate2(file, "sequence", sequence_type, space,
+                          H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    int retained = 17;
+    std::array<hvl_t, 3> sequences{{{1, &retained}, {1, &retained}, {1, &retained}}};
+    CHECK(H5Aread(sequence, sequence_type, sequences.data()) >= 0);
+    CHECK(sequences[0].len == 0 && !sequences[0].p);
+    CHECK(sequences[1].len == 0 && !sequences[1].p);
+    CHECK(sequences[2].len == 1 && sequences[2].p == &retained);
+    CHECK(H5Treclaim(sequence_type, space, H5P_DEFAULT, sequences.data()) >= 0);
+
+    auto disk_type = unwritten_type(H5T_STD_I32BE);
+    auto memory_type = unwritten_type(H5T_NATIVE_INT);
+    Id nested(H5Acreate2(file, "nested", memory_type, space,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    std::array<UnwrittenValue, 4> values;
+    std::memset(values.data(), 0x5a, sizeof values);
+    // Native HDF5 fills the requested representation even when no conversion
+    // exists from the unwritten attribute's stored datatype.
+    CHECK(H5Aread(number, memory_type, values.data()) >= 0);
+    for (const auto& value : values) check_unwritten(value);
+    std::memset(values.data(), 0x5a, sizeof values);
+    CHECK(H5Aread(nested, disk_type, values.data()) >= 0);
+    for (const auto& value : values) check_unwritten(value);
+    CHECK(H5Treclaim(memory_type, space, H5P_DEFAULT, values.data()) >= 0);
+
+    std::array<UnwrittenValue, 4> input{};
+    for (auto& value : input)
+    {
+        value.number = 23;
+        value.text = const_cast<char*>("written");
+        value.sequence = {1, &retained};
+    }
+    CHECK(H5Awrite(nested, memory_type, input.data()) >= 0);
+    CHECK(H5Awrite(nested, memory_type, input.data()) >= 0);
+    CHECK(H5Aread(nested, memory_type, values.data()) >= 0);
+    for (const auto& value : values)
+    {
+        CHECK(value.number == 23 && value.text && std::string(value.text) == "written");
+        CHECK(value.sequence.len == 1 && static_cast<int*>(value.sequence.p)[0] == retained);
+    }
+    CHECK(H5Treclaim(memory_type, space, H5P_DEFAULT, values.data()) >= 0);
+
+    Id empty_space(H5Screate(H5S_NULL), H5Sclose);
+    Id empty(H5Acreate2(file, "empty", H5T_NATIVE_INT, empty_space,
+                       H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    CHECK(H5Aread(empty, H5T_NATIVE_INT, &retained) >= 0);
+    CHECK(retained == 17);
+}
+void attribute_unwritten_serialization()
+{
+    test::Connector c("model-attribute-unwritten-serialization");
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(c.vol);
+    auto space = test::space(2);
+    auto disk_type = unwritten_type(H5T_STD_I32BE);
+    auto memory_type = unwritten_type(H5T_NATIVE_INT);
+    LowFive::File source("source", H5P_FILE_CREATE_DEFAULT, H5P_FILE_ACCESS_DEFAULT);
+    source.add_child(new LowFive::Attribute("number", H5T_STD_I32BE, space));
+    source.add_child(new LowFive::Attribute("nested", memory_type, space));
+    Id empty_space(H5Screate(H5S_NULL), H5Sclose);
+    source.add_child(new LowFive::Attribute("empty", H5T_NATIVE_INT, empty_space));
+
+    diy::MemoryBuffer buffer;
+    LowFive::serialize(buffer, &source, vol);
+    buffer.reset();
+    std::unique_ptr<LowFive::Object> copy(LowFive::deserialize(buffer, vol));
+    auto* number = dynamic_cast<LowFive::Attribute*>(copy->attribute("number"));
+    auto* nested = dynamic_cast<LowFive::Attribute*>(copy->attribute("nested"));
+    CHECK(number && nested);
+    std::array<double, 3> numbers{{-1, -2, -3}};
+    number->read(LowFive::Datatype(H5T_NATIVE_DOUBLE), numbers.data());
+    CHECK(numbers[0] == 0 && numbers[1] == 0 && numbers[2] == -3);
+    std::array<UnwrittenValue, 4> values;
+    std::memset(values.data(), 0x5a, sizeof values);
+    number->read(LowFive::Datatype(memory_type), values.data());
+    for (const auto& value : values) check_unwritten(value);
+    std::memset(values.data(), 0x5a, sizeof values);
+    nested->read(LowFive::Datatype(disk_type), values.data());
+    for (const auto& value : values) check_unwritten(value);
+    CHECK(H5Treclaim(memory_type, space, H5P_DEFAULT, values.data()) >= 0);
+    auto* empty = dynamic_cast<LowFive::Attribute*>(copy->attribute("empty"));
+    CHECK(empty);
+    int untouched = 19;
+    empty->read(LowFive::Datatype(H5T_NATIVE_INT), &untouched);
+    CHECK(untouched == 19);
+
+    int sequence[] = {4, 9};
+    std::array<UnwrittenValue, 4> input{};
+    for (auto& value : input)
+    {
+        value.number = 31;
+        value.text = const_cast<char*>("roundtrip");
+        value.sequence = {2, sequence};
+    }
+    nested->write(LowFive::Datatype(memory_type), input.data());
+    buffer.clear();
+    LowFive::serialize(buffer, copy.get(), vol);
+    buffer.reset();
+    std::unique_ptr<LowFive::Object> rewritten(LowFive::deserialize(buffer, vol));
+    copy.reset();
+    auto* written = dynamic_cast<LowFive::Attribute*>(rewritten->attribute("nested"));
+    CHECK(written);
+    written->read(LowFive::Datatype(memory_type), values.data());
+    for (const auto& value : values)
+    {
+        CHECK(value.number == 31 && value.text && std::string(value.text) == "roundtrip");
+        CHECK(value.sequence.len == 2 && static_cast<int*>(value.sequence.p)[1] == 9);
+    }
+    CHECK(H5Treclaim(memory_type, space, H5P_DEFAULT, values.data()) >= 0);
+    auto* unchanged = dynamic_cast<LowFive::Attribute*>(source.attribute("nested"));
+    CHECK(unchanged);
+    unchanged->read(LowFive::Datatype(memory_type), values.data());
+    for (const auto& value : values) check_unwritten(value);
+    CHECK(H5Treclaim(memory_type, space, H5P_DEFAULT, values.data()) >= 0);
+}
 void dataset_conversion()
 {
     test::Connector c("model-dataset-conversion"); auto f = c.file(); auto s = test::space(4);
@@ -1075,19 +1238,44 @@ void persistence_selected_vlen_reference()
 }
 void persistence_unwritten_attribute()
 {
+    test::Connector c("model-persist-unwritten-attribute");
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(c.vol);
     auto scalar = test::scalar();
+    auto type = unwritten_type(H5T_NATIVE_INT);
     LowFive::File file(
         "model-persist-unwritten-attribute", H5P_FILE_CREATE_DEFAULT,
         H5P_FILE_ACCESS_DEFAULT);
     file.add_child(new LowFive::Attribute(
-        "unwritten", H5T_NATIVE_INT, scalar.id));
+        "unwritten", H5T_STD_I32BE, scalar.id));
+    file.add_child(new LowFive::Attribute("nested", type, scalar));
+    auto* original = dynamic_cast<LowFive::Attribute*>(file.attribute("nested"));
+    CHECK(original);
+    std::array<UnwrittenValue, 2> output;
+    std::memset(output.data(), 0x5a, sizeof output);
+    original->read(LowFive::Datatype(type), output.data());
+    for (const auto& value : output) check_unwritten(value);
+
+    diy::MemoryBuffer buffer;
+    LowFive::serialize(buffer, &file, vol);
+    buffer.reset();
+    std::unique_ptr<LowFive::Object> copy(LowFive::deserialize(buffer, vol));
+    auto* copied_file = dynamic_cast<LowFive::File*>(copy.get());
+    CHECK(copied_file);
     const char* saved_name = "model-persist-unwritten-attribute-output.h5";
-    LowFive::save(file, saved_name);
-    Id saved(H5Fopen(saved_name, H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
-    Id attribute(H5Aopen(saved, "unwritten", H5P_DEFAULT), H5Aclose);
-    int value = -1;
-    CHECK(H5Aread(attribute, H5T_NATIVE_INT, &value) >= 0);
-    CHECK(value == 0);
+    for (const auto* source : {&file, copied_file})
+    {
+        LowFive::save(*source, saved_name);
+        Id saved(H5Fopen(saved_name, H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
+        Id attribute(H5Aopen(saved, "unwritten", H5P_DEFAULT), H5Aclose);
+        double number = -1;
+        CHECK(H5Aread(attribute, H5T_NATIVE_DOUBLE, &number) >= 0);
+        CHECK(number == 0);
+        Id nested(H5Aopen(saved, "nested", H5P_DEFAULT), H5Aclose);
+        std::memset(output.data(), 0x5a, sizeof output);
+        CHECK(H5Aread(nested, type, output.data()) >= 0);
+        for (const auto& value : output) check_unwritten(value);
+        CHECK(H5Treclaim(type, scalar, H5P_DEFAULT, output.data()) >= 0);
+    }
     std::remove(saved_name);
 }
 void file_copy_root_token()
@@ -1114,6 +1302,8 @@ int main(int argc, char** argv)
         if (name == "attribute-conversion") attribute_conversion();
         else if (name == "attribute-compound") attribute_compound();
         else if (name == "attribute-strings") attribute_strings();
+        else if (name == "attribute-unwritten") attribute_unwritten();
+        else if (name == "attribute-unwritten-serialization") attribute_unwritten_serialization();
         else if (name == "dataset-conversion") dataset_conversion();
         else if (name == "dataspace-ownership") dataspace_ownership();
         else if (name == "compound-background") compound_background();
