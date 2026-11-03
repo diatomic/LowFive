@@ -40,7 +40,7 @@ if                          (lowfive_install_examples)
                             prod-con-multidata prod-2cons-multidata 2prods-con-multidata
                             producer-multidata producer1-multidata producer2-multidata
                             consumer-multidata consumer1-multidata consumer2-multidata
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/prod-con-multidata/
+                            DESTINATION examples/prod-con-multidata
                             )
 endif                       ()
 

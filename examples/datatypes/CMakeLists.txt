@@ -7,6 +7,6 @@ endforeach                  ()
 
 if                          (lowfive_install_examples)
     install                 (TARGETS datatypes
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/datatypes/
+                            DESTINATION examples/datatypes
                             )
 endif                       ()

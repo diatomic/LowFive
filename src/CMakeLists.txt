@@ -56,6 +56,6 @@ endif()
 
 
 install                 (TARGETS lowfive lowfive-dist
-                        LIBRARY DESTINATION lib
-                        ARCHIVE DESTINATION lib
-                        RUNTIME DESTINATION bin)
+                        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

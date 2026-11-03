@@ -1,5 +1,6 @@
 cmake_minimum_required      (VERSION 3.18)
 project                     (LowFive)
+include                     (GNUInstallDirs)
 
 option                      (wrapped_mpi      "MPI compiler wrapper requires no further MPI libs"     OFF)
 option                      (lowfive_python   "Build python bindings"                                 ON)
@@ -135,8 +136,8 @@ foreach                     (ITEM ${DEPLOY_FILES_AND_DIRS})
       list                  (APPEND FILES_TO_DEPLOY "${ITEM}")
    endif                    ()
 endforeach                  ()
-install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
-install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if                          (lowfive_python)
     find_package            (Python REQUIRED COMPONENTS Interpreter Development.Module)

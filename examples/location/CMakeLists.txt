@@ -7,6 +7,6 @@ endforeach                  ()
 
 if                          (lowfive_install_examples)
     install                 (TARGETS location
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/location/
+                            DESTINATION examples/location
                             )
 endif                       ()

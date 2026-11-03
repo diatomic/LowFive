@@ -7,6 +7,6 @@ endforeach                  ()
 
 if                          (lowfive_install_examples)
     install                 (TARGETS attr-iterate
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/attributes/
+                            DESTINATION examples/attributes
                             )
 endif                       ()

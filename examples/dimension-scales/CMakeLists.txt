@@ -7,6 +7,6 @@ endforeach                  ()
 
 if                          (lowfive_install_examples)
     install                 (TARGETS dimension-scales
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/dimension-scales/
+                            DESTINATION examples/dimension-scales
                             )
 endif                       ()

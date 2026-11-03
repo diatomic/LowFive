@@ -73,11 +73,34 @@ if                          (MPI4Py_FOUND)
                              TIMEOUT 60 LABELS "python;mpi" PROCESSORS 4)
     endif                   ()
 endif                       ()
-foreach                     (case permissions python)
+set                         (lowfive_install_example_args)
+if                          (lowfive_install_examples)
+    list                    (APPEND lowfive_install_example_args
+                             "--file=examples/attributes/$<TARGET_FILE_NAME:attr-iterate>"
+                             "--file=examples/datatypes/$<TARGET_FILE_NAME:datatypes>"
+                             "--file=examples/dimension-scales/$<TARGET_FILE_NAME:dimension-scales>"
+                             "--file=examples/groups/$<TARGET_FILE_NAME:group-iterate>"
+                             "--file=examples/links/$<TARGET_FILE_NAME:links>"
+                             "--file=examples/location/$<TARGET_FILE_NAME:location>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:prod-con-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:prod-2cons-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:2prods-con-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:producer-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:producer1-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:producer2-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:consumer-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:consumer1-multidata>"
+                             "--file=examples/prod-con-multidata/$<TARGET_FILE_NAME:consumer2-multidata>")
+endif                       ()
+foreach                     (case permissions python relocatable)
     add_test                (NAME lowfive-install-${case}
                              COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/install.py"
                              "${PROJECT_BINARY_DIR}" "${CMAKE_INSTALL_PREFIX}" ${case}
-                             "$<TARGET_FILE_NAME:lowfive>" "$<TARGET_FILE_NAME:lowfive-dist>")
+                             "--libdir=${CMAKE_INSTALL_LIBDIR}"
+                             "--bindir=${CMAKE_INSTALL_BINDIR}"
+                             "--includedir=${CMAKE_INSTALL_INCLUDEDIR}"
+                             "$<TARGET_FILE_NAME:lowfive>" "$<TARGET_FILE_NAME:lowfive-dist>"
+                             ${lowfive_install_example_args})
     set_tests_properties    (lowfive-install-${case} PROPERTIES TIMEOUT 60 LABELS install)
 endforeach                  ()
 set                         (lowfive_public_header_include_dirs
@@ -93,6 +116,9 @@ endforeach                  ()
 add_test                    (NAME lowfive-install-public-header
                              COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/install.py"
                              "${PROJECT_BINARY_DIR}" "${CMAKE_INSTALL_PREFIX}" public-header
+                             "--libdir=${CMAKE_INSTALL_LIBDIR}"
+                             "--bindir=${CMAKE_INSTALL_BINDIR}"
+                             "--includedir=${CMAKE_INSTALL_INCLUDEDIR}"
                              "--compiler=${CMAKE_CXX_COMPILER}"
                              "--toolchain=${CMAKE_TOOLCHAIN_FILE}"
                              ${lowfive_public_header_args})

@@ -7,6 +7,6 @@ endforeach                  ()
 
 if                          (lowfive_install_examples)
     install                 (TARGETS group-iterate
-                            DESTINATION ${CMAKE_INSTALL_PREFIX}/examples/groups/
+                            DESTINATION examples/groups
                             )
 endif                       ()
