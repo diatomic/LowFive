@@ -99,7 +99,7 @@ foreach(case copy-whole dummy-copy-whole)
     set_tests_properties(lowfive-distributed-${case} PROPERTIES
                          TIMEOUT 30 PROCESSORS 3 LABELS mpi)
 endforeach()
-lowfive_mpi_test(lowfive-rpc rpc.cpp destroy-first destroy-second)
+lowfive_mpi_test(lowfive-rpc rpc.cpp destroy-first destroy-second blob-lifetime)
 set(lowfive_saved_mpi_postflags ${MPIEXEC_POSTFLAGS})
 set(MPIEXEC_POSTFLAGS --lowfive-mpi-postflag)
 lowfive_mpi_cases(lowfive-distributed postflag-order)

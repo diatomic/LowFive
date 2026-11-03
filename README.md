@@ -64,6 +64,10 @@ snapshots are released when the last handle closes. Pass `delete_data=false` to
 retain snapshots for another serving round. Automatic serving on file close uses
 the default cleanup behavior.
 
+Received RPC binary blobs own their storage. Loading a blob transfers that
+ownership out of the receive buffer, so its bytes remain valid until the last
+owning blob is destroyed.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:

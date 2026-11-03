@@ -3,6 +3,9 @@
 #include "metadata.hpp"
 #include "rpc/client.h"
 #include "rpc/server.h"
+#include <array>
+#include <cstring>
+#include <vector>
 
 namespace
 {
@@ -21,6 +24,39 @@ void exports(Module& module)
     module.function("destroyed", []() { return destroyed; });
     module.function("echo", [](int n) { return n; });
 }
+
+void exercise_blob_lifetime(int rank)
+{
+    std::vector<char> expected(65539);
+    for (size_t i = 0; i < expected.size(); ++i)
+        expected[i] = static_cast<char>(i % 127);
+    const std::array<char, 3> trailer = {{'e', 'n', 'd'}};
+    if (rank == 0)
+    {
+        diy::MemoryBuffer outgoing;
+        diy::save(outgoing, 42);
+        outgoing.save_binary_blob(expected.data(), expected.size());
+        outgoing.save_binary_blob(trailer.data(), trailer.size());
+        LowFive::rpc::ssend(MPI_COMM_WORLD, 1, 17, outgoing);
+    }
+    else
+    {
+        diy::MemoryBuffer::Blob retained;
+        {
+            diy::MemoryBuffer incoming;
+            LowFive::rpc::recv(MPI_COMM_WORLD, 0, 17, incoming);
+            int header = 0;
+            diy::load(incoming, header);
+            CHECK(header == 42);
+            retained = incoming.load_binary_blob();
+            auto last = incoming.load_binary_blob();
+            CHECK(last.size == trailer.size());
+            CHECK(std::memcmp(last.pointer.get(), trailer.data(), last.size) == 0);
+        }
+        CHECK(retained.size == expected.size());
+        CHECK(std::memcmp(retained.pointer.get(), expected.data(), retained.size) == 0);
+    }
+}
 }
 
 int main(int argc, char** argv)
@@ -33,7 +69,9 @@ int main(int argc, char** argv)
     {
         CHECK(argc == 2 && size == 2);
         const std::string name(argv[1]);
-        if (rank == 0)
+        if (name == "blob-lifetime")
+            exercise_blob_lifetime(rank);
+        else if (rank == 0)
         {
             LowFive::rpc::server::module module;
             exports(module);
