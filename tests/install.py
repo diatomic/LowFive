@@ -38,7 +38,8 @@ with tempfile.TemporaryDirectory(prefix="lowfive-install-") as temporary:
     elif case == "python":
         platlib = sysconfig.get_path("platlib", vars={"base": prefix, "platbase": prefix})
         installed = stage / platlib.lstrip("/")
-        environment["PYTHONPATH"] = str(installed)
+        environment["PYTHONPATH"] = os.pathsep.join(
+            filter(None, (str(installed), environment.get("PYTHONPATH"))))
         if sys.platform == "win32":
             loader_variable = "PATH"
             library_directories = [root / bindir, root / libdir]

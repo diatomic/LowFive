@@ -41,9 +41,10 @@ install                     (FILES lowfive/__init__.py DESTINATION ${LOWFIVE_PYT
 foreach                     (case exports errors lifetime)
     add_test                (NAME lowfive-python-${case}
                              COMMAND "${CMAKE_COMMAND}" -E env
-                             "PYTHONPATH=${MODULE_OUTPUT_DIRECTORY}"
                              "HDF5_PLUGIN_PATH=$<TARGET_FILE_DIR:lowfive>"
-                             "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/python_api.py" ${case})
+                             "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/prepend_python_path.py"
+                             "${MODULE_OUTPUT_DIRECTORY}"
+                             "${PROJECT_SOURCE_DIR}/tests/python_api.py" ${case})
     set_tests_properties    (lowfive-python-${case} PROPERTIES TIMEOUT 30 LABELS python)
 endforeach                  ()
 if                          (MPI4Py_FOUND)
@@ -54,20 +55,22 @@ if                          (MPI4Py_FOUND)
         add_test            (NAME lowfive-python-distributed
                              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 ${MPIEXEC_PREFLAGS}
                              "${CMAKE_COMMAND}" -E env
-                             "PYTHONPATH=${MODULE_OUTPUT_DIRECTORY}"
                              "HDF5_PLUGIN_PATH=$<TARGET_FILE_DIR:lowfive>"
                              "HDF5_VOL_CONNECTOR=lowfive under_vol=0$<SEMICOLON>under_info={}$<SEMICOLON>"
-                             "${Python_EXECUTABLE}" "${MODULE_OUTPUT_DIRECTORY}/test-dist.py" -m
+                             "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/prepend_python_path.py"
+                             "${MODULE_OUTPUT_DIRECTORY}"
+                             "${MODULE_OUTPUT_DIRECTORY}/test-dist.py" -m
                              ${MPIEXEC_POSTFLAGS})
         set_tests_properties(lowfive-python-distributed PROPERTIES
                              TIMEOUT 60 LABELS "python;mpi" PROCESSORS 3)
         add_test            (NAME lowfive-python-distributed-file
                              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 ${MPIEXEC_PREFLAGS}
                              "${CMAKE_COMMAND}" -E env
-                             "PYTHONPATH=${MODULE_OUTPUT_DIRECTORY}"
                              "HDF5_PLUGIN_PATH=$<TARGET_FILE_DIR:lowfive>"
                              "HDF5_VOL_CONNECTOR=lowfive under_vol=0$<SEMICOLON>under_info={}$<SEMICOLON>"
-                             "${Python_EXECUTABLE}" "${MODULE_OUTPUT_DIRECTORY}/test-dist.py" -f
+                             "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/prepend_python_path.py"
+                             "${MODULE_OUTPUT_DIRECTORY}"
+                             "${MODULE_OUTPUT_DIRECTORY}/test-dist.py" -f
                              ${MPIEXEC_POSTFLAGS})
         set_tests_properties(lowfive-python-distributed-file PROPERTIES
                              TIMEOUT 60 LABELS "python;mpi" PROCESSORS 4)
