@@ -115,6 +115,17 @@ void property_lifetime()
     std::remove("base-property.h5");
 }
 
+void property_errors()
+{
+    auto& vol = LowFive::VOLBase::create_vol_base();
+    LowFive::H5VOLProperty property(vol);
+    test::Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    bool failed = false;
+    try { property.apply(dcpl); }
+    catch (const std::runtime_error&) { failed = true; }
+    CHECK(failed);
+}
+
 void info_roundtrip(bool nested)
 {
     test::Connector connector(nested ? "base-info-nested" : "base-info-independent", "native");
@@ -213,6 +224,7 @@ int main(int argc, char** argv)
         else if (name == "reopen-metadata") reopen("file");
         else if (name == "exceptions") exceptions();
         else if (name == "property-lifetime") property_lifetime();
+        else if (name == "property-errors") property_errors();
         else if (name == "info-independent") info_roundtrip(false);
         else if (name == "info-nested") info_roundtrip(true);
         else if (name == "info-malformed") malformed_info();

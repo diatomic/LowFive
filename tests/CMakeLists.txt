@@ -12,7 +12,7 @@ endfunction()
 lowfive_test(lowfive-api api.cpp memory file dual native patterns)
 lowfive_test(lowfive-base base.cpp
     hard hard-same-dst hard-same-src copy-same-dst copy-same-src move-same-dst move-same-src
-    reopen-native reopen-metadata exceptions property-lifetime info-independent
+    reopen-native reopen-metadata exceptions property-lifetime property-errors info-independent
     info-nested info-malformed singleton distributed-close-failure)
 lowfive_test(lowfive-factories factories.cpp
     base-metadata base-distributed metadata-distributed
