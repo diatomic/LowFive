@@ -1,5 +1,6 @@
 #include "test.hpp"
 #include <lowfive/H5VOLProperty.hpp>
+#include <lowfive/vol-dist-metadata.hpp>
 #include <memory>
 
 namespace
@@ -166,6 +167,42 @@ void malformed_info()
         CHECK(parsed == nullptr);
     }
 }
+
+void distributed_close_failure()
+{
+    const char* filename = "base-distributed-close-failure.h5";
+    auto& vol = LowFive::DistMetadataVOL::create_DistMetadataVOL(
+        MPI_COMM_WORLD, LowFive::DistMetadataVOL::communicators{});
+    vol.serve_on_close = false;
+    vol.set_passthru(filename, "*");
+    {
+        LowFive::H5VOLProperty property(vol);
+        test::Id fapl(H5Pcreate(H5P_FILE_ACCESS), H5Pclose);
+        CHECK(H5Pset_fclose_degree(fapl, H5F_CLOSE_SEMI) >= 0);
+        property.apply(fapl);
+        test::Id file(H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl), H5Fclose);
+        auto space = test::scalar();
+        test::Id dataset(H5Dcreate2(file, "value", H5T_NATIVE_INT, space,
+                                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+        CHECK(H5Fclose(file) < 0);
+        CHECK(H5Iis_valid(file) > 0);
+        CHECK(H5Iis_valid(dataset) > 0);
+        const int written = 42;
+        CHECK(H5Dwrite(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                       H5P_DEFAULT, &written) >= 0);
+        dataset.reset();
+        file.reset();
+    }
+    {
+        test::Id file(H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
+        test::Id dataset(H5Dopen2(file, "value", H5P_DEFAULT), H5Dclose);
+        int read = 0;
+        CHECK(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, &read) >= 0);
+        CHECK(read == 42);
+    }
+    CHECK(std::remove(filename) == 0);
+}
 }
 
 int main(int argc, char** argv)
@@ -179,6 +216,7 @@ int main(int argc, char** argv)
         else if (name == "info-independent") info_roundtrip(false);
         else if (name == "info-nested") info_roundtrip(true);
         else if (name == "info-malformed") malformed_info();
+        else if (name == "distributed-close-failure") distributed_close_failure();
         else if (name == "singleton")
         {
             auto& first = LowFive::VOLBase::create_vol_base();

@@ -32,6 +32,8 @@ success; optional-operation queries advertise only implemented operations.
 Native-backed objects continue to forward operations to the underlying connector.
 Open-object counts and ID lists are scoped to the requested file;
 `H5F_OBJ_LOCAL` restricts them to the originating file handle.
+Failed underlying file closes preserve the live file handle and propagate the
+error, including `H5F_CLOSE_SEMI` failures while child objects remain open.
 
 Asynchronous underlying connectors are supported through request wait, notify,
 cancel, specific, optional, and free callbacks. Multi-dataset submissions retain
