@@ -235,7 +235,7 @@ query(const Datatype&   mem_type,
 
     for (const auto& [offset, value] : pending_strings)
     {
-        const char* source = value.empty() ? nullptr : value.c_str();
+        const char* source = value.c_str();
         type.convert(
             mem_type, 1, &source, static_cast<char*>(buf) + offset);
     }

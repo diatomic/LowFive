@@ -502,6 +502,8 @@ void
 diy::MemoryBuffer::
 save_binary(const char* x, size_t count)
 {
+  if (count == 0)
+    return;
   std::copy_n(x, count, grow(count));
 }
 

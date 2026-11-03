@@ -382,6 +382,18 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
             CHECK(H5Dwrite(ds, type, one, extent, H5P_DEFAULT, &value) >= 0);
             return;
         }
+        if (name == "empty-string")
+        {
+            auto extent = test::space(2);
+            test::Id type(H5Tcopy(H5T_C_S1), H5Tclose);
+            CHECK(H5Tset_size(type, H5T_VARIABLE) >= 0);
+            test::Id ds(H5Dcreate2(file, "values", type, extent, H5P_DEFAULT,
+                                   H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+            const char* values[] = {"", "written"};
+            CHECK(H5Dwrite(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           values) >= 0);
+            return;
+        }
         if (name == "fill-string")
         {
             auto extent = test::space(3);
@@ -617,6 +629,20 @@ void exercise(const std::string& name, int rank, MPI_Comm local, MPI_Comm interc
                 for (size_t i : {0, 2, 4, 6})
                     CHECK(result[i].len == 0 && result[i].p == nullptr);
                 CHECK(H5Treclaim(type, ms, H5P_DEFAULT, result.data()) >= 0);
+            }
+            else if (name == "empty-string")
+            {
+                test::Id type(H5Tcopy(H5T_C_S1), H5Tclose);
+                CHECK(H5Tset_size(type, H5T_VARIABLE) >= 0);
+                std::array<char*, 2> result {};
+                CHECK(H5Dread(ds, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                              result.data()) >= 0);
+                CHECK(result[0] != nullptr && result[0][0] == '\0');
+                CHECK(result[1] != nullptr &&
+                      std::string(result[1]) == "written");
+                auto extent = test::space(2);
+                CHECK(H5Treclaim(type, extent, H5P_DEFAULT,
+                                 result.data()) >= 0);
             }
             else if (name == "fill-string")
             {

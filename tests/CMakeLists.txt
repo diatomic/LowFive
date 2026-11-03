@@ -101,7 +101,7 @@ lowfive_mpi_test(lowfive-distributed distributed.cpp
     hard-link-serialized object-hard-link-serialized remote-unlinked-alias
     hard-link-parent-relative object-alias-policy vlen vlen-compound
     vlen-compound-selection scalar no-index
-    fill-unwritten fill-partial fill-default fill-vlen fill-string
+    fill-unwritten fill-partial fill-default fill-vlen fill-string empty-string
     broadcast-replace dummy-real intercomm-indices serving-cleanup)
 foreach(case copy-whole dummy-copy-whole)
     add_test(NAME lowfive-distributed-${case}
