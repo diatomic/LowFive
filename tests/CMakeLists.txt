@@ -69,7 +69,11 @@ lowfive_test(lowfive-callbacks callbacks.cpp
     reference-live-file-collection reference-retained-collection
     reference-attribute reference-native-attribute dataset-reference-overwrite
     reference-zero-copy-alias
-    vlen-zero-copy-alias soft-link-cross-file)
+    vlen-zero-copy-alias soft-link-cross-file
+    intermediate-group intermediate-group-native
+    intermediate-dataset intermediate-dataset-native
+    intermediate-datatype intermediate-datatype-native
+    intermediate-links intermediate-links-native)
 lowfive_test(lowfive-examples examples.cpp
     serialization grid-valid grid-corrupt grid-read-error particles-valid particles-duplicate
     particles-reordered particles-coordinate particles-read-error)

@@ -87,6 +87,90 @@ std::optional<DatasetMetadata> query_dataset_metadata(Getter&& get)
 
 Object::ObjectPath metadata_target_path(Object* parent,
                                         const std::string& path);
+
+inline Object::ObjectPath metadata_creation_path(Object* parent,
+                                                  std::string path,
+                                                  bool native)
+{
+    while (!path.empty() && path.back() == '/') path.pop_back();
+    if (path == "." || (path.size() >= 2 &&
+                         path.compare(path.size() - 2, 2, "/.") == 0))
+        return {nullptr, ""};
+    unsigned budget = 64;
+    if (!native) return parent->search_path(std::move(path), budget, false);
+    auto result = parent->search_path(path, budget, false);
+    if (result.obj) return result;
+
+    // A native soft-link ancestor may point to an uncached group. Expand
+    // only the parent path; an existing final destination link must still
+    // reject creation, including when its target is missing.
+    auto slash = path.find_last_of('/');
+    if (slash == std::string::npos) return result;
+    auto ancestor = metadata_target_path(parent, path.substr(0, slash + 1));
+    if (!ancestor.obj) return ancestor;
+    if (!ancestor.path.empty() && ancestor.path.back() != '/')
+        ancestor.path += '/';
+    ancestor.path += path.substr(slash + 1);
+    return ancestor;
+}
+
+inline Object::ObjectPath metadata_link_creation_path(
+    Object* parent, const H5VL_loc_params_t& loc, bool native)
+{
+    if (loc.type == H5VL_OBJECT_BY_NAME)
+        return metadata_creation_path(
+            parent, loc.loc_data.loc_by_name.name, native);
+    return parent->locate_link(loc);
+}
+
+inline bool metadata_creation_allowed(const Object::ObjectPath& path,
+                                      hid_t lcpl_id)
+{
+    if (!path.obj || path.path.empty()) return false;
+    if (path.is_name()) return true;
+    unsigned create = 0;
+    return lcpl_id != H5P_DEFAULT &&
+        H5Pget_create_intermediate_group(lcpl_id, &create) >= 0 && create;
+}
+
+// Call only after validation or successful native creation. Existing native
+// ancestors may be uncached and need their actual properties, not defaults.
+inline Object::ObjectPath metadata_create_parents(
+    MetadataVOL& vol, Object::ObjectPath path, ObjectPointers* location,
+    bool native, hid_t dxpl_id)
+{
+    while (true)
+    {
+        auto slash = path.path.find('/');
+        if (slash == std::string::npos) return path;
+        auto component = path.path.substr(0, slash);
+        if (!component.empty() && component != ".")
+        {
+            Hid gcpl(H5P_DEFAULT);
+            if (native)
+            {
+                H5VL_loc_params_t loc {};
+                loc.obj_type = get_identifier_type(
+                    static_cast<Object*>(location->mdata_obj));
+                loc.type = H5VL_OBJECT_BY_SELF;
+                auto fullpath = path.obj->fullname(component).second;
+                auto* group = vol.VOLBase::group_open(
+                    vol.unwrap(location), &loc, fullpath.c_str(),
+                    H5P_DEFAULT, dxpl_id, nullptr);
+                if (!group) return {nullptr, ""};
+                H5VL_group_get_args_t get {};
+                get.op_type = H5VL_GROUP_GET_GCPL;
+                auto status = vol.VOLBase::group_get(
+                    group, &get, dxpl_id, nullptr);
+                vol.VOLBase::group_close(group, dxpl_id, nullptr);
+                if (status < 0) return {nullptr, ""};
+                gcpl = Hid(get.args.get_gcpl.gcpl_id, true);
+            }
+            path.obj = path.obj->add_child(new Group(component, gcpl.id));
+        }
+        path.path.erase(0, slash + 1);
+    }
+}
 Object* replace_metadata(MetadataVOL& vol, File& file, Object* previous,
                          Object* replacement);
 

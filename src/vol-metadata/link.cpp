@@ -29,8 +29,11 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
             lapl_id, dxpl_id, req);
     }
     auto* parent = static_cast<Object*>(destination->mdata_obj);
-    auto path = parent->locate_link(*loc_params);
-    if (!path.obj || path.path.empty() || !path.is_name()) return -1;
+    auto path = metadata_link_creation_path(
+        parent, *loc_params, native_destination);
+    if (!path.obj || path.path.empty()) return -1;
+    if (!native_destination && !metadata_creation_allowed(path, lcpl_id))
+        return -1;
     Object* target = nullptr;
     if (args->op_type == H5VL_LINK_CREATE_HARD)
     {
@@ -52,6 +55,9 @@ LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, cons
         auto result = link_create_trampoline(&native_args, unwrap(obj), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
         if (result < 0) return result;
     }
+    path = metadata_create_parents(*this, std::move(path), destination,
+                                   native_destination, dxpl_id);
+    if (!path.obj) return -1;
     if (target)
     {
         auto* file = dynamic_cast<File*>(target->find_root());
@@ -99,9 +105,6 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     const bool native_source = unwrap(source);
     const bool native_destination = unwrap(destination);
     if (native_source != native_destination) return -1;
-    if (native_source)
-        return VOLBase::link_copy(unwrap(src_obj), loc_params1, unwrap(dst_obj), loc_params2,
-                                  under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
 
 
     Object::ObjectPath source_path {nullptr, ""};
@@ -109,19 +112,35 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     if (source->mdata_obj && destination->mdata_obj)
     {
         source_path = static_cast<Object*>(source->mdata_obj)->locate_link(*loc_params1);
-        destination_path = static_cast<Object*>(destination->mdata_obj)->locate_link(*loc_params2);
-        if (!source_path.obj || !source_path.path.empty() ||
-            !destination_path.obj || destination_path.path.empty() ||
-            !destination_path.is_name())
+        destination_path = metadata_link_creation_path(
+            static_cast<Object*>(destination->mdata_obj), *loc_params2,
+            native_destination);
+        if (!native_source &&
+            (!source_path.obj || !source_path.path.empty() ||
+             !metadata_creation_allowed(destination_path, lcpl_id)))
             return -1;
-        if (source_path.obj->find_root() !=
+        if (source_path.obj && source_path.path.empty() && destination_path.obj &&
+            source_path.obj->find_root() !=
                 destination_path.obj->find_root() &&
             !dynamic_cast<SoftLink*>(source_path.obj))
             return -1;
     }
+    if (native_source)
+    {
+        auto result = VOLBase::link_copy(
+            unwrap(src_obj), loc_params1, unwrap(dst_obj), loc_params2,
+            under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+        if (result < 0 || !source_path.obj || !source_path.path.empty() ||
+            !destination_path.obj || destination_path.path.empty())
+            return result;
+    }
 
     if (!source_path.obj)
         return -1;
+    destination_path = metadata_create_parents(
+        *this, std::move(destination_path), destination, native_destination,
+        dxpl_id);
+    if (!destination_path.obj) return -1;
     Object* copied = nullptr;
     if (auto* soft = dynamic_cast<SoftLink*>(source_path.obj))
         copied = new SoftLink(destination_path.path, soft->target);
@@ -153,13 +172,15 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
     {
         source_path =
             static_cast<Object*>(source->mdata_obj)->locate_link(*loc_params1);
-        destination_path =
-            static_cast<Object*>(destination->mdata_obj)->locate_link(*loc_params2);
+        destination_path = metadata_link_creation_path(
+            static_cast<Object*>(destination->mdata_obj), *loc_params2,
+            native_destination);
     }
     const bool tracked =
         source_path.obj && source_path.path.empty() && source_path.obj->parent &&
         destination_path.obj && !destination_path.path.empty() &&
-        destination_path.is_name();
+        (native_destination ||
+         metadata_creation_allowed(destination_path, lcpl_id));
     if (tracked)
         for (auto* parent = destination_path.obj; parent;
              parent = parent->parent)
@@ -181,6 +202,10 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
             !dynamic_cast<SoftLink*>(source_path.obj))
             return -1;
     }
+    destination_path = metadata_create_parents(
+        *this, std::move(destination_path), destination, native_destination,
+        dxpl_id);
+    if (!destination_path.obj) return -1;
 
     source_path.obj->remove();
     source_path.obj->name = destination_path.path;

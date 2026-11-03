@@ -71,6 +71,15 @@ Received RPC binary blobs own their storage. Loading a blob transfers that
 ownership out of the receive buffer, so its bytes remain valid until the last
 owning blob is destroyed.
 
+Creation callbacks honor the LCPL intermediate-group flag across groups,
+datasets, committed datatypes, and links, including link copy and move.
+Missing ancestors fail without graph mutation unless creation is enabled.
+Implicit groups use default GCPLs; the requested final group keeps its own GCPL.
+Native-backed creation mirrors native ancestor properties, including uncached
+groups reached through soft-link ancestors. Existing destination links and
+terminal `.` components are rejected; trailing separators on group names are
+normalized.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:

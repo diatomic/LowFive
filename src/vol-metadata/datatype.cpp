@@ -21,10 +21,11 @@ datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         {
             parent = current->locate(*loc_params).exact();
             if (!parent) return nullptr;
-            destination = metadata_target_path(parent, name);
+            destination = metadata_creation_path(parent, name, unwrap(pointers));
             if (!destination.obj || destination.path.empty())
                 return nullptr;
-            if (!unwrap(pointers) && !destination.is_name())
+            if (!unwrap(pointers) &&
+                !metadata_creation_allowed(destination, lcpl_id))
                 return nullptr;
         }
     }
@@ -39,13 +40,24 @@ datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         if (!underlying) return nullptr;
     }
     if (!underlying && !destination.obj) return nullptr;
+    if (destination.obj)
+    {
+        destination = metadata_create_parents(
+            *this, std::move(destination), pointers, underlying != nullptr,
+            dxpl_id);
+        if (!destination.obj)
+        {
+            if (underlying) VOLBase::datatype_close(underlying, dxpl_id, nullptr);
+            return nullptr;
+        }
+    }
 
     auto* result = wrap(underlying);
     result->access_flags = pointers->access_flags;
     result->file_handle = pointers->file_handle;
     if (destination.obj)
-        result->mdata_obj = destination.obj->add_path(
-            new CommittedDatatype("", type_id), destination.path);
+        result->mdata_obj = destination.obj->add_child(
+            new CommittedDatatype(destination.path, type_id));
     if (destination.obj && !result->mdata_obj)
     {
         if (underlying) VOLBase::datatype_close(underlying, dxpl_id, nullptr);

@@ -198,17 +198,29 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
     if (!parent_pointers->writable()) return nullptr;
     auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
     std::string dataset_name = name ? name : "";
-    auto path = parent->search(dataset_name);
-    if (!path.obj || !path.is_name() || (name && path.path.empty())) return nullptr;
     auto filepath = parent->fullname(dataset_name);
     bool native = match_any(filepath, passthru);
     bool in_memory = match_any(filepath, memory);
+    auto path = metadata_creation_path(parent, dataset_name, native);
+    if (!path.obj || (name && path.path.empty())) return nullptr;
+    if (name && !native && !metadata_creation_allowed(path, lcpl_id))
+        return nullptr;
     void* underlying = nullptr;
     if (native)
     {
         if (!unwrap(obj)) return nullptr;
         underlying = VOLBase::dataset_create(unwrap(obj), loc_params, name, lcpl_id, type_id, space_id, dcpl_id, dapl_id, dxpl_id, req);
         if (!underlying) return nullptr;
+    }
+    if (name)
+    {
+        path = metadata_create_parents(*this, std::move(path), parent_pointers,
+                                       native, dxpl_id);
+        if (!path.obj)
+        {
+            if (underlying) VOLBase::dataset_close(underlying, dxpl_id, nullptr);
+            return nullptr;
+        }
     }
     auto ownership = match_any(filepath, zerocopy) ? Dataset::Ownership::user : Dataset::Ownership::lowfive;
     auto* metadata = new Dataset(path.path, type_id, space_id, ownership, dcpl_id,

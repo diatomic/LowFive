@@ -402,8 +402,14 @@ void run(const std::string& name)
     const bool dual = name == "dual_reopen" || name == "extent_failure" ||
                       name == "file-id-child-dual" ||
                       name.find("failure") != std::string::npos;
+    const bool intermediate_native =
+        name == "intermediate-group-native" ||
+        name == "intermediate-dataset-native" ||
+        name == "intermediate-datatype-native" ||
+        name == "intermediate-links-native";
     const auto mode = name == "file-id-child-file" ? "file" :
-                      (dual || name == "native_parent_attr" ? "dual" :
+                      (dual || intermediate_native ||
+                       name == "native_parent_attr" ? "dual" :
                                                                   "memory");
     test::Connector connector("callbacks_" + name, mode);
     auto& vol = dynamic_cast<LowFive::MetadataVOL&>(connector.vol);
@@ -506,6 +512,34 @@ void run(const std::string& name)
     }
     auto file = [&]()
     {
+        if (intermediate_native)
+        {
+            {
+                Id native_file(H5Fcreate(connector.filename.c_str(),
+                                          H5F_ACC_TRUNC, H5P_DEFAULT,
+                                          H5P_DEFAULT), H5Fclose);
+                Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+                CHECK(H5Pset_link_creation_order(
+                    gcpl, H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED) >= 0);
+                CHECK(H5Pset_link_phase_change(gcpl, 12, 10) >= 0);
+                Id existing(H5Gcreate2(native_file, "existing", H5P_DEFAULT,
+                                        gcpl, H5P_DEFAULT), H5Gclose);
+                if (name == "intermediate-links-native")
+                {
+                    for (auto path : {"existing-hard", "existing-copy",
+                                      "existing-move"})
+                    {
+                        Id group(H5Gcreate2(native_file, path, H5P_DEFAULT,
+                                             gcpl, H5P_DEFAULT), H5Gclose);
+                    }
+                    CHECK(H5Lcreate_soft("/source", native_file,
+                                         "uncached-soft", H5P_DEFAULT,
+                                         H5P_DEFAULT) >= 0);
+                }
+            }
+            return Id(H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR,
+                              connector.fapl), H5Fclose);
+        }
         if (name != "reference-opened-native") return connector.file();
         {
             Id native_file(H5Fcreate(connector.filename.c_str(), H5F_ACC_TRUNC,
@@ -517,6 +551,363 @@ void run(const std::string& name)
                           connector.fapl), H5Fclose);
     }();
     auto scalar = test::scalar();
+    if (name.rfind("intermediate-", 0) == 0)
+    {
+        Id lcpl(H5Pcreate(H5P_LINK_CREATE), H5Pclose);
+        Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+        const unsigned tracked = H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED;
+        CHECK(H5Pset_link_creation_order(gcpl, tracked) >= 0);
+        CHECK(H5Pset_link_phase_change(gcpl, 12, 10) >= 0);
+        auto properties = [&](const char* path, bool final)
+        {
+            Id group(H5Gopen2(file, path, H5P_DEFAULT), H5Gclose);
+            Id actual(H5Gget_create_plist(group), H5Pclose);
+            unsigned order = 0, maximum = 0, minimum = 0;
+            CHECK(H5Pget_link_creation_order(actual, &order) >= 0);
+            CHECK(order == (final ? tracked : 0));
+            CHECK(H5Pget_link_phase_change(actual, &maximum, &minimum) >= 0);
+            CHECK(maximum == (final ? 12 : 8));
+            CHECK(minimum == (final ? 10 : 6));
+            auto* metadata = dynamic_cast<LowFive::Group*>(
+                vol.locate(connector.filename, path));
+            CHECK(metadata);
+            CHECK(H5Pget_link_creation_order(metadata->gcpl.id, &order) >= 0);
+            CHECK(order == (final ? tracked : 0));
+            CHECK(H5Pget_link_phase_change(metadata->gcpl.id,
+                                           &maximum, &minimum) >= 0);
+            CHECK(maximum == (final ? 12 : 8));
+            CHECK(minimum == (final ? 10 : 6));
+        };
+        auto absent = [&](const char* path, size_t before)
+        {
+            CHECK(H5Lexists(file, path, H5P_DEFAULT) == 0);
+            CHECK(vol.files.at(connector.filename)->children.size() == before);
+        };
+        CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+        const auto before_dot = vol.files.at(connector.filename)->children.size();
+        if (name.rfind("intermediate-group", 0) == 0)
+            CHECK(H5Gcreate2(file, "dot-parent/.", lcpl, gcpl, H5P_DEFAULT) < 0);
+        else if (name.rfind("intermediate-dataset", 0) == 0)
+            CHECK(H5Dcreate2(file, "dot-parent/.", H5T_NATIVE_INT, scalar, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) < 0);
+        else if (name.rfind("intermediate-datatype", 0) == 0)
+        {
+            Id type(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "dot-parent/.", type, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) < 0);
+            CHECK(H5Tcommitted(type) == 0);
+        }
+        else
+            CHECK(H5Lcreate_soft("/target", file, "dot-parent/.", lcpl,
+                                 H5P_DEFAULT) < 0);
+        absent("dot-parent", before_dot);
+        CHECK(H5Pset_create_intermediate_group(lcpl, 0) >= 0);
+        auto uncached_alias = [&](const char* target, const char* alias)
+        {
+            auto destination = "/" + std::string(target);
+            CHECK(H5Lcreate_soft(destination.c_str(), file, alias, H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+        };
+        if (intermediate_native) uncached_alias("existing", "uncached-alias");
+        if (name == "intermediate-group" ||
+            name == "intermediate-group-native")
+        {
+            CHECK(H5Lcreate_soft("/missing-group", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Gcreate2(file, "dangling", properties, gcpl,
+                                 H5P_DEFAULT) < 0);
+                if (!intermediate_native)
+                    CHECK(H5Gcreate2(file, "dangling/child", properties, gcpl,
+                                     H5P_DEFAULT) < 0);
+                absent("missing-group", before);
+                CHECK(H5Lexists(file, "dangling", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Gcreate2(file, "groups/branch/final", disabled, gcpl,
+                                 H5P_DEFAULT) < 0);
+                absent("groups", before);
+                reject_dangling(disabled);
+            }
+            {
+                Id trailing(H5Gcreate2(file, "trailing-default/", H5P_DEFAULT,
+                                       gcpl, H5P_DEFAULT), H5Gclose);
+                properties("/trailing-default", true);
+                H5G_info_t info {};
+                CHECK(H5Gget_info(trailing, &info) >= 0);
+                CHECK(info.nlinks == 0);
+                CHECK(vol.locate(connector.filename, "/trailing-default")
+                          ->children.empty());
+                Id explicit_disabled(H5Gcreate2(
+                    file, "trailing-disabled/", lcpl, gcpl, H5P_DEFAULT),
+                    H5Gclose);
+                properties("/trailing-disabled", true);
+                CHECK(vol.locate(connector.filename, "/trailing-disabled")
+                          ->children.empty());
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            Id group(H5Gcreate2(file, "/groups/branch/final/", lcpl, gcpl,
+                                H5P_DEFAULT), H5Gclose);
+            properties("/groups", false);
+            properties("/groups/branch", false);
+            properties("/groups/branch/final", true);
+            CHECK(vol.locate(connector.filename, "/groups/branch/final")
+                      ->children.empty());
+            CHECK(H5Lcreate_soft("/groups", file, "group-alias", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            Id alias_child(H5Gcreate2(file, "group-alias/more/final", lcpl,
+                                      gcpl, H5P_DEFAULT), H5Gclose);
+            properties("/groups/more", false);
+            properties("/groups/more/final", true);
+            if (intermediate_native)
+            {
+                Id child(H5Gcreate2(file, "uncached-alias/child", H5P_DEFAULT,
+                                    H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+                properties("/existing", true);
+                properties("/existing/child", false);
+            }
+        }
+        else if (name == "intermediate-dataset" ||
+                 name == "intermediate-dataset-native")
+        {
+            CHECK(H5Lcreate_soft("/missing-dataset", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Dcreate2(file, "dangling", H5T_NATIVE_INT, scalar,
+                                 properties, H5P_DEFAULT, H5P_DEFAULT) < 0);
+                if (!intermediate_native)
+                    CHECK(H5Dcreate2(file, "dangling/child", H5T_NATIVE_INT,
+                                     scalar, properties, H5P_DEFAULT,
+                                     H5P_DEFAULT) < 0);
+                absent("missing-dataset", before);
+                CHECK(H5Lexists(file, "dangling", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Dcreate2(file, "datasets/branch/value", H5T_NATIVE_INT,
+                                 scalar, disabled, H5P_DEFAULT,
+                                 H5P_DEFAULT) < 0);
+                absent("datasets", before);
+                reject_dangling(disabled);
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            Id created(H5Dcreate2(file, "datasets/branch/value", H5T_NATIVE_INT,
+                                  scalar, lcpl, H5P_DEFAULT, H5P_DEFAULT),
+                       H5Dclose);
+            write(created, 149);
+            Id opened(H5Dopen2(file, "datasets/branch/value", H5P_DEFAULT),
+                      H5Dclose);
+            value(opened, 149);
+            properties("/datasets", false);
+            properties("/datasets/branch", false);
+            CHECK(H5Lcreate_soft("/datasets", file, "dataset-alias",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id alias_child(H5Dcreate2(
+                file, "dataset-alias/more/value", H5T_NATIVE_INT, scalar,
+                lcpl, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+            write(alias_child, 153);
+            Id alias_opened(H5Dopen2(file, "datasets/more/value", H5P_DEFAULT),
+                            H5Dclose);
+            value(alias_opened, 153);
+            properties("/datasets/more", false);
+            if (intermediate_native)
+            {
+                auto child = dataset(file, "uncached-alias/child", scalar);
+                properties("/existing", true);
+            }
+        }
+        else if (name == "intermediate-datatype" ||
+                 name == "intermediate-datatype-native")
+        {
+            CHECK(H5Lcreate_soft("/missing-type", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+                CHECK(H5Tcommit2(file, "dangling", datatype, properties,
+                                 H5P_DEFAULT, H5P_DEFAULT) < 0);
+                if (!intermediate_native)
+                    CHECK(H5Tcommit2(file, "dangling/child", datatype, properties,
+                                     H5P_DEFAULT, H5P_DEFAULT) < 0);
+                absent("missing-type", before);
+                CHECK(H5Lexists(file, "dangling", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+                CHECK(H5Tcommit2(file, "types/branch/type", datatype, disabled,
+                                 H5P_DEFAULT, H5P_DEFAULT) < 0);
+                absent("types", before);
+                reject_dangling(disabled);
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "types/branch/type", datatype, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id opened(H5Topen2(file, "types/branch/type", H5P_DEFAULT), H5Tclose);
+            CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+            properties("/types", false);
+            properties("/types/branch", false);
+            CHECK(H5Lcreate_soft("/types", file, "type-alias", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            Id alias_type(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "type-alias/more/type", alias_type, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id alias_opened(H5Topen2(file, "types/more/type", H5P_DEFAULT),
+                            H5Tclose);
+            CHECK(H5Tequal(alias_opened, H5T_NATIVE_INT) > 0);
+            properties("/types/more", false);
+            if (intermediate_native)
+            {
+                Id child(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+                CHECK(H5Tcommit2(file, "uncached-alias/type", child, H5P_DEFAULT,
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                properties("/existing", true);
+            }
+        }
+        else
+        {
+            auto source = dataset(file, "source", scalar);
+            write(source, 151);
+            Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "type", datatype, H5P_DEFAULT,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "copy-source", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "move-source", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/missing-links", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                if (intermediate_native) return;
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Lcreate_hard(file, "source", file, "dangling/hard",
+                                     properties, H5P_DEFAULT) < 0);
+                CHECK(H5Lcreate_soft("/source", file, "dangling/soft",
+                                     properties, H5P_DEFAULT) < 0);
+                CHECK(H5Olink(datatype, file, "dangling/type", properties,
+                               H5P_DEFAULT) < 0);
+                CHECK(H5Lcopy(file, "copy-source", file, "dangling/copy",
+                               properties, H5P_DEFAULT) < 0);
+                CHECK(H5Lmove(file, "move-source", file, "dangling/move",
+                               properties, H5P_DEFAULT) < 0);
+                absent("missing-links", before);
+                CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Lcreate_hard(file, "source", file, "hard/branch/link",
+                                     disabled, H5P_DEFAULT) < 0);
+                absent("hard", before);
+                CHECK(H5Lcreate_soft("/source", file, "soft/branch/link",
+                                     disabled, H5P_DEFAULT) < 0);
+                absent("soft", before);
+                CHECK(H5Olink(datatype, file, "linked-type/branch/type",
+                               disabled, H5P_DEFAULT) < 0);
+                absent("linked-type", before);
+                CHECK(H5Lcopy(file, "copy-source", file, "copied/branch/link",
+                               disabled, H5P_DEFAULT) < 0);
+                absent("copied", before);
+                CHECK(H5Lmove(file, "move-source", file, "moved/branch/link",
+                               disabled, H5P_DEFAULT) < 0);
+                absent("moved", before);
+                CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) > 0);
+                reject_dangling(disabled);
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            CHECK(H5Lcreate_hard(file, "source", file, "hard/branch/link",
+                                 lcpl, H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "soft/branch/link", lcpl,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Olink(datatype, file, "linked-type/branch/type", lcpl,
+                           H5P_DEFAULT) >= 0);
+            CHECK(H5Lcopy(file, "copy-source", file, "copied/branch/link",
+                           lcpl, H5P_DEFAULT) >= 0);
+            CHECK(H5Lmove(file, "move-source", file, "moved/branch/link",
+                           lcpl, H5P_DEFAULT) >= 0);
+            CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) == 0);
+            for (auto path : {"hard", "soft", "linked-type", "copied", "moved"})
+            {
+                properties(path, false);
+                auto branch = std::string(path) + "/branch";
+                properties(branch.c_str(), false);
+            }
+            for (auto path : {"hard/branch/link", "soft/branch/link",
+                              "copied/branch/link", "moved/branch/link"})
+            {
+                Id opened(H5Dopen2(file, path, H5P_DEFAULT), H5Dclose);
+                value(opened, 151);
+            }
+            Id opened(H5Topen2(file, "linked-type/branch/type", H5P_DEFAULT),
+                      H5Tclose);
+            CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+            CHECK(H5Lcreate_soft("/soft", file, "alias", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_hard(file, "source", file,
+                                 "alias/more/levels/link", lcpl,
+                                 H5P_DEFAULT) >= 0);
+            properties("/soft/more", false);
+            properties("/soft/more/levels", false);
+            Id alias(H5Dopen2(file, "alias/more/levels/link", H5P_DEFAULT),
+                     H5Dclose);
+            value(alias, 151);
+            if (intermediate_native)
+            {
+                const auto second_name = connector.filename + ".uncached";
+                vol.set_passthru(second_name, "*");
+                vol.set_memory(second_name, "*");
+                {
+                    Id second(H5Fcreate(second_name.c_str(), H5F_ACC_TRUNC,
+                                          H5P_DEFAULT, connector.fapl),
+                              H5Fclose);
+                    auto second_source = dataset(second, "source", scalar);
+                    write(second_source, 157);
+                    CHECK(H5Lcopy(file, "uncached-soft", second, "copied",
+                                   H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                    Id copied(H5Dopen2(second, "copied", H5P_DEFAULT), H5Dclose);
+                    value(copied, 157);
+                }
+                std::remove(second_name.c_str());
+            }
+            if (intermediate_native)
+            {
+                CHECK(H5Lcreate_soft("/source", file, "uncached-alias/link",
+                                     H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                properties("/existing", true);
+                uncached_alias("existing-hard", "uncached-hard-alias");
+                CHECK(H5Lcreate_hard(file, "source", file,
+                                     "uncached-hard-alias/link", H5P_DEFAULT,
+                                     H5P_DEFAULT) >= 0);
+                properties("/existing-hard", true);
+                uncached_alias("existing-copy", "uncached-copy-alias");
+                CHECK(H5Lcopy(file, "copy-source", file,
+                               "uncached-copy-alias/link", H5P_DEFAULT,
+                               H5P_DEFAULT) >= 0);
+                properties("/existing-copy", true);
+                uncached_alias("existing-move", "uncached-move-alias");
+                CHECK(H5Lmove(file, "copy-source", file,
+                               "uncached-move-alias/link", H5P_DEFAULT,
+                               H5P_DEFAULT) >= 0);
+                properties("/existing-move", true);
+            }
+        }
+        return;
+    }
     if (name == "missing_callback_names")
     {
         H5O_info2_t object_info {};

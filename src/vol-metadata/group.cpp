@@ -10,25 +10,27 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     auto* parent_pointers = static_cast<ObjectPointers*>(obj);
     if (!parent_pointers->writable()) return nullptr;
     auto* parent = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
-    auto path = parent->search(name);
-    if (!path.obj || path.path.empty()) return nullptr;
     auto filepath = parent->fullname(name);
+    const bool native = unwrap(obj) && match_any(filepath, passthru, true);
+    auto path = metadata_creation_path(parent, name, native);
+    if (!path.obj || path.path.empty()) return nullptr;
+    if (!native && !metadata_creation_allowed(path, lcpl_id)) return nullptr;
     void* underlying = nullptr;
-    if (unwrap(obj) && match_any(filepath, passthru, true))
+    if (native)
     {
         underlying = VOLBase::group_create(unwrap(obj), loc_params, name, lcpl_id, gcpl_id, gapl_id, dxpl_id, req);
         if (!underlying) return nullptr;
     }
-    while (!path.path.empty())
+    path = metadata_create_parents(*this, std::move(path), parent_pointers,
+                                   native, dxpl_id);
+    if (!path.obj)
     {
-        auto slash = path.path.find('/');
-        auto component = path.path.substr(0, slash);
-        if (!component.empty() && component != ".")
-            path.obj = path.obj->add_child(new Group(component, gcpl_id));
-        path.path = slash == std::string::npos ? "" : path.path.substr(slash + 1);
+        if (underlying) VOLBase::group_close(underlying, dxpl_id, nullptr);
+        return nullptr;
     }
+    auto* metadata = path.obj->add_child(new Group(path.path, gcpl_id));
     auto* result = wrap(underlying);
-    result->mdata_obj = path.obj;
+    result->mdata_obj = metadata;
     result->access_flags = parent_pointers->access_flags;
     result->file_handle = parent_pointers->file_handle;
     return result;
