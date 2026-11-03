@@ -52,7 +52,8 @@ subsequent opens use the replacement.
 Repeated broadcasts, including an empty snapshot, retire prior map ownership.
 The metadata wire format carries unwritten attribute state and dataset fill
 values; communicating processes must use the same LowFive version. Distributed
-modern-reference values remain unsupported.
+modern-reference values remain unsupported. Unknown serialized object kinds are
+rejected with a metadata error; partially decoded object trees are released.
 
 Distributed communicator indices must be nonnegative and smaller than the
 configured communicator count. Invalid indices in mappings, direct calls, or

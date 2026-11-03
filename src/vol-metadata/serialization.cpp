@@ -508,8 +508,9 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, Objects& obje
         diy::load(bb, dt->data);
         o = dt;
     } else
-        MetadataError("unhandled case in deserialization");
+        throw MetadataError("unhandled object type in deserialization");
 
+    std::unique_ptr<Object> owner(o);
     o->token = token;
     objects.emplace(token, o);
 
@@ -527,5 +528,5 @@ LowFive::deserialize(diy::MemoryBuffer& bb, HardLinks& hard_links, Objects& obje
         }
     }
 
-    return o;
+    return owner.release();
 }
