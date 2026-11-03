@@ -36,7 +36,13 @@ add_library             (lowfive SHARED
                             ${LOWFIVE_BACKWARD_ENABLE}
                         )
 
-target_link_libraries     (lowfive fmt::fmt ${HDF5_LIBRARY} diy)
+target_link_libraries     (lowfive
+                           PRIVATE
+                           fmt::fmt-header-only
+                           spdlog::spdlog_header_only
+                           diy
+                           PUBLIC
+                           ${HDF5_LIBRARY})
 target_include_directories(lowfive INTERFACE ${PROJECT_SOURCE_DIR}/include)
 
 
@@ -47,7 +53,13 @@ add_library             (lowfive-dist
                          vol-dist/index.cpp
                          vol-dist-metadata.cpp
                          ${LOWFIVE_BACKWARD_ENABLE})
-target_link_libraries   (lowfive-dist fmt::fmt diy)
+target_link_libraries   (lowfive-dist PRIVATE
+                         fmt::fmt-header-only
+                         spdlog::spdlog_header_only
+                         diy)
+if                      (TARGET MPI::MPI_CXX)
+    target_link_libraries(lowfive-dist PUBLIC MPI::MPI_CXX)
+endif                   ()
 
 if(lowfive_backward)
     add_backward        (lowfive)
