@@ -63,34 +63,56 @@ process(int source)
     diy::MemoryBuffer in, out;
     recv(comm_, source, tags::consumer, in);
 
-    ops::Operation op;
-    diy::load(in, op);
-    log->trace("Received op: {}", op);
+    bool success = true;
+    try
+    {
+        ops::Operation op;
+        diy::load(in, op);
+        log->trace("Received op: {}", op);
 
-    if (op == ops::function)
-    {
-        log->trace("Function call");
-        m_.call(in, out);
-    } else if (op == ops::mem_fn)
-    {
-        log->trace("Member function call");
-        m_.call_mem_fn(in, out);
-    } else if (op == ops::create)
-    {
-        log->trace("Constructor");
-        m_.create(in, out);
-    } else if (op == ops::destroy)
-    {
-        log->trace("Destructor");
-        m_.destroy(in);
-    } else if (op == ops::finish)
-    {
-        log->debug("Received finish");
-        return true;
+        if (op == ops::function)
+        {
+            log->trace("Function call");
+            m_.call(in, out);
+        } else if (op == ops::mem_fn)
+        {
+            log->trace("Member function call");
+            m_.call_mem_fn(in, out);
+        } else if (op == ops::create)
+        {
+            log->trace("Constructor");
+            m_.create(in, out);
+        } else if (op == ops::destroy)
+        {
+            log->trace("Destructor");
+            m_.destroy(in);
+        } else if (op == ops::finish)
+        {
+            log->debug("Received finish");
+            return true;
+        }
+        else
+            throw std::runtime_error("Unknown operation");
     }
-    else
-        throw std::runtime_error("Uknown operation");
+    catch (const std::exception& error)
+    {
+        log->error("RPC request failed: {}", error.what());
+        out = diy::MemoryBuffer();
+        diy::save(out, std::string(error.what()));
+        success = false;
+    }
+    catch (...)
+    {
+        log->error("RPC request failed with an unknown exception");
+        out = diy::MemoryBuffer();
+        diy::save(out, std::string("Unknown server exception"));
+        success = false;
+    }
 
+    // MemoryBuffer results retain their caller-provided cursor, so move to the
+    // end explicitly before appending the response footer.
+    out.position = out.size();
+    diy::save(out, success);
     send(comm_, source, tags::producer, out);
 
     return false;

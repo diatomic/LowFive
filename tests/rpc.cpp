@@ -5,6 +5,7 @@
 #include "rpc/server.h"
 #include <array>
 #include <cstring>
+#include <stdexcept>
 #include <vector>
 
 namespace
@@ -23,6 +24,14 @@ void exports(Module& module)
     module.template class_<Value>("Value").template constructor<int>().function("get", &Value::get);
     module.function("destroyed", []() { return destroyed; });
     module.function("echo", [](int n) { return n; });
+    module.function("fail", []() { throw std::runtime_error("intentional server failure"); });
+    module.function("reset-buffer", []()
+    {
+        diy::MemoryBuffer result;
+        diy::save(result, 37);
+        result.reset();
+        return result;
+    });
 }
 
 void exercise_blob_lifetime(int rank)
@@ -86,6 +95,26 @@ int main(int argc, char** argv)
             LowFive::rpc::client client(module, MPI_COMM_WORLD, 0);
             auto first = client.create("Value", 17);
             CHECK(first.call<int>("get") == 17);
+            if (name == "exception")
+            {
+                bool failed = false;
+                try
+                {
+                    client.call<void>("fail");
+                }
+                catch (const std::runtime_error& error)
+                {
+                    failed = std::string(error.what()).find(
+                                 "intentional server failure") !=
+                             std::string::npos;
+                }
+                CHECK(failed);
+                CHECK(first.call<int>("get") == 17);
+                auto buffer = client.call<diy::MemoryBuffer>("reset-buffer");
+                int value = 0;
+                diy::load(buffer, value);
+                CHECK(value == 37);
+            }
             if (name == "destroy-second")
             {
                 auto second = client.create("Value", 29);

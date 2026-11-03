@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <stdexcept>
 
 #include <mpi.h>
 #include <diy/mpi.hpp>
@@ -53,6 +54,8 @@ struct client
     inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); ssend(comm_, target, tags::consumer, out); }
 
     private:
+        inline void check_response(diy::MemoryBuffer& in);
+
         template<class R>
         R           load(diy::MemoryBuffer& in, int target, bool own);
 
@@ -73,6 +76,20 @@ struct client
 }   // namespace LowFive
 
 #include "modules/client.h"
+
+void
+LowFive::rpc::client::
+check_response(diy::MemoryBuffer& in)
+{
+    bool success;
+    diy::load_back(in, success);
+    if (success)
+        return;
+
+    std::string message;
+    diy::load(in, message);
+    throw std::runtime_error("Remote RPC error: " + message);
+}
 
 template<class R>
 R
@@ -132,6 +149,7 @@ call(int target, std::string name, Args... args)
 
     send(comm_, target, tags::consumer, out);
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 
     return load<R>(in, target, false);
 }
@@ -152,6 +170,7 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
 
     send(comm_, target, tags::consumer, out);
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 
     return load<R>(in, target, false);
 }
@@ -173,6 +192,7 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
 
     send(comm_, target, tags::consumer, out);
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 
     return load<object>(in, target, true);     // true indicates that we own this object (and will automatically delete it, when all references go out of scope)
 }
@@ -194,4 +214,5 @@ LowFive::rpc::client::destroy(int target, size_t id)
     send(comm_, target, tags::consumer, out);
     diy::MemoryBuffer in;
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 }
