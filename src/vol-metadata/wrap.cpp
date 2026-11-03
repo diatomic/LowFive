@@ -48,6 +48,7 @@ wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
         wrapped->mdata_obj = pending->second.object;
         wrapped->access_flags = pending->second.access_flags;
         wrapped->file_handle = pending->second.file_handle;
+        wrapped->fapl = Hid(pending->second.fapl);
         pending_wrap_metadata.erase(pending);
     }
     return wrapped;

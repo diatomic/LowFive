@@ -26,6 +26,7 @@ file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_
     result->primary_file_wrapper = true;
     result->access_flags = H5F_ACC_RDWR;
     result->file_handle = next_file_handle++;
+    result->fapl = Hid(H5Pcopy(fapl_id), true);
     return result;
 }
 
@@ -47,14 +48,13 @@ file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void *
         auto* metadata = new File(name, H5P_FILE_CREATE_DEFAULT, fapl_id);
         it = files.emplace(name, metadata).first;
     }
-    if (auto* metadata = dynamic_cast<File*>(it->second))
-        metadata->fapl = Hid(H5Pcopy(fapl_id), true);
     auto* result = wrap(underlying);
     result->mdata_obj = it->second;
     result->file_wrapper = true;
     result->primary_file_wrapper = true;
     result->access_flags = flags;
     result->file_handle = next_file_handle++;
+    result->fapl = Hid(H5Pcopy(fapl_id), true);
     return result;
 }
 
@@ -148,6 +148,7 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
             reopened->primary_file_wrapper = true;
             reopened->access_flags = file_->access_flags;
             reopened->file_handle = next_file_handle++;
+            reopened->fapl = file_->fapl;
             *args->args.reopen.file = reopened;
         }
         return result;
@@ -167,6 +168,7 @@ file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void *
             reopened->primary_file_wrapper = true;
             reopened->access_flags = file_->access_flags;
             reopened->file_handle = next_file_handle++;
+            reopened->fapl = file_->fapl;
             *args->args.reopen.file = reopened;
             return 0;
         }
@@ -222,8 +224,11 @@ file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req)
         }
         else if (get_type == H5VL_FILE_GET_FAPL)            // file access property list
         {
-            log->trace("file_get(): H5VL_FILE_GET_FAPL, writing {} into args", static_cast<File*>(file_->mdata_obj)->fapl.id);
-            args->args.get_fapl.fapl_id = H5Pcopy(static_cast<File*>(file_->mdata_obj)->fapl.id);
+            log->trace("file_get(): H5VL_FILE_GET_FAPL, writing {} into args",
+                       file_->fapl.id);
+            if (file_->fapl.id <= H5P_DEFAULT) return -1;
+            args->args.get_fapl.fapl_id = H5Pcopy(file_->fapl.id);
+            if (args->args.get_fapl.fapl_id < 0) return -1;
         }
         else if (get_type == H5VL_FILE_GET_FCPL)            // file creation property list
         {

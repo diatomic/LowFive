@@ -853,6 +853,8 @@ resolve_reference(File& file, H5R_ref_t* reference)
         ObjectPointers* pointers = wrap(nullptr);
         pointers->mdata_obj = target;
         pointers->tmp = true;
+        pointers->file_handle = next_file_handle++;
+        pointers->fapl = target_file->fapl;
         hid_t id = H5VLwrap_register(pointers, get_identifier_type(target));
         if (id < 0)
         {

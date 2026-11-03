@@ -18,8 +18,16 @@ struct ObjectPointers
     bool            primary_file_wrapper = false;
     bool            reference_file_wrapper = false;
     unsigned        access_flags = H5F_ACC_RDWR;
-    // Shared by objects opened through the same file handle (H5F_OBJ_LOCAL).
+    // State inherited by objects opened through the same file handle.
     uint64_t file_handle = 0;
+    Hid             fapl {0, true};
+
+    void inherit_file_state(const ObjectPointers& source)
+    {
+        access_flags = source.access_flags;
+        file_handle = source.file_handle;
+        fapl = source.fapl;
+    }
 
     bool writable() const { return (access_flags & H5F_ACC_RDWR) != 0; }
 

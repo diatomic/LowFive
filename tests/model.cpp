@@ -871,6 +871,10 @@ void dataset_fill_reference_serialization()
         CHECK(H5Dread(opened, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
                       H5P_DEFAULT, &output) >= 0);
         CHECK(output == input);
+        Id owning_file(H5Iget_file_id(opened), H5Fclose);
+        Id fapl(H5Fget_access_plist(owning_file), H5Pclose);
+        CHECK(fapl.id > H5P_DEFAULT);
+        CHECK(H5Pisa_class(fapl, H5P_FILE_ACCESS) > 0);
     };
     std::array<H5R_ref_t, 2> output{};
     CHECK(H5Dread(references, H5T_STD_REF, H5S_ALL, H5S_ALL,

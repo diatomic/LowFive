@@ -1868,6 +1868,36 @@ void run(const std::string& name)
             hsize_t size = 1; CHECK(H5Pget_userblock(fcpl, &size) >= 0); CHECK(size == 0);
             CHECK(H5Pset_userblock(fcpl, 512) >= 0); CHECK(H5Pset_alignment(fapl, 1, 4096) >= 0);
         }
+        Id first_fapl(H5Pcopy(connector.fapl), H5Pclose);
+        Id second_fapl(H5Pcopy(connector.fapl), H5Pclose);
+        CHECK(H5Pset_alignment(first_fapl, 101, 1001) >= 0);
+        CHECK(H5Pset_alignment(second_fapl, 202, 2002) >= 0);
+        Id first(H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR, first_fapl),
+                 H5Fclose);
+        Id second(
+            H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR, second_fapl),
+            H5Fclose);
+        first_fapl.reset();
+        second_fapl.reset();
+        auto check_alignment = [](hid_t handle, hsize_t expected_threshold,
+                                  hsize_t expected_alignment)
+        {
+            Id actual(H5Fget_access_plist(handle), H5Pclose);
+            hsize_t threshold = 0;
+            hsize_t alignment = 0;
+            CHECK(H5Pget_alignment(actual, &threshold, &alignment) >= 0);
+            CHECK(threshold == expected_threshold);
+            CHECK(alignment == expected_alignment);
+        };
+        check_alignment(first, 101, 1001);
+        check_alignment(second, 202, 2002);
+
+        Id reopened(H5Freopen(first), H5Fclose);
+        check_alignment(reopened, 101, 1001);
+        Id group(H5Gcreate2(first, "fapl-child", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        Id child_file(H5Iget_file_id(group), H5Fclose);
+        check_alignment(child_file, 101, 1001);
     }
     else if (name == "enumeration" || name == "indexed_lookup")
     {

@@ -123,13 +123,12 @@ void copy_fill_properties(LowFive::MetadataVOL& vol, LowFive::Dataset& dataset,
         throw LowFive::MetadataError("Could not copy dataset fill value");
 }
 template<class Operation>
-herr_t with_native_dataset(LowFive::Dataset& dataset, void* native_dataset,
-                           void* native_file, hid_t dxpl_id,
-                           Operation&& operation)
+herr_t with_native_dataset(LowFive::Dataset& dataset, hid_t fapl,
+                           void* native_dataset, void* native_file,
+                           hid_t dxpl_id, Operation&& operation)
 {
-    auto* file = dynamic_cast<LowFive::File*>(dataset.find_root());
-    if (!file) return -1;
-    UnderConnector configured(file->fapl.id);
+    if (!dynamic_cast<LowFive::File*>(dataset.find_root())) return -1;
+    UnderConnector configured(fapl);
     if (!configured) return -1;
 
     if (native_dataset)
@@ -236,8 +235,7 @@ dataset_create(void *obj, const H5VL_loc_params_t *loc_params,
         metadata = static_cast<Dataset*>(path.obj->add_child(metadata));
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
-    result->access_flags = parent_pointers->access_flags;
-    result->file_handle = parent_pointers->file_handle;
+    result->inherit_file_state(*parent_pointers);
     return result;
 }
 
@@ -290,8 +288,7 @@ dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     }
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
-    result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
-    result->file_handle = static_cast<ObjectPointers*>(obj)->file_handle;
+    result->inherit_file_state(*static_cast<ObjectPointers*>(obj));
     return result;
 }
 
@@ -352,7 +349,7 @@ dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space
         {
             auto native = native_objects(*this, dset_, *ds);
             return with_native_dataset(
-                *ds, native.first, native.second, plist_id,
+                *ds, dset_->fapl.id, native.first, native.second, plist_id,
                 [&](void* native, hid_t connector)
                 {
                     return H5VLdataset_read(
@@ -395,7 +392,8 @@ dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_spac
     {
         auto native = native_objects(*this, pointers, *metadata);
         if (with_native_dataset(
-                *metadata, native.first, native.second, plist_id,
+                *metadata, pointers->fapl.id, native.first, native.second,
+                plist_id,
                 [&](void* native, hid_t connector)
                 {
                     const void* output = buf;

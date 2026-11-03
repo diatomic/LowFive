@@ -31,8 +31,7 @@ group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, h
     auto* metadata = path.obj->add_child(new Group(path.path, gcpl_id));
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
-    result->access_flags = parent_pointers->access_flags;
-    result->file_handle = parent_pointers->file_handle;
+    result->inherit_file_state(*parent_pointers);
     return result;
 }
 
@@ -76,8 +75,7 @@ group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid
     }
     auto* result = wrap(underlying);
     result->mdata_obj = metadata;
-    result->access_flags = static_cast<ObjectPointers*>(obj)->access_flags;
-    result->file_handle = static_cast<ObjectPointers*>(obj)->file_handle;
+    result->inherit_file_state(*static_cast<ObjectPointers*>(obj));
     return result;
 }
 

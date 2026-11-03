@@ -80,6 +80,7 @@ struct MetadataVOL: public LowFive::VOLBase
         Object* object;
         unsigned access_flags;
         std::uint64_t file_handle;
+        hid_t fapl;
     };
     std::unordered_map<void*, PendingWrapMetadata> pending_wrap_metadata;
     std::uint64_t next_file_handle = 1;
