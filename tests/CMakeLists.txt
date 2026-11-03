@@ -14,6 +14,9 @@ lowfive_test(lowfive-base base.cpp
     hard hard-same-dst hard-same-src copy-same-dst copy-same-src move-same-dst move-same-src
     reopen-native reopen-metadata exceptions property-lifetime info-independent
     info-nested info-malformed singleton distributed-close-failure)
+lowfive_test(lowfive-factories factories.cpp
+    base-metadata base-distributed metadata-distributed
+    metadata-repeat distributed-repeat distributed-metadata)
 lowfive_test(lowfive-request request.cpp
     singleton multiple cancel-free event-success event-failure
     submission-failure submission-request-failure forwarding-errors bounded-cleanup

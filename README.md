@@ -102,4 +102,6 @@ ctest --test-dir build --output-on-failure -L install
 Python tests are enabled with `lowfive_python`. The distributed Python example
 is registered when the selected interpreter provides mpi4py, h5py, and NumPy.
 Each connector test runs in its own process because LowFive maintains one
-active connector instance per process.
+active connector instance per process. Factories reuse compatible instances
+(including a distributed connector requested as `MetadataVOL`) and throw
+`std::logic_error` for incompatible requests, leaving the active connector intact.

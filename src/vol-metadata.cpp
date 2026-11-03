@@ -3,6 +3,7 @@
 #include "vol-metadata-private.hpp"
 
 #include <unordered_set>
+#include <stdexcept>
 
 namespace
 {
@@ -692,12 +693,12 @@ create_MetadataVOL()
     {
         log->trace("In get_metadata_vol: info->vol is NULL, creating new MetadataVOL");
         info->vol = new MetadataVOL();
-    } else
-    {
-        log->warn("In get_metadata_vol: info->vol is not NULL, return existing object");
     }
 
-    return *dynamic_cast<MetadataVOL*>(info->vol);
+    auto* vol = dynamic_cast<MetadataVOL*>(info->vol);
+    if (!vol)
+        throw std::logic_error("Cannot create MetadataVOL: an incompatible connector is already active");
+    return *vol;
 }
 
 LowFive::File::PendingReference

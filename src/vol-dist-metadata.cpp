@@ -610,12 +610,14 @@ DistMetadataVOL::create_DistMetadataVOL(communicator local_, communicators inter
     {
         log->trace("In create_DistMetadataVOL: info->vol is NULL, creating new DistMetadataVOL");
         info->vol = new DistMetadataVOL(local_, intercomms_);
-    } else
-    {
-        log->warn("In create_DistMetadataVOL: info->vol is not NULL, return existing DistMetadataVOL, arguments ignored");
+        return *static_cast<DistMetadataVOL*>(info->vol);
     }
 
-    return *dynamic_cast<DistMetadataVOL*>(info->vol);
+    auto* vol = dynamic_cast<DistMetadataVOL*>(info->vol);
+    if (!vol)
+        throw std::logic_error("Cannot create DistMetadataVOL: an incompatible connector is already active");
+    log->warn("In create_DistMetadataVOL: info->vol is not NULL, return existing DistMetadataVOL, arguments ignored");
+    return *vol;
 }
 
 } // namespace LowFive
