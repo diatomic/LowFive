@@ -1,44 +1,12 @@
-#include "../metadata.hpp"
+#include "../vol-metadata-private.hpp"
 #include "../log-private.hpp"
+#include <functional>
 
 namespace LowFive
 {
 
-std::string saved_reference_path(
-    const File& file, const File::PendingReference& state)
-{
-    if (!state.filename.empty() && state.filename != file.name)
-        throw MetadataError("Cross-file references cannot be persisted");
-    auto& metadata = const_cast<File&>(file);
-    Object* target = metadata.find_token(state.token);
-    if (!target)
-        throw MetadataError("Could not find reference target while saving");
-    auto path = metadata.reachable_path(target);
-    if (path.empty())
-        throw MetadataError("Reference target has no persisted path");
-    return path;
-}
-
-void create_saved_reference(
-    hid_t file_id, const File& file, const File::PendingReference& state,
-    H5R_ref_t* reference)
-{
-    const auto path = saved_reference_path(file, state);
-    herr_t result = -1;
-    if (state.type == H5R_OBJECT1 || state.type == H5R_OBJECT2)
-        result = H5Rcreate_object(
-            file_id, path.c_str(), H5P_DEFAULT, reference);
-    else if (state.type == H5R_DATASET_REGION1 ||
-             state.type == H5R_DATASET_REGION2)
-        result = H5Rcreate_region(
-            file_id, path.c_str(), state.region.id, H5P_DEFAULT, reference);
-    else if (state.type == H5R_ATTR)
-        result = H5Rcreate_attr(
-            file_id, path.c_str(), state.attribute.c_str(), H5P_DEFAULT,
-            reference);
-    if (result < 0)
-        throw MetadataError("Could not reconstruct reference while saving");
-}
+using ReferenceCreator =
+    std::function<void(const File::PendingReference&, H5R_ref_t*)>;
 
 struct PreparedValues
 {
@@ -49,29 +17,30 @@ struct PreparedValues
     bool owns_values = false;
 
     PreparedValues(
-        const File& file, hid_t file_id, const Datatype& type_, size_t count_,
-        const void* values):
+        const File& file, const ReferenceCreator& create_reference,
+        const Datatype& type_, size_t count_, const void* values):
         type(type_), count(count_), original(values)
     {
-        prepare(file, file_id, nullptr);
+        prepare(file, create_reference, nullptr);
     }
 
     PreparedValues(
-        const File& file, hid_t file_id, const Datatype& type_, size_t count_,
-        const void* values, const std::vector<bool>& effective):
+        const File& file, const ReferenceCreator& create_reference,
+        const Datatype& type_, size_t count_, const void* values,
+        const std::vector<bool>& effective):
         type(type_), count(count_), original(values)
     {
         if (effective.size() != count)
             throw MetadataError("Could not map selected values while saving");
-        prepare(file, file_id, &effective);
+        prepare(file, create_reference, &effective);
     }
 
     void prepare(
-        const File& file, hid_t file_id,
+        const File& file, const ReferenceCreator& create_reference,
         const std::vector<bool>* effective)
     {
         std::vector<H5R_ref_t*> source_references;
-        bool has_pending = false;
+        std::vector<File::PendingReference> states;
         for (size_t i = 0; i < count; ++i)
         {
             if (effective && !(*effective)[i]) continue;
@@ -82,13 +51,23 @@ struct PreparedValues
                 [&](H5R_ref_t* reference)
                 {
                     source_references.push_back(reference);
-                    has_pending =
-                        has_pending ||
-                        file.references.find(reference) !=
-                            file.references.end();
+                    const auto pending = file.references.find(reference);
+                    if (pending != file.references.end())
+                        states.push_back(pending->second);
+                    else
+                    {
+                        const H5R_ref_t empty {};
+                        if (std::memcmp(reference, &empty, sizeof(empty)) == 0)
+                            states.emplace_back();
+                        else
+                            states.push_back(describe_reference(*reference));
+                    }
                 });
         }
-        if (!has_pending) return;
+        if (std::none_of(states.begin(), states.end(),
+                         [](const File::PendingReference& state)
+                         { return state.type != H5R_BADTYPE; }))
+            return;
 
         copied.reset(new char[count * type.dtype_size]());
         owns_values = true;
@@ -114,16 +93,14 @@ struct PreparedValues
 
             for (size_t i = 0; i < source_references.size(); ++i)
             {
-                auto pending = file.references.find(source_references[i]);
-                if (pending == file.references.end()) continue;
+                if (states[i].type == H5R_BADTYPE) continue;
                 auto* reference = copied_references[i];
                 if (H5Rget_type(reference) != H5R_BADTYPE &&
                     H5Rdestroy(reference) < 0)
                     throw MetadataError(
                         "Could not replace reference while saving");
                 std::memset(reference, 0, sizeof(*reference));
-                create_saved_reference(
-                    file_id, file, pending->second, reference);
+                create_reference(states[i], reference);
             }
         }
         catch (...)
@@ -181,15 +158,16 @@ effective_dataset_values(const Dataset& object)
 }
 
 void save_dataset_data(
-    const Hid& file, const Hid& dataset, const File& metadata,
-    const Dataset* object)
+    const ReferenceCreator& create_reference, const Hid& dataset,
+    const File& metadata, const Dataset* object)
 {
     const auto effective = effective_dataset_values(*object);
     for (size_t i = 0; i < object->data.size(); ++i)
     {
         const auto& x = object->data[i];
         PreparedValues prepared(
-            metadata, file.id, x.type, x.memory.size(), x.data, effective[i]);
+            metadata, create_reference, x.type, x.memory.size(), x.data,
+            effective[i]);
         const void* values = prepared.values();
         std::vector<const char*> strings;
         if (x.type.is_var_length_string())
@@ -210,79 +188,250 @@ void save_dataset_data(
     }
 }
 
-void save_structure(const Hid& parent, const Object* object)
+void require_persistable_type(const Datatype& type)
 {
-    for (const Object* child : object->children)
-    {
-        if (const auto* group = dynamic_cast<const Group*>(child))
-        {
-            Hid saved(H5Gcreate(
-                parent.id, group->name.c_str(), H5P_DEFAULT, H5P_DEFAULT,
-                H5P_DEFAULT), true);
-            if (saved.id < 0)
-                throw MetadataError("Could not persist group");
-            save_structure(saved, group);
-        }
-        else if (const auto* dataset = dynamic_cast<const Dataset*>(child))
-        {
-            Hid saved(H5Dcreate(
-                parent.id, dataset->name.c_str(), dataset->type.id,
-                dataset->space.id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
-                true);
-            if (saved.id < 0)
-                throw MetadataError("Could not persist dataset");
-            save_structure(saved, dataset);
-        }
-        else if (const auto* attribute = dynamic_cast<const Attribute*>(child))
-        {
-            Hid saved(H5Acreate(
-                parent.id, attribute->name.c_str(), attribute->type.id,
-                attribute->space.id, H5P_DEFAULT, H5P_DEFAULT), true);
-            if (saved.id < 0)
-                throw MetadataError("Could not persist attribute");
-        }
-    }
+    const auto cls = H5Tget_class(type.id);
+    if (cls == H5T_NO_CLASS)
+        throw MetadataError("Invalid datatype while saving");
+    if (cls == H5T_REFERENCE && !type.is_modern_reference())
+        throw MetadataError("Legacy reference values cannot be persisted");
+    if (cls == H5T_ARRAY || cls == H5T_VLEN)
+        require_persistable_type(Datatype(H5Tget_super(type.id), true));
+    else if (cls == H5T_COMPOUND)
+        for (int i = 0; i < H5Tget_nmembers(type.id); ++i)
+            require_persistable_type(
+                Datatype(H5Tget_member_type(type.id, i), true));
 }
 
-void save_values(const Hid& file, const Hid& parent, const File& metadata,
-                 const Object* object)
+// Create each object once, independently of its links. This preserves aliases,
+// cycles, and link creation order even when a fill references a later object.
+struct SavedGraph
 {
-    for (const Object* child : object->children)
+    const File& metadata;
+    const Hid& file;
+    std::map<const Object*, Hid> objects;
+    std::vector<const Object*> nodes;
+    std::unordered_set<const Object*> discovered;
+    ReferenceCreator create_reference;
+
+    SavedGraph(const File& metadata_, const Hid& file_):
+        metadata(metadata_), file(file_),
+        create_reference([this](const File::PendingReference& state,
+                                H5R_ref_t* reference)
+                         { reference_value(state, reference); })
     {
-        if (const auto* group = dynamic_cast<const Group*>(child))
+        discover(&metadata);
+        Hid root(H5Gopen(file.id, "/", H5P_DEFAULT), true);
+        if (root.id < 0)
+            throw MetadataError("Could not open persisted root group");
+        objects.emplace(&metadata, std::move(root));
+    }
+
+    const Object* hard_target(const HardLink* link) const
+    {
+        const Object* target = link;
+        std::unordered_set<const Object*> visited;
+        while (const auto* hard = dynamic_cast<const HardLink*>(target))
         {
-            Hid saved(H5Gopen(parent.id, group->name.c_str(), H5P_DEFAULT),
-                      true);
-            if (saved.id < 0)
-                throw MetadataError("Could not reopen persisted group");
-            save_values(file, saved, metadata, group);
+            if (!visited.insert(target).second || !hard->target)
+                throw MetadataError("Invalid hard-link target while saving");
+            target = hard->target;
         }
-        else if (const auto* dataset = dynamic_cast<const Dataset*>(child))
+        if (!dynamic_cast<const Group*>(target) &&
+            !dynamic_cast<const Dataset*>(target) &&
+            !dynamic_cast<const CommittedDatatype*>(target) &&
+            target != &metadata)
+            throw MetadataError("Unsupported hard-link target while saving");
+        return target;
+    }
+
+    void discover(const Object* object)
+    {
+        if (!discovered.insert(object).second) return;
+        if (const auto* link = dynamic_cast<const HardLink*>(object))
         {
-            Hid saved(H5Dopen(parent.id, dataset->name.c_str(), H5P_DEFAULT),
-                      true);
-            if (saved.id < 0)
-                throw MetadataError("Could not reopen persisted dataset");
-            save_dataset_data(file, saved, metadata, dataset);
-            save_values(file, saved, metadata, dataset);
+            if (!object->children.empty())
+                throw MetadataError("Hard-link children cannot be persisted");
+            discover(hard_target(link));
+            return;
+        }
+        if (dynamic_cast<const SoftLink*>(object))
+        {
+            if (!object->children.empty())
+                throw MetadataError("Soft-link children cannot be persisted");
+            return;
+        }
+        if (object != &metadata && !dynamic_cast<const Group*>(object) &&
+            !dynamic_cast<const Dataset*>(object) &&
+            !dynamic_cast<const Attribute*>(object) &&
+            !dynamic_cast<const CommittedDatatype*>(object))
+            throw MetadataError("Unsupported metadata object while saving");
+        nodes.push_back(object);
+        if (const auto* dataset = dynamic_cast<const Dataset*>(object))
+        {
+            require_persistable_type(dataset->type);
+            for (const auto& triple : dataset->data)
+                require_persistable_type(triple.type);
         }
         else if (const auto* attribute =
-                     dynamic_cast<const Attribute*>(child))
+                     dynamic_cast<const Attribute*>(object))
         {
-            if (!attribute->data) continue;
-            Hid saved(H5Aopen(parent.id, attribute->name.c_str(), H5P_DEFAULT),
-                      true);
-            if (saved.id < 0)
-                throw MetadataError("Could not reopen persisted attribute");
-            PreparedValues prepared(
-                metadata, file.id, attribute->mem_type,
-                attribute->space.size(), attribute->data.get());
-            if (H5Awrite(
-                    saved.id, attribute->mem_type.id, prepared.values()) < 0)
-                throw MetadataError("Could not persist attribute data");
+            require_persistable_type(attribute->type);
+            require_persistable_type(attribute->mem_type);
+        }
+        for (const auto* child : object->children)
+        {
+            if (dynamic_cast<const Attribute*>(object) ||
+                (object != &metadata && !dynamic_cast<const Group*>(object) &&
+                 !dynamic_cast<const Attribute*>(child)))
+                throw MetadataError("Unsupported metadata child while saving");
+            discover(child);
         }
     }
-}
+
+    const Hid& ensure(const Object* object)
+    {
+        const auto found = objects.find(object);
+        if (found != objects.end()) return found->second;
+        if (!discovered.count(object))
+            throw MetadataError("Reference target has no persisted hard link");
+
+        Hid saved(0);
+        if (const auto* group = dynamic_cast<const Group*>(object))
+            saved = Hid(H5Gcreate_anon(file.id, group->gcpl.id, H5P_DEFAULT),
+                        true);
+        else if (const auto* dataset = dynamic_cast<const Dataset*>(object))
+        {
+            H5D_fill_value_t status;
+            if (H5Pfill_value_defined(dataset->dcpl.id, &status) < 0)
+                throw MetadataError("Could not inspect persisted fill value");
+            // Native HDF5 1.14 writes scalar reference fills with an invalid
+            // disk size. Nested reference fills also undergo shallow copying
+            // followed by reclamation during conversion, with no observable
+            // ownership transfer on failure. Reject before any DCPL copy.
+            if (status == H5D_FILL_VALUE_USER_DEFINED &&
+                H5Tdetect_class(dataset->type.id, H5T_REFERENCE) > 0)
+                throw MetadataError(
+                    "Reference-valued fills cannot be persisted safely "
+                    "with HDF5 1.14");
+            saved = Hid(H5Dcreate_anon(
+                file.id, dataset->type.id, dataset->space.id, dataset->dcpl.id,
+                H5P_DEFAULT), true);
+        }
+        else if (const auto* type =
+                     dynamic_cast<const CommittedDatatype*>(object))
+        {
+            if (type->data.empty())
+                throw MetadataError("Committed datatype has no encoded definition");
+            saved = Hid(H5Tdecode(type->data.data()), true);
+            if (saved.id < 0 ||
+                H5Tcommit_anon(file.id, saved.id, H5P_DEFAULT, H5P_DEFAULT) < 0)
+                throw MetadataError("Could not persist committed datatype");
+        }
+        else if (const auto* attribute = dynamic_cast<const Attribute*>(object))
+        {
+            const auto& parent = ensure(attribute->parent);
+            // A forward attribute reference must not reorder tracked attributes.
+            for (const auto* sibling : attribute->parent->children)
+            {
+                if (sibling == attribute) break;
+                if (dynamic_cast<const Attribute*>(sibling)) ensure(sibling);
+            }
+            saved = Hid(H5Acreate(
+                parent.id, attribute->name.c_str(), attribute->type.id,
+                attribute->space.id, H5P_DEFAULT, H5P_DEFAULT), true);
+        }
+        else
+            throw MetadataError("Unsupported persisted object");
+        if (saved.id < 0)
+            throw MetadataError("Could not persist metadata object");
+        const auto& result = objects.emplace(object, std::move(saved)).first->second;
+        return result;
+    }
+
+    void reference_value(const File::PendingReference& state,
+                         H5R_ref_t* reference)
+    {
+        if (!state.filename.empty() && state.filename != metadata.name)
+            throw MetadataError("Cross-file references cannot be persisted");
+        auto* target = const_cast<File&>(metadata).find_token(state.token);
+        if (!target)
+            throw MetadataError("Could not find reference target while saving");
+        const auto& saved = ensure(target);
+        herr_t result = -1;
+        if (state.type == H5R_OBJECT1 || state.type == H5R_OBJECT2)
+            result = H5Rcreate_object(saved.id, ".", H5P_DEFAULT, reference);
+        else if (state.type == H5R_DATASET_REGION1 ||
+                 state.type == H5R_DATASET_REGION2)
+            result = H5Rcreate_region(saved.id, ".", state.region.id,
+                                     H5P_DEFAULT, reference);
+        else if (state.type == H5R_ATTR)
+        {
+            const auto* attribute =
+                const_cast<Object*>(target)->attribute(state.attribute);
+            if (!attribute)
+                throw MetadataError("Could not find reference attribute while saving");
+            ensure(attribute);
+            result = H5Rcreate_attr(saved.id, ".", state.attribute.c_str(),
+                                   H5P_DEFAULT, reference);
+        }
+        if (result < 0)
+            throw MetadataError("Could not reconstruct reference while saving");
+    }
+
+    void save()
+    {
+        for (const auto* object : nodes) ensure(object);
+        for (const auto* object : nodes)
+        {
+            const auto& parent = objects.at(object);
+            for (const auto* child : object->children)
+            {
+                if (dynamic_cast<const Attribute*>(child)) continue;
+                herr_t result;
+                if (const auto* soft = dynamic_cast<const SoftLink*>(child))
+                    result = H5Lcreate_soft(
+                        soft->target.c_str(), parent.id, soft->name.c_str(),
+                        H5P_DEFAULT, H5P_DEFAULT);
+                else
+                {
+                    const auto* hard = dynamic_cast<const HardLink*>(child);
+                    const auto* target = hard ? hard_target(hard) : child;
+                    result = H5Olink(objects.at(target).id, parent.id,
+                                     child->name.c_str(), H5P_DEFAULT,
+                                     H5P_DEFAULT);
+                }
+                if (result < 0)
+                    throw MetadataError("Could not persist link");
+            }
+        }
+        for (const auto* object : nodes)
+        {
+            const auto& saved = objects.at(object);
+            if (const auto* dataset = dynamic_cast<const Dataset*>(object))
+                save_dataset_data(create_reference, saved, metadata, dataset);
+            else if (const auto* attribute =
+                         dynamic_cast<const Attribute*>(object))
+            {
+                if (!attribute->data) continue;
+                PreparedValues prepared(
+                    metadata, create_reference, attribute->mem_type,
+                    attribute->space.size(), attribute->data.get());
+                if (H5Awrite(saved.id, attribute->mem_type.id,
+                             prepared.values()) < 0)
+                    throw MetadataError("Could not persist attribute data");
+            }
+        }
+        for (auto& entry : objects)
+        {
+            if (H5Idec_ref(entry.second.id) < 0)
+                throw MetadataError("Could not close persisted object");
+            entry.second.id = 0;
+        }
+        if (H5Fflush(file.id, H5F_SCOPE_GLOBAL) < 0)
+            throw MetadataError("Could not flush persisted file");
+    }
+};
 
 }
 
@@ -295,11 +444,16 @@ LowFive::save(const File& f, std::string filename)
 
     Hid fid(H5Fcreate(filename.c_str(),
                       H5F_ACC_TRUNC,
-                      H5P_DEFAULT,
+                      f.fcpl.id,
                       H5P_DEFAULT), true);
     if (fid.id < 0)
         throw MetadataError("Could not create persisted file");
 
-    save_structure(fid, &f);
-    save_values(fid, fid, f, &f);
+    {
+        SavedGraph graph(f, fid);
+        graph.save();
+    }
+    const auto saved_file = std::exchange(fid.id, 0);
+    if (H5Fclose(saved_file) < 0)
+        throw MetadataError("Could not close persisted file");
 }

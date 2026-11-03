@@ -37,7 +37,9 @@ lowfive_test(lowfive-model model.cpp
     reference-delete dataset-reference-delete persist-references
     persist-cross-file-reference persist-overwritten-reference
     persist-deleted-reference-path-reuse persist-selected-vlen-reference
-    persist-unwritten-attribute)
+    persist-unwritten-attribute persist-properties persist-links
+    persist-committed-types persist-fill-references persist-nested-fill-references
+    persist-unsupported-object)
 lowfive_test(lowfive-callbacks callbacks.cpp
     wildcard file_plist_ownership file_failure file_access file_exclusive
     missing_callback_names metadata_optional_contract file_owned_object_ids

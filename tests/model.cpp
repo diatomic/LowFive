@@ -1443,6 +1443,372 @@ void file_copy_root_token()
     CHECK(copy.references.at(&reference).token == copy.token);
     CHECK(copy.find_token(copy.token) == &copy);
 }
+void persistence_properties()
+{
+    auto scalar = test::scalar();
+    hsize_t extent = 4, maximum = H5S_UNLIMITED, chunk = 2;
+    Id space(H5Screate_simple(1, &extent, &maximum), H5Sclose);
+    Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+    int fill = 42;
+    CHECK(H5Pset_chunk(dcpl, 1, &chunk) >= 0);
+    CHECK(H5Pset_fletcher32(dcpl) >= 0);
+    CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_INT, &fill) >= 0);
+    CHECK(H5Pset_fill_time(dcpl, H5D_FILL_TIME_ALLOC) >= 0);
+    CHECK(H5Pset_alloc_time(dcpl, H5D_ALLOC_TIME_INCR) >= 0);
+    CHECK(H5Pset_attr_creation_order(
+        dcpl, H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED) >= 0);
+    Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+    CHECK(H5Pset_link_creation_order(
+        gcpl, H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED) >= 0);
+    CHECK(H5Pset_attr_creation_order(
+        gcpl, H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED) >= 0);
+    CHECK(H5Pset_link_phase_change(gcpl, 6, 3) >= 0);
+    CHECK(H5Pset_attr_phase_change(gcpl, 5, 2) >= 0);
+    LowFive::File source("source", H5P_FILE_CREATE_DEFAULT,
+                         H5P_FILE_ACCESS_DEFAULT);
+    auto* group = new LowFive::Group("group", gcpl);
+    source.add_child(group);
+    auto* dataset = new LowFive::Dataset(
+        "values", H5T_NATIVE_INT, space, LowFive::Dataset::lowfive,
+        LowFive::Hid(dcpl), LowFive::Hid(H5P_DEFAULT), false, true);
+    group->add_child(dataset);
+    group->add_child(new LowFive::Group("second", H5P_DEFAULT));
+    for (const char* name : {"zeta", "alpha"})
+    {
+        auto* attribute = new LowFive::Attribute(name, H5T_NATIVE_INT, scalar);
+        dataset->add_child(attribute);
+        attribute->write(LowFive::Datatype(H5T_NATIVE_INT), &fill);
+    }
+    int changed = 99;
+    CHECK(H5Pset_fill_value(dcpl, H5T_NATIVE_INT, &changed) >= 0);
+    const char* filename = "model-persist-properties.h5";
+    LowFive::save(source, filename);
+    Id file(H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
+    Id saved(H5Dopen2(file, "group/values", H5P_DEFAULT), H5Dclose);
+    std::array<int, 4> values{};
+    CHECK(H5Dread(saved, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, values.data()) >= 0);
+    for (int value : values) CHECK(value == 42);
+    Id properties(H5Dget_create_plist(saved), H5Pclose);
+    CHECK(H5Pget_layout(properties) == H5D_CHUNKED);
+    hsize_t actual_chunk = 0;
+    CHECK(H5Pget_chunk(properties, 1, &actual_chunk) == 1);
+    CHECK(actual_chunk == chunk);
+    CHECK(H5Pget_nfilters(properties) == 1);
+    unsigned flags = 0, config = 0;
+    size_t parameters = 0;
+    CHECK(H5Pget_filter2(properties, 0, &flags, &parameters, nullptr, 0,
+                          nullptr, &config) == H5Z_FILTER_FLETCHER32);
+    CHECK(H5Pget_fill_value(properties, H5T_NATIVE_INT, &changed) >= 0);
+    CHECK(changed == 42);
+    H5D_fill_time_t fill_time;
+    H5D_alloc_time_t alloc_time;
+    CHECK(H5Pget_fill_time(properties, &fill_time) >= 0);
+    CHECK(fill_time == H5D_FILL_TIME_ALLOC);
+    CHECK(H5Pget_alloc_time(properties, &alloc_time) >= 0);
+    CHECK(alloc_time == H5D_ALLOC_TIME_INCR);
+    Id saved_space(H5Dget_space(saved), H5Sclose);
+    hsize_t actual_extent = 0, actual_maximum = 0;
+    CHECK(H5Sget_simple_extent_dims(saved_space, &actual_extent,
+                                    &actual_maximum) == 1);
+    CHECK(actual_extent == extent && actual_maximum == maximum);
+    Id saved_group(H5Gopen2(file, "group", H5P_DEFAULT), H5Gclose);
+    Id group_properties(H5Gget_create_plist(saved_group), H5Pclose);
+    unsigned order = 0, high = 0, low = 0;
+    CHECK(H5Pget_link_creation_order(group_properties, &order) >= 0);
+    CHECK(order == (H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED));
+    CHECK(H5Pget_link_phase_change(group_properties, &high, &low) >= 0);
+    CHECK(high == 6 && low == 3);
+    CHECK(H5Pget_attr_creation_order(group_properties, &order) >= 0);
+    CHECK(order == (H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED));
+    CHECK(H5Pget_attr_phase_change(group_properties, &high, &low) >= 0);
+    CHECK(high == 5 && low == 2);
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        Id attribute(H5Aopen_by_idx(saved, ".", H5_INDEX_CRT_ORDER,
+                                    H5_ITER_INC, i, H5P_DEFAULT,
+                                    H5P_DEFAULT), H5Aclose);
+        char name[16]{};
+        CHECK(H5Aget_name(attribute, sizeof name, name) >= 0);
+        CHECK(std::string(name) == (i ? "alpha" : "zeta"));
+    }
+    std::remove(filename);
+}
+
+void check_same_object(hid_t file, const char* first, const char* second)
+{
+    H5O_info2_t a{}, b{};
+    CHECK(H5Oget_info_by_name3(file, first, &a, H5O_INFO_BASIC,
+                               H5P_DEFAULT) >= 0);
+    CHECK(H5Oget_info_by_name3(file, second, &b, H5O_INFO_BASIC,
+                               H5P_DEFAULT) >= 0);
+    int comparison = 1;
+    CHECK(H5Otoken_cmp(file, &a.token, &b.token, &comparison) >= 0);
+    CHECK(comparison == 0);
+}
+
+void persistence_links()
+{
+    auto scalar = test::scalar();
+    Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+    CHECK(H5Pset_link_creation_order(
+        gcpl, H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED) >= 0);
+    LowFive::File source("source", H5P_FILE_CREATE_DEFAULT,
+                         H5P_FILE_ACCESS_DEFAULT);
+    auto* group = new LowFive::Group("group", gcpl);
+    source.add_child(group);
+    auto* dataset = new LowFive::Dataset(
+        "target", H5T_NATIVE_INT, scalar, LowFive::Dataset::lowfive,
+        LowFive::Hid(H5P_DEFAULT), LowFive::Hid(H5P_DEFAULT), false, true);
+    group->add_child(new LowFive::HardLink("forward", dataset));
+    group->add_child(new LowFive::SoftLink("relative", "target"));
+    group->add_child(dataset);
+    group->add_child(new LowFive::HardLink("self", group));
+    group->add_child(new LowFive::SoftLink("dangling", "../missing"));
+    group->add_child(new LowFive::SoftLink("soft-cycle", "soft-cycle"));
+    auto* detached = new LowFive::Group("old-name", H5P_DEFAULT);
+    source.unlinked.push_back(detached);
+    detached->add_child(new LowFive::Group("child", H5P_DEFAULT));
+    source.add_child(new LowFive::HardLink("detached", detached));
+    int input = 19;
+    dataset->write(LowFive::Datatype(H5T_NATIVE_INT),
+                   LowFive::Dataspace(scalar), LowFive::Dataspace(scalar),
+                   &input);
+    const char* filename = "model-persist-links.h5";
+    LowFive::save(source, filename);
+    Id file(H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
+    check_same_object(file, "/group/forward", "/group/target");
+    check_same_object(file, "/group", "/group/self");
+    check_same_object(file, "/group/relative", "/group/target");
+    CHECK(H5Lexists(file, "/detached/child", H5P_DEFAULT) > 0);
+    CHECK(H5Lexists(file, "/old-name", H5P_DEFAULT) == 0);
+    for (const auto& link : std::array<std::pair<const char*, const char*>, 3>{
+             {{"relative", "target"}, {"dangling", "../missing"},
+              {"soft-cycle", "soft-cycle"}}})
+    {
+        const std::string path = std::string("/group/") + link.first;
+        H5L_info2_t info{};
+        CHECK(H5Lget_info2(file, path.c_str(), &info, H5P_DEFAULT) >= 0);
+        CHECK(info.type == H5L_TYPE_SOFT);
+        std::vector<char> target(info.u.val_size);
+        CHECK(H5Lget_val(file, path.c_str(), target.data(), target.size(),
+                          H5P_DEFAULT) >= 0);
+        CHECK(std::string(target.data()) == link.second);
+    }
+    const std::array<const char*, 6> order{
+        {"forward", "relative", "target", "self", "dangling", "soft-cycle"}};
+    for (size_t i = 0; i < order.size(); ++i)
+    {
+        char name[32]{};
+        CHECK(H5Lget_name_by_idx(file, "/group", H5_INDEX_CRT_ORDER,
+                                  H5_ITER_INC, i, name, sizeof name,
+                                  H5P_DEFAULT) >= 0);
+        CHECK(std::string(name) == order[i]);
+    }
+    Id saved(H5Dopen2(file, "/group/forward", H5P_DEFAULT), H5Dclose);
+    int output = 0;
+    CHECK(H5Dread(saved, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, &output) >= 0);
+    CHECK(output == input);
+    std::remove(filename);
+}
+
+void persistence_committed_types()
+{
+    auto scalar = test::scalar();
+    Id type(H5Tcreate(H5T_COMPOUND, sizeof(int)), H5Tclose);
+    CHECK(H5Tinsert(type, "number", 0, H5T_NATIVE_INT) >= 0);
+    LowFive::File source("source", H5P_FILE_CREATE_DEFAULT,
+                         H5P_FILE_ACCESS_DEFAULT);
+    auto* committed = new LowFive::CommittedDatatype("record", type);
+    source.add_child(new LowFive::HardLink("alias", committed));
+    source.add_child(committed);
+    auto* attribute = new LowFive::Attribute("version", H5T_NATIVE_INT, scalar);
+    committed->add_child(attribute);
+    int version = 7;
+    attribute->write(LowFive::Datatype(H5T_NATIVE_INT), &version);
+    auto* reference_attribute =
+        new LowFive::Attribute("type-reference", H5T_STD_REF, scalar);
+    source.add_child(reference_attribute);
+    H5R_ref_t empty{};
+    reference_attribute->write(LowFive::Datatype(H5T_STD_REF), &empty);
+    LowFive::File::PendingReference state;
+    state.type = H5R_OBJECT2;
+    state.token = committed->token;
+    source.references.emplace(
+        reinterpret_cast<H5R_ref_t*>(reference_attribute->data.get()), state);
+    const char* filename = "model-persist-committed-types.h5";
+    LowFive::save(source, filename);
+    Id file(H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
+    Id saved(H5Topen2(file, "record", H5P_DEFAULT), H5Tclose);
+    CHECK(H5Tcommitted(saved) > 0);
+    CHECK(H5Tequal(saved, type) > 0);
+    check_same_object(file, "record", "alias");
+    Id saved_attribute(H5Aopen(saved, "version", H5P_DEFAULT), H5Aclose);
+    int output = 0;
+    CHECK(H5Aread(saved_attribute, H5T_NATIVE_INT, &output) >= 0);
+    CHECK(output == version);
+    Id saved_reference(H5Aopen(file, "type-reference", H5P_DEFAULT), H5Aclose);
+    H5R_ref_t reference{};
+    CHECK(H5Aread(saved_reference, H5T_STD_REF, &reference) >= 0);
+    Id referenced(H5Ropen_object(&reference, H5P_DEFAULT, H5P_DEFAULT), H5Tclose);
+    CHECK(H5Tcommitted(referenced) > 0);
+    CHECK(H5Tequal(referenced, saved) > 0);
+    CHECK(H5Rdestroy(&reference) >= 0);
+    std::remove(filename);
+}
+
+void persistence_fill_references()
+{
+    test::Connector connector("model-persist-fill-references");
+    auto file = connector.file();
+    auto scalar = test::scalar();
+    auto extent = test::space(3);
+    Id target(H5Dcreate2(file, "target", H5T_NATIVE_INT, extent,
+                         H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    std::array<int, 3> input{{17, 23, 31}};
+    CHECK(H5Dwrite(target, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                   H5P_DEFAULT, input.data()) >= 0);
+    Id attribute(H5Acreate2(target, "version", H5T_NATIVE_INT, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    int version = 8;
+    CHECK(H5Awrite(attribute, H5T_NATIVE_INT, &version) >= 0);
+    std::array<H5R_ref_t, 3> fill{};
+    CHECK(H5Rcreate_object(file, "target", H5P_DEFAULT, &fill[0]) >= 0);
+    select(extent, 1, 2);
+    CHECK(H5Rcreate_region(file, "target", extent, H5P_DEFAULT, &fill[1]) >= 0);
+    CHECK(H5Rcreate_attr(file, "target", "version", H5P_DEFAULT, &fill[2]) >= 0);
+    const std::array<const char*, 3> names{{
+        "object-reference", "region-reference", "attribute-reference"}};
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(connector.vol);
+    auto* source = dynamic_cast<LowFive::File*>(vol.files.at(connector.filename));
+    CHECK(source);
+    source->copy_whole = true;
+    const char* filename = "model-persist-fill-references.h5";
+    auto rejected = [&](const LowFive::File& metadata)
+    {
+        bool failed = false;
+        try { LowFive::save(metadata, filename); }
+        catch (const LowFive::MetadataError&) { failed = true; }
+        CHECK(failed);
+    };
+    for (size_t i = 0; i < fill.size(); ++i)
+    {
+        Id properties(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+        CHECK(H5Pset_fill_value(properties, H5T_STD_REF, &fill[i]) >= 0);
+        Id references(H5Dcreate2(file, names[i], H5T_STD_REF, scalar,
+                                 H5P_DEFAULT, properties, H5P_DEFAULT), H5Dclose);
+        rejected(*source);
+        rejected(*source);
+        diy::MemoryBuffer buffer;
+        LowFive::serialize(buffer, source, vol);
+        buffer.reset();
+        std::unique_ptr<LowFive::Object> copy(LowFive::deserialize(buffer, vol));
+        auto* restored = dynamic_cast<LowFive::File*>(copy.get());
+        CHECK(restored && restored->references.size() == 1);
+        rejected(*restored);
+        rejected(*restored);
+        CHECK(restored->references.size() == 1);
+        H5R_ref_t borrowed{};
+        CHECK(H5Pget_fill_value(properties, H5T_STD_REF, &borrowed) >= 0);
+        CHECK(H5Rget_type(&borrowed) == H5Rget_type(&fill[i]));
+        references.reset();
+        CHECK(H5Ldelete(file, names[i], H5P_DEFAULT) >= 0);
+    }
+    // Neither live nor pending rejection may consume source references.
+    Id opened(H5Ropen_object(&fill[0], H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    std::array<int, 3> values{};
+    CHECK(H5Dread(opened, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                  H5P_DEFAULT, values.data()) >= 0);
+    CHECK(values == input);
+    Id region(H5Ropen_region(&fill[1], H5P_DEFAULT, H5P_DEFAULT), H5Sclose);
+    hsize_t start = 0, end = 0;
+    CHECK(H5Sget_select_bounds(region, &start, &end) >= 0);
+    CHECK(start == 1 && end == 2);
+    Id opened_attribute(H5Ropen_attr(&fill[2], H5P_DEFAULT,
+                                     H5P_DEFAULT), H5Aclose);
+    int actual = 0;
+    CHECK(H5Aread(opened_attribute, H5T_NATIVE_INT, &actual) >= 0);
+    CHECK(actual == version);
+    for (auto& reference : fill) CHECK(H5Rdestroy(&reference) >= 0);
+    std::remove(filename);
+}
+
+void persistence_nested_fill_references()
+{
+    test::Connector connector("model-persist-nested-fill-references");
+    auto file = connector.file();
+    auto scalar = test::scalar();
+    auto extent = test::space(3);
+    Id target(H5Dcreate2(file, "target", H5T_NATIVE_INT, extent,
+                         H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+    Id attribute(H5Acreate2(target, "version", H5T_NATIVE_INT, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+    int version = 8;
+    CHECK(H5Awrite(attribute, H5T_NATIVE_INT, &version) >= 0);
+    std::array<H5R_ref_t, 2> fill{};
+    select(extent, 1, 2);
+    CHECK(H5Rcreate_region(file, "target", extent, H5P_DEFAULT, &fill[0]) >= 0);
+    CHECK(H5Rcreate_attr(file, "target", "version", H5P_DEFAULT, &fill[1]) >= 0);
+    hsize_t count = fill.size();
+    Id array(H5Tarray_create2(H5T_STD_REF, 1, &count), H5Tclose);
+    Id compound(H5Tcreate(H5T_COMPOUND, sizeof(fill)), H5Tclose);
+    CHECK(H5Tinsert(compound, "region", 0, H5T_STD_REF) >= 0);
+    CHECK(H5Tinsert(compound, "attribute", sizeof(H5R_ref_t), H5T_STD_REF) >= 0);
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(connector.vol);
+    auto* source = dynamic_cast<LowFive::File*>(vol.files.at(connector.filename));
+    CHECK(source);
+    for (hid_t type : {static_cast<hid_t>(array), static_cast<hid_t>(compound)})
+    {
+        Id properties(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+        CHECK(H5Pset_fill_value(properties, type, fill.data()) >= 0);
+        Id references(H5Dcreate2(file, "references", type, scalar,
+                                 H5P_DEFAULT, properties, H5P_DEFAULT), H5Dclose);
+        bool failed = false;
+        try { LowFive::save(*source, "model-persist-nested-fill-references.h5"); }
+        catch (const LowFive::MetadataError&) { failed = true; }
+        CHECK(failed);
+        // Rejection must not consume either the original or DCPL references.
+        std::array<H5R_ref_t, 2> borrowed{};
+        CHECK(H5Pget_fill_value(properties, type, borrowed.data()) >= 0);
+        CHECK(H5Rget_type(&borrowed[0]) == H5R_DATASET_REGION2);
+        CHECK(H5Rget_type(&borrowed[1]) == H5R_ATTR);
+        Id region(H5Ropen_region(&fill[0], H5P_DEFAULT, H5P_DEFAULT), H5Sclose);
+        hsize_t start = 0, end = 0;
+        CHECK(H5Sget_select_bounds(region, &start, &end) >= 0);
+        CHECK(start == 1 && end == 2);
+        Id opened(H5Ropen_attr(&fill[1], H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int actual = 0;
+        CHECK(H5Aread(opened, H5T_NATIVE_INT, &actual) >= 0);
+        CHECK(actual == version);
+        references.reset();
+        CHECK(H5Ldelete(file, "references", H5P_DEFAULT) >= 0);
+    }
+    for (auto& reference : fill) CHECK(H5Rdestroy(&reference) >= 0);
+    std::remove("model-persist-nested-fill-references.h5");
+}
+
+void persistence_unsupported_object()
+{
+    auto scalar = test::scalar();
+    auto rejected = [&](LowFive::Object* object)
+    {
+        LowFive::File source("source", H5P_FILE_CREATE_DEFAULT,
+                             H5P_FILE_ACCESS_DEFAULT);
+        source.add_child(object);
+        bool failed = false;
+        try { LowFive::save(source, "model-persist-unsupported-object.h5"); }
+        catch (const LowFive::MetadataError&) { failed = true; }
+        CHECK(failed);
+    };
+    rejected(new LowFive::NamedDtype("missing-definition"));
+    rejected(new LowFive::CommittedDatatype("empty-definition", 0));
+    rejected(new LowFive::HardLink("missing-target", nullptr));
+    rejected(new LowFive::Dataset(
+        "legacy-reference", H5T_STD_REF_OBJ, scalar, LowFive::Dataset::lowfive,
+        LowFive::Hid(H5P_DEFAULT), LowFive::Hid(H5P_DEFAULT), false, true));
+    std::remove("model-persist-unsupported-object.h5");
+}
 }
 int main(int argc, char** argv)
 {
@@ -1497,6 +1863,13 @@ int main(int argc, char** argv)
             persistence_selected_vlen_reference();
         else if (name == "persist-unwritten-attribute")
             persistence_unwritten_attribute();
+        else if (name == "persist-properties") persistence_properties();
+        else if (name == "persist-links") persistence_links();
+        else if (name == "persist-committed-types") persistence_committed_types();
+        else if (name == "persist-fill-references") persistence_fill_references();
+        else if (name == "persist-nested-fill-references")
+            persistence_nested_fill_references();
+        else if (name == "persist-unsupported-object") persistence_unsupported_object();
         else CHECK(false);
     });
 }

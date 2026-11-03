@@ -85,6 +85,16 @@ buffers report the required size without writing, matching native HDF5.
 Object info and reference-type queries recognize committed datatypes as named
 datatypes, including indexed and by-name lookups.
 
+Internal HDF5 persistence preserves stored FCPL/GCPL/DCPL settings, dataspace
+limits, nonreference fill values, hard-link identity and cycles, soft links, and
+committed datatype objects. Modern references in dataset and attribute data
+are remapped without consuming the source values. Unsupported object kinds,
+legacy reference values, and user-defined reference-valued fills fail
+explicitly. Native HDF5 1.14 cannot safely persist reference-valued fills:
+scalar fills reopen with an invalid size, and nested fills have ambiguous
+reference ownership during native conversion. ACPL/TCPL settings and dataset
+associations with committed types are not retained by the metadata model.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:
