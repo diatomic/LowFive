@@ -80,6 +80,11 @@ groups reached through soft-link ancestors. Existing destination links and
 terminal `.` components are rejected; trailing separators on group names are
 normalized.
 
+Committed datatype encoding copies only the encoded payload. Null or undersized
+buffers report the required size without writing, matching native HDF5.
+Object info and reference-type queries recognize committed datatypes as named
+datatypes, including indexed and by-name lookups.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:

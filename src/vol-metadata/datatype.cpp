@@ -173,7 +173,11 @@ LowFive::MetadataVOL::datatype_get(void* dt, H5VL_datatype_get_args_t* args, hid
 
         /* H5T_construct_datatype (library private routine) */
         case H5VL_DATATYPE_GET_BINARY: {
-            memcpy(args->args.get_binary.buf, o->data.data(), args->args.get_binary.buf_size);
+            auto& binary = args->args.get_binary;
+            if (!binary.buf || binary.buf_size < o->data.size())
+                binary.buf_size = o->data.size();
+            else
+                memcpy(binary.buf, o->data.data(), o->data.size());
             break;
         }
 

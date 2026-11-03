@@ -138,9 +138,18 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
         ObjectPointers* obj_        = (ObjectPointers*) obj;
         Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
 
-        // map of our object types to hdf5 object types
-        //std::vector<int> h5_types = {H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
-        std::vector<int> h5_types = {H5O_TYPE_GROUP, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_UNKNOWN, H5O_TYPE_NAMED_DATATYPE};
+        const auto h5_type = [](ObjectType type) -> H5O_type_t
+        {
+            switch (type)
+            {
+                case ObjectType::File:
+                case ObjectType::Group: return H5O_TYPE_GROUP;
+                case ObjectType::Dataset: return H5O_TYPE_DATASET;
+                case ObjectType::NamedDtype:
+                case ObjectType::CommittedDatatype: return H5O_TYPE_NAMED_DATATYPE;
+                default: throw MetadataError("object_get(): unsupported object type");
+            }
+        };
 
         switch (get_type)
         {
@@ -203,15 +212,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
 
             Object* obj = mdata_obj->locate(*loc_params).exact();
             if (!obj) return -1;
-            if (static_cast<int>(obj->type) >= h5_types.size())     // sanity check
-                throw MetadataError(fmt::format("object_get(): obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", obj->type));
-
-            int otype   = h5_types[static_cast<int>(obj->type)];
-            *obj_type   = static_cast<H5O_type_t>(otype);
-            log->trace("object_get: obj->type {} hdf5 otype {}", obj->type, otype);
-
-            if (otype == H5O_TYPE_UNKNOWN)
-                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
+            *obj_type = h5_type(obj->type);
+            log->trace("object_get: obj->type {} hdf5 otype {}", obj->type, *obj_type);
 
             return 0;
         }
@@ -226,16 +228,8 @@ object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_
             Object* obj = mdata_obj->locate(*loc_params).exact();
             if (!obj) return -1;
 
-            if (static_cast<int>(obj->type) >= h5_types.size())     // sanity check
-                throw MetadataError(fmt::format("object_get(): mdata_obj->type {} > H5O_TYPE_NAMED_DATATYPE, the last element of h5_types", mdata_obj->type));
-
-            // get object type in HDF format
-            int otype   = h5_types[static_cast<int>(obj->type)];
-            oinfo->type = static_cast<H5O_type_t>(otype);
-            log->trace("object_get: name={} obj->type {} hdf5 otype {}", obj->name, obj->type, otype);
-
-            if (otype == H5O_TYPE_UNKNOWN)
-                throw MetadataError(fmt::format("object_get(): hdf5 otype = H5O_TYPE_UNKNOWN; this should not happen"));
+            oinfo->type = h5_type(obj->type);
+            log->trace("object_get: name={} obj->type {} hdf5 otype {}", obj->name, obj->type, oinfo->type);
 
             obj->fill_token(oinfo->token);
 
