@@ -5,7 +5,7 @@
 #include    <diy/assigner.hpp>
 #include    <diy/../../examples/opts.h>
 
-#include    <dlfcn.h>
+#include    "load-task.hpp"
 
 #include    "prod-con-multidata.hpp"
 
@@ -142,30 +142,24 @@ int main(int argc, char* argv[])
     if (shared && world.rank() == 0)
         fmt::print("space sharing: producer1_ranks = producer2_ranks = consumer_ranks = world: {}\n", world.size());
 
-    // load tasks
-    void* lib_producer1 = dlopen(producer1_exec.c_str(), RTLD_LAZY);
-    if (!lib_producer1)
-        fmt::print(stderr, "Couldn't open producer1.hx\n");
-
-    void* lib_producer2 = dlopen(producer2_exec.c_str(), RTLD_LAZY);
-    if (!lib_producer2)
-        fmt::print(stderr, "Couldn't open producer2.hx\n");
-
-    void* lib_consumer = dlopen(consumer_exec.c_str(), RTLD_LAZY);
-    if (!lib_consumer)
-        fmt::print(stderr, "Couldn't open consumer.hx\n");
-
-    void* producer1_f_ = dlsym(lib_producer1, "producer1_f");
-    if (!producer1_f_)
-        fmt::print(stderr, "Couldn't find producer1_f\n");
-
-    void* producer2_f_ = dlsym(lib_producer2, "producer2_f");
-    if (!producer2_f_)
-        fmt::print(stderr, "Couldn't find producer2_f\n");
-
-    void* consumer_f_ = dlsym(lib_consumer, "consumer_f");
-    if (!consumer_f_)
-        fmt::print(stderr, "Couldn't find consumer_f\n");
+    // Load and validate every task before any rank splits communicators.
+    void* lib_producer1 = nullptr;
+    void* lib_producer2 = nullptr;
+    void* lib_consumer = nullptr;
+    void* producer1_f_ = lowfive_examples::load_task(producer1_exec, "producer1_f", lib_producer1, world.rank());
+    void* producer2_f_ = lowfive_examples::load_task(producer2_exec, "producer2_f", lib_producer2, world.rank());
+    void* consumer_f_ = lowfive_examples::load_task(consumer_exec, "consumer_f", lib_consumer, world.rank());
+    int load_failed = !producer1_f_ || !producer2_f_ || !consumer_f_;
+    int any_load_failed = 0;
+    MPI_Allreduce(&load_failed, &any_load_failed, 1, MPI_INT, MPI_MAX, world);
+    if (any_load_failed)
+    {
+        // No task entry point has run; discard the handles acquired for startup.
+        if (lib_consumer) dlclose(lib_consumer);
+        if (lib_producer2) dlclose(lib_producer2);
+        if (lib_producer1) dlclose(lib_producer1);
+        return 1;
+    }
 
     // set HDF5 error handler
     H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);

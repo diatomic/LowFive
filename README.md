@@ -95,6 +95,12 @@ scalar fills reopen with an invalid size, and nested fills have ambiguous
 reference ownership during native conversion. ACPL/TCPL settings and dataset
 associations with committed types are not retained by the metadata model.
 
+Multidata example drivers validate each library and task entry point before
+splitting communicators or starting tasks. A loader failure on any rank makes
+all ranks exit with status 1; diagnostics include rank, library path, expected
+symbol, and loader error. Successful startup retains task libraries for the
+process lifetime.
+
 ## Testing
 
 Build with MPI and HDF5 1.14, including its high-level library:

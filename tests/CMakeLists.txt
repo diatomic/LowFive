@@ -305,3 +305,48 @@ endforeach()
 
 #endif()
 
+function(lowfive_loader_test name expected_path expected_symbol)
+    add_test(NAME ${name}
+        COMMAND ${CMAKE_COMMAND}
+            "-Dcommand=${MPIEXEC_EXECUTABLE};${ARGN}"
+            "-Dexpected_path=${expected_path}" "-Dexpected_symbol=${expected_symbol}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/check-loader.cmake)
+    set_tests_properties(${name} PROPERTIES TIMEOUT 20 PROCESSORS 2 LABELS "mpi;loader")
+endfunction()
+
+foreach(driver prod-con-multidata-test prod-2cons-multidata-test 2prods-con-multidata-test)
+    if(driver STREQUAL "2prods-con-multidata-test")
+        set(producer_option --prod1_exec)
+        set(producer_symbol producer1_f)
+        set(task_options --prod2_exec $<TARGET_FILE:producer2-multidata-test>
+                         --con_exec $<TARGET_FILE:consumer-multidata-test>)
+    elseif(driver STREQUAL "prod-2cons-multidata-test")
+        set(producer_option --prod_exec)
+        set(producer_symbol producer_f)
+        set(task_options --con1_exec $<TARGET_FILE:consumer1-multidata-test>
+                         --con2_exec $<TARGET_FILE:consumer2-multidata-test>)
+    else()
+        set(producer_option --prod_exec)
+        set(producer_symbol producer_f)
+        set(task_options --con_exec $<TARGET_FILE:consumer-multidata-test>)
+    endif()
+    foreach(failure missing-library missing-symbol)
+        if(failure STREQUAL "missing-library")
+            set(library "${CMAKE_CURRENT_BINARY_DIR}/lowfive-missing-loader-task.hx")
+        else()
+            set(library $<TARGET_FILE:consumer-multidata-test>)
+        endif()
+        lowfive_loader_test("${driver}-loader-${failure}" "${library}" "${producer_symbol}"
+            ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+            $<TARGET_FILE:${driver}> ${MPIEXEC_POSTFLAGS} ${producer_option} "${library}" ${task_options})
+        if(driver STREQUAL "prod-con-multidata-test")
+            lowfive_loader_test("${driver}-loader-rank-local-${failure}" "${library}" "${producer_symbol}"
+                ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS}
+                $<TARGET_FILE:${driver}> ${MPIEXEC_POSTFLAGS} --prod_exec "${library}"
+                    --con_exec $<TARGET_FILE:consumer-multidata-test>
+                : ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS}
+                $<TARGET_FILE:${driver}> ${MPIEXEC_POSTFLAGS} --prod_exec $<TARGET_FILE:producer-multidata-test>
+                    --con_exec $<TARGET_FILE:consumer-multidata-test>)
+        endif()
+    endforeach()
+endforeach()
