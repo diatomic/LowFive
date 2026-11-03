@@ -38,6 +38,7 @@ RemoteFile::~RemoteFile()
     release(unlinked);
 
     obj.call<void>("file_close");
+    obj.destroy();
     MPI_Comm connection = comm != MPI_COMM_NULL ? comm : vol.local;
     MPI_Barrier(connection);
 
@@ -52,7 +53,6 @@ RemoteFile::~RemoteFile()
             query_->c.finish(0);
     }
 
-    obj.destroy();
     if (comm != MPI_COMM_NULL)
         MPI_Comm_free(&comm);
 }

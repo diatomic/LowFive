@@ -4,6 +4,7 @@
 #include "rpc/client.h"
 #include "rpc/server.h"
 #include <array>
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -18,12 +19,19 @@ struct Value
     int get() { return number; }
     int number;
 };
+struct Borrowed
+{
+    int get() { return 91; }
+};
+Borrowed borrowed;
 template<class Module>
 void exports(Module& module)
 {
     module.template class_<Value>("Value").template constructor<int>().function("get", &Value::get);
+    module.template class_<Borrowed>("Borrowed").function("get", &Borrowed::get);
     module.function("destroyed", []() { return destroyed; });
     module.function("echo", [](int n) { return n; });
+    module.function("borrowed", []() { return &borrowed; });
     module.function("fail", []() { throw std::runtime_error("intentional server failure"); });
     module.function("reset-buffer", []()
     {
@@ -87,6 +95,13 @@ int main(int argc, char** argv)
             LowFive::rpc::server server(module, MPI_COMM_WORLD);
             while (!server.process(1)) {}
             CHECK(destroyed == (name == "destroy-second" ? 2 : 1));
+            if (name == "borrowed")
+            {
+                CHECK(module.objects_.size() == 2);
+                CHECK(std::none_of(
+                    module.objects_.begin(), module.objects_.end(),
+                    [](const auto& object) { return object.active; }));
+            }
         }
         else
         {
@@ -115,6 +130,17 @@ int main(int argc, char** argv)
                 diy::load(buffer, value);
                 CHECK(value == 37);
             }
+            if (name == "borrowed")
+            {
+                for (int i = 0; i < 1000; ++i)
+                {
+                    auto value =
+                        client.call<LowFive::rpc::client::object>("borrowed");
+                    CHECK(value.call<int>("get") == 91);
+                    CHECK(client.tracked_object_count() == 2);
+                }
+                CHECK(client.tracked_object_count() == 1);
+            }
             if (name == "destroy-second")
             {
                 auto second = client.create("Value", 29);
@@ -124,6 +150,7 @@ int main(int argc, char** argv)
                 CHECK(first.call<int>("get") == 17);
             }
             first.destroy();
+            CHECK(client.tracked_object_count() == 0);
             CHECK(client.call<int>("echo", 73) == 73);
             CHECK(client.call<int>("destroyed") == (name == "destroy-second" ? 2 : 1));
             CHECK(client.call<int>("echo", -9) == -9);

@@ -2,6 +2,7 @@
 
 #include <map>
 #include <stdexcept>
+#include <tuple>
 
 #include <mpi.h>
 #include <diy/mpi.hpp>
@@ -49,11 +50,35 @@ struct client
     object          create(int target, std::string name, Args... args);
 
     inline void     destroy(int target, size_t id);
-
-    inline size_t&  ref_count(int target, size_t obj_id)    { return ref_count_[std::make_tuple(target, obj_id)]; }
-    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); ssend(comm_, target, tags::consumer, out); }
+    size_t          tracked_object_count() const              { return ref_count_.size(); }
+    inline void     finish(int target) const                   { diy::MemoryBuffer out; diy::save(out, ops::finish); ssend(comm_, target, tags::consumer, out); }
 
     private:
+        using ObjectKey = std::tuple<int, size_t>;
+
+        inline void retain(int target, size_t obj_id)
+        {
+            ++ref_count_[ObjectKey {target, obj_id}];
+        }
+
+        inline bool release_ref(int target, size_t obj_id)
+        {
+            auto it = ref_count_.find(ObjectKey {target, obj_id});
+            if (it == ref_count_.end() || it->second == 0)
+                throw std::logic_error("Invalid RPC client object reference");
+            return --it->second == 0;
+        }
+
+        inline void restore_ref(int target, size_t obj_id)
+        {
+            ++ref_count_[ObjectKey {target, obj_id}];
+        }
+
+        inline void forget_ref(int target, size_t obj_id)
+        {
+            ref_count_.erase(ObjectKey {target, obj_id});
+        }
+
         inline void check_response(diy::MemoryBuffer& in);
 
         template<class R>
@@ -61,14 +86,12 @@ struct client
 
         template<class... Args>
         void        save(diy::MemoryBuffer& out, Args... args);
-
-    private:
         const module&               m_;
         diy::mpi::communicator      comm_;
 
         int                         default_target_;
 
-        std::map<std::tuple<int,size_t>, size_t>    ref_count_;
+        std::map<ObjectKey, size_t>    ref_count_;
 
 };
 
