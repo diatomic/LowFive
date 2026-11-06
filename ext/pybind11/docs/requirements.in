@@ -1,7 +1,14 @@
+# Documentation tooling requires Python >=3.10.
 breathe
+certifi>=2026.10.18
 furo
+idna>=3.15
 myst_parser
+pygments>=2.20.0
+requests>=2.33.0
+soupsieve>=2.9.0
 sphinx
 sphinx-copybutton
 sphinxcontrib-moderncmakedomain
 sphinxcontrib-svg2pdfconverter
+urllib3>=2.8.0

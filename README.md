@@ -10,3 +10,19 @@ than one task can produce (write) data, and more than one task can consume
 (read) data, accommodating fan-in and fan-out in the workflow task graph.
 LowFive supports data redistribution from n producer processes to m consumer
 processes.
+
+## Vendored Python tooling
+
+The vendored pybind11 documentation and test manifests contain local security
+updates. These are development dependencies, not LowFive runtime dependencies.
+Documentation tooling requires Python 3.10 or newer. The primary pybind11 test
+manifest provides NumPy/SciPy environments for CPython 3.10–3.13; the older copy
+inside DIY uses CPython 3.10 or 3.11. Library interpreter support is unchanged.
+
+To regenerate the documentation lockfile from `ext/pybind11`, run:
+
+```sh
+uv pip compile --python-version 3.10 docs/requirements.in -o docs/requirements.txt
+```
+
+Retain the local security constraints when refreshing vendored sources with peru.

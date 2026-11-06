@@ -6,15 +6,8 @@ nox.needs_version = ">=2022.1.7"
 nox.options.sessions = ["lint", "tests", "tests_packaging"]
 
 PYTHON_VERSIONS = [
-    "3.6",
-    "3.7",
-    "3.8",
-    "3.9",
     "3.10",
     "3.11",
-    "pypy3.7",
-    "pypy3.8",
-    "pypy3.9",
 ]
 
 if os.environ.get("CI", None):
