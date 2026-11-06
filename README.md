@@ -111,6 +111,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Source packages must include the test sources and example helper headers.
+CMake configures tests and examples for every build, including Spack installs;
+`lowfive_install_examples` controls installation, not compilation.
+
 The isolated API tests cover storage modes, datatype conversion, selections,
 attributes, links and paths, object lifetimes, VOL wrapping, connector
 configuration, asynchronous request lifecycles, distributed queries, and RPC
