@@ -2,6 +2,7 @@
 
 #include    <vector>
 #include    <set>
+#include    <map>
 #include    <mpi.h>
 
 #include    "vol-metadata.hpp"
@@ -60,11 +61,7 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     static DistMetadataVOL&         create_DistMetadataVOL(communicator local_, communicators intercomms_);
 
     // record intercomm to use for a dataset
-    void set_intercomm(std::string filename, std::string full_path, int intercomm_index)
-    {
-        intercomm_locations.emplace_back(LocationPattern { filename, full_path });
-        intercomm_indices.emplace_back(intercomm_index);
-    }
+    void set_intercomm(std::string filename, std::string full_path, int intercomm_index);
 
     void set_serve_indices(ServeIndices si)
     {
@@ -96,6 +93,8 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
 
     void            broadcast_files(int root = 0);
 
+    // Retire file snapshots after serving unless delete_data is false.
+    // Open handles retain their snapshots until closed.
     void            serve_all(bool delete_data = true, bool perform_indexing = true);
 
     void*           object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
@@ -114,6 +113,9 @@ struct DistMetadataVOL: public LowFive::MetadataVOL
     long int        file_close_counter_ {0};  // increment after each call to file_close
 
     private:
+        friend struct RemoteFile;
+        std::map<int, size_t> remote_file_counts_;
+        communicator checked_intercomm(int intercomm_index) const;
         void        make_remote_dataset(ObjectPointers*& result, std::pair<std::string, std::string> filepath);
 };
 

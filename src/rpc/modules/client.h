@@ -192,12 +192,14 @@ struct client::object
                         object(int rank, size_t id, const class_proxy& cp, client* self, bool own):
                             rank_(rank), id_(id), cp_(cp), self_(self), own_(own)
     {
-        self_->ref_count(rank_, id_)++;
+        self_->retain(rank_, id_);
     }
 
                         object(const object& o):
                             rank_(o.rank_), id_(o.id_), cp_(o.cp_), self_(o.self_), own_(o.own_)
-                                                                    { self_->ref_count(rank_, id_)++; }
+    {
+        self_->retain(rank_, id_);
+    }
                         object(object&& o):
                             rank_(o.rank_), id_(o.id_), cp_(o.cp_), self_(o.self_), own_(o.own_)
                                                                     { o.self_ = nullptr; } // leave o in invalid state
@@ -211,28 +213,64 @@ struct client::object
     size_t              hash() const                                { return cp_.hash(); }
     size_t              id() const                                  { return id_; }
 
-    void                destroy()
+    void                destroy()                                   { release(); }
+
+                        ~object() noexcept
     {
-        if (!self_)      // invalid state
-            return;
-
-        auto log = get_logger();
-        log->trace("~object: own = {}, this = {}", own_, fmt::ptr(this));
-
-        self_->ref_count(rank_, id_)--;
-        if (own_ && self_->ref_count(rank_, id_) == 0)
-            self_->destroy(rank_, id_);
-
-        self_ = nullptr;
+        try
+        {
+            release();
+        }
+        catch (const std::exception& error)
+        {
+            get_logger()->error(
+                "Could not release RPC object {}: {}", id_, error.what());
+            abandon();
+        }
+        catch (...)
+        {
+            get_logger()->error(
+                "Could not release RPC object {}: unknown error", id_);
+            abandon();
+        }
     }
-
-                        ~object()                                   { destroy(); }
 
     int                 rank_;
     size_t              id_;
     const class_proxy&  cp_;
     client*             self_;
     bool                own_;
+
+    private:
+    void                release()
+    {
+        if (!self_)
+            return;
+
+        client* owner = self_;
+        if (owner->release_ref(rank_, id_))
+        {
+            try
+            {
+                owner->destroy(rank_, id_);
+            }
+            catch (...)
+            {
+                owner->restore_ref(rank_, id_);
+                throw;
+            }
+            owner->forget_ref(rank_, id_);
+        }
+        self_ = nullptr;
+    }
+
+    void                abandon() noexcept
+    {
+        if (!self_)
+            return;
+        self_->forget_ref(rank_, id_);
+        self_ = nullptr;
+    }
 };
 
 /**

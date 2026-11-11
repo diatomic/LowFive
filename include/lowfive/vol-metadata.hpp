@@ -7,8 +7,8 @@
 #include    <unordered_set>
 #include    <functional>
 #include    <ostream>
+#include    <cstdint>
 
-#include    <fmt/core.h>
 #include    "vol-base.hpp"
 
 namespace LowFive
@@ -21,12 +21,14 @@ struct LocationPattern {
 
 inline std::ostream& operator<<(std::ostream& out, const LocationPattern& p)
 {
-    out << "LocationPattern(filename = " << p.filename << ", pattern = " << p.pattern;
+    out << "LocationPattern(filename = " << p.filename << ", pattern = " << p.pattern << ')';
     return out;
 }
 
 struct Object;              // forward declaration for Files
 struct ObjectPointers;      // forward declaration for wrap
+struct Dataset;
+struct File;
 
 // custom VOL object
 // only need to specialize those functions that are custom
@@ -38,7 +40,6 @@ struct MetadataVOL: public LowFive::VOLBase
     using Files             = std::map<std::string, Object*>;       // Object*, to support both File and RemoteFile
     using LocationPatterns  = std::vector<LocationPattern>;
 
-    using AfterFileCreate   = std::function<void()>;
     using AfterFileClose    = std::function<void(const std::string&)>;
     using BeforeFileOpen    = std::function<void(const std::string&)>;
     using AfterDatasetWrite = std::function<void()>;
@@ -48,9 +49,10 @@ struct MetadataVOL: public LowFive::VOLBase
     LocationPatterns            passthru;
     LocationPatterns            zerocopy;
     bool                        keep = false;       // whether to keep files in the metadata after they are closed
+    bool                        collecting_files = false;
+    bool                        retaining_reference_file = false;
 
     // callbacks
-    AfterFileCreate             after_file_create;
     AfterFileClose              after_file_close;
     BeforeFileOpen              before_file_open;
     AfterDatasetWrite           after_dataset_write;
@@ -73,6 +75,15 @@ struct MetadataVOL: public LowFive::VOLBase
 
     //bool dont_wrap = false;
     std::unordered_set<void*>   our_objects;
+    struct PendingWrapMetadata
+    {
+        Object* object;
+        unsigned access_flags;
+        std::uint64_t file_handle;
+        hid_t fapl;
+    };
+    std::unordered_map<void*, PendingWrapMetadata> pending_wrap_metadata;
+    std::uint64_t next_file_handle = 1;
     bool            ours(void* p) const     { return our_objects.find(p) != our_objects.end(); }
 
     ObjectPointers* wrap(void* p);
@@ -83,7 +94,12 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void            print_files();
 
+    void            resolve_reference(File& file, H5R_ref_t* reference);
     void            resolve_references(Object* o);
+    void            resolve_references(Dataset* dataset, hid_t memory_space,
+                                       hid_t file_space);
+    void            suspend_references(Object* o);
+    herr_t          retain_reference_file(File& file, hid_t target_id);
 
     bool            has_real_file(const char* fname) const; // return true, if fname is in files and
                                                             // it is not a DummyFile
@@ -136,23 +152,34 @@ struct MetadataVOL: public LowFive::VOLBase
 
     void clear_files();
 
-    // ref: https://www.geeksforgeeks.org/wildcard-character-matching/
-    // checks if two given strings match; the first string may contain wildcard characters
-    static bool match(const char *first, const char * second)
+    // Match '*' (any sequence) and '?' (one character) without recursive branching.
+    static bool match(const char* pattern, const char* text)
     {
-        if (*first == '\0' && *second == '\0')
-            return true;
-
-        if (*first == '*' && *(first+1) != '\0' && *second == '\0')
-            return false;
-
-        if (*first == '?' || *first == *second)
-            return match(first+1, second+1);
-
-        if (*first == '*')
-            return match(first+1, second) || match(first, second+1);
-
-        return false;
+        const char* star = nullptr;
+        const char* retry = nullptr;
+        while (*text)
+        {
+            if (*pattern == '*')
+            {
+                star = pattern++;
+                retry = text;
+            }
+            else if (*pattern == '?' || *pattern == *text)
+            {
+                ++pattern;
+                ++text;
+            }
+            else if (star)
+            {
+                pattern = star + 1;
+                text = ++retry;
+            }
+            else
+                return false;
+        }
+        while (*pattern == '*')
+            ++pattern;
+        return *pattern == '\0';
     }
 
     // in the next 4 functions, partial means don't check full_path (for dataset)
@@ -266,7 +293,7 @@ struct MetadataVOL: public LowFive::VOLBase
     herr_t          attr_optional(void *obj, H5VL_optional_args_t * args, hid_t dxpl_id, void **req) override;
     herr_t          attr_close(void *attr, hid_t dxpl_id, void **req) override;
     htri_t          attr_exists(Object *mdata_obj, const char* attr_name, htri_t* ret);
-    herr_t          attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data);
+    herr_t          attr_iter(void *obj, const H5VL_loc_params_t *loc_params, H5_index_t index, H5_iter_order_t order, hsize_t *idx, H5A_operator2_t op, void* op_data);
 
     void *          object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req) override;
     herr_t          object_copy(void *src_obj, const H5VL_loc_params_t *src_loc_params, const char *src_name, void *dst_obj, const H5VL_loc_params_t *dst_loc_params, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req) override;

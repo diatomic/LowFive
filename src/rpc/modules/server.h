@@ -80,12 +80,47 @@ struct server::module
 
     struct ObjectWithClass
     {
-        void*   obj;
-        size_t  cls;
-        bool    own;
+        void*   obj = nullptr;
+        size_t  cls = 0;
+        bool    own = false;
+        bool    active = false;
     };
-    std::vector<ObjectWithClass>        objects_;
+
+    ObjectWithClass&    lookup(size_t id);
+    size_t              store(void* obj, size_t cls, bool own);
+
+    std::vector<ObjectWithClass>    objects_;
+    std::vector<size_t>             free_objects_;
+
 };
+
+inline
+server::module::ObjectWithClass&
+server::module::
+lookup(size_t id)
+{
+    if (id >= objects_.size() || !objects_[id].active)
+        throw std::runtime_error("Invalid RPC object handle");
+    return objects_[id];
+}
+
+inline
+size_t
+server::module::
+store(void* obj, size_t cls, bool own)
+{
+    const ObjectWithClass value {obj, cls, own, true};
+    if (free_objects_.empty())
+    {
+        objects_.push_back(value);
+        return objects_.size() - 1;
+    }
+
+    const size_t id = free_objects_.back();
+    free_objects_.pop_back();
+    objects_[id] = value;
+    return id;
+}
 
 template<class T>
 T
@@ -96,12 +131,12 @@ load_value(diy::MemoryBuffer& in)
     {
         size_t obj_id;
         diy::load(in, obj_id);
-        return static_cast<T>(objects_[obj_id].obj);
+        return static_cast<T>(lookup(obj_id).obj);
     } else if constexpr (std::is_reference_v<T>)
     {
         size_t obj_id;
         diy::load(in, obj_id);
-        return *static_cast<std::add_pointer_t<T>>(objects_[obj_id].obj);
+        return *static_cast<std::add_pointer_t<T>>(lookup(obj_id).obj);
     } else
     {
         T x;
@@ -166,9 +201,7 @@ struct server::module::Function<R*, Args...>: public FunctionBase
         R* res = call_impl(typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
 
         size_t cls = self->class_id<R>();
-
-        self->objects_.emplace_back(ObjectWithClass { res, cls, false });
-        size_t obj_id = self->objects_.size() - 1;
+        size_t obj_id = self->store(res, cls, false);
 
         diy::save(out, cls);
         diy::save(out, obj_id);
@@ -244,7 +277,7 @@ struct server::module::MemberFunction: public MemberFunctionBase
         auto log = get_logger();
         log->trace("Called member function {}", name_);
 
-        C* x = (C*) self->objects_[obj_id].obj;
+        C* x = static_cast<C*>(self->lookup(obj_id).obj);
 
         R res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
         if constexpr (std::is_same_v<R, diy::MemoryBuffer>)
@@ -276,14 +309,12 @@ struct server::module::MemberFunction<C, R*, Args...>: public MemberFunctionBase
         auto log = get_logger();
         log->trace("Called member function {}", name_);
 
-        C* x = (C*) self->objects_[obj_id].obj;
+        C* x = static_cast<C*>(self->lookup(obj_id).obj);
 
         R* res = call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
 
         size_t cls = self->class_id<R>();
-
-        self->objects_.emplace_back(ObjectWithClass { res, cls, false });
-        size_t res_obj_id = self->objects_.size() - 1;
+        size_t res_obj_id = self->store(res, cls, false);
 
         diy::save(out, cls);
         diy::save(out, res_obj_id);
@@ -311,7 +342,7 @@ struct server::module::MemberFunction<C,void,Args...>: public MemberFunctionBase
         auto log = get_logger();
         log->trace("Called member function {}", name_);
 
-        C* x = (C*) self->objects_[obj_id].obj;
+        C* x = static_cast<C*>(self->lookup(obj_id).obj);
 
         call_impl(x, typename detail::gens<sizeof...(Args)>::type(), self->load<Args...>(in));
     }
@@ -429,7 +460,7 @@ call_mem_fn(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
     size_t obj_id;
     diy::load(in, obj_id);
 
-    size_t cls = objects_[obj_id].cls;
+    size_t cls = lookup(obj_id).cls;
     auto& cp = proxy(cls);
     size_t fn_id;
     diy::load(in, fn_id);
@@ -445,9 +476,8 @@ create(diy::MemoryBuffer& in, diy::MemoryBuffer& out)
     diy::load(in, cls);
     diy::load(in, constructor_id);
 
-    objects_.emplace_back(ObjectWithClass { classes_[cls]->create(constructor_id, in, this), cls, true });
-
-    size_t obj_id = objects_.size() - 1;
+    size_t obj_id =
+        store(classes_[cls]->create(constructor_id, in, this), cls, true);
     diy::save(out, cls);        // redundant, but matches the reading on the client, designed to support returning objects from function calls
     diy::save(out, obj_id);
 }
@@ -459,15 +489,12 @@ destroy(diy::MemoryBuffer& in)
     size_t obj_id;
     diy::load(in, obj_id);
 
-    if (!objects_[obj_id].own)
-    {
-        auto log = get_logger();
-        log->error("Destroying an object we don't own: {}", obj_id);
-        throw std::runtime_error("Destroying an object we don't own");
-    }
+    auto& object = lookup(obj_id);
+    if (object.own)
+        proxy(object.cls).destroy(object.obj);
 
-    proxy(obj_id).destroy(objects_[obj_id].obj);
-    objects_[obj_id].obj = 0;
+    object = ObjectWithClass {};
+    free_objects_.push_back(obj_id);
 }
 
 

@@ -24,6 +24,8 @@ struct VOLBase
     //            ~UnderObject()                  { hid_t err_id; err_id = H5Eget_current_stack(); H5Idec_ref(under_vol_id); H5Eset_current_stack(err_id); }
     //};
 
+    struct request_state_t;
+
     // The pass through VOL info object;
     // it increments the reference count for the under_vold_id on creation and decrements on destruction
     struct pass_through_t
@@ -34,6 +36,9 @@ struct VOLBase
         pass_through_t*     create(void* o)                     { auto x = new pass_through_t(o, under_vol_id, vol); return x; }
         static void         destroy(pass_through_t* x)
         {
+            if (x->wrapped_previous || x->wrapped_next ||
+                x->vol->wrapped_objects == x)
+                x->vol->untrack_wrapped_object(x);
             x->vol->drop(x->under_object);
             destroy_wrapper(x);
         }
@@ -48,6 +53,11 @@ struct VOLBase
         void*               under_object;
         hid_t               under_vol_id;
         VOLBase*            vol;                                // pointer to this
+        pass_through_t*     wrapped_previous = nullptr;
+        pass_through_t*     wrapped_next = nullptr;
+        // Ordinary requests retain the same wrapper as objects. Only batched
+        // dataset operations and notifications need additional shared state.
+        std::shared_ptr<request_state_t> request_state;
     };
 
     // The pass through VOL wrapper context
@@ -66,7 +76,8 @@ struct VOLBase
                                                                 //     very unfortunate design, but it's the only way I can find to match HDF5 VOL design
     };
 
-    static info_t* info;     // this needs to be static, since in the environment variable case, we need to configure it from _str_to_info
+    // Independently owned live configuration; decoding connector info never replaces it.
+    static info_t* info;
 
     unsigned                version;
     int                     value;
@@ -77,10 +88,14 @@ struct VOLBase
                              // prohibit copy/move ctor and assignment, make
                             // default ctor private
     protected:
+        pass_through_t*     wrapped_objects = nullptr;
+        void                track_wrapped_object(pass_through_t* object);
+        void                untrack_wrapped_object(pass_through_t* object);
+        void                release_wrapped_objects();
                             VOLBase();
     public:
-                            // we delete VOL objects by delete info->vol, so we
-                            // must have virtual destructor
+                            // HDF5 owns the singleton and deletes it at connector termination.
+                            // Derived connectors therefore need a virtual destructor.
                             virtual ~VOLBase();
 
                             VOLBase(const VOLBase&) = delete;
@@ -90,7 +105,7 @@ struct VOLBase
                             VOLBase& operator=(VOLBase&&) = delete;
 
     // only for debugging purposes; shouldn't every have to be used in real code
-    static VOLBase&         create_vol_base()   { auto vol_base = new VOLBase; info->vol = vol_base; return *vol_base; }
+    static VOLBase&         create_vol_base()   { if (!info_t::vol) new VOLBase; return *info_t::vol; }
 
     virtual void            drop(void* p)       {}
 
@@ -186,7 +201,6 @@ struct VOLBase
     virtual herr_t          file_close(void *file, hid_t dxpl_id, void **req);
     static herr_t          _file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req);
     virtual herr_t          file_get(void *file, H5VL_file_get_args_t* args, hid_t dxpl_id, void **req);
-    static herr_t          _file_specific_reissue(void *obj, hid_t connector_id, H5VL_file_specific_t args, hid_t dxpl_id, void **req, ...);   // helper function for _file_specific()
     static herr_t          _file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req);
     virtual herr_t          file_specific(void *file, H5VL_file_specific_args_t* args, hid_t dxpl_id, void **req);
     static herr_t          _file_optional(void *file, H5VL_optional_args_t* args, hid_t dxpl_id, void **req);
@@ -206,7 +220,6 @@ struct VOLBase
     static herr_t          _group_close(void *obj, hid_t dxpl_id, void **req);
     virtual herr_t          group_close(void *obj, hid_t dxpl_id, void **req);
 
-    static herr_t          _link_create_reissue(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t connector_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req); // helper function for link_create()
     static herr_t          _link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     virtual herr_t          link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
     static herr_t          _link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
@@ -258,13 +271,19 @@ struct VOLBase
     //void token_to_str               {}
     //void token_from_str             {}
 
-    //// request
-    //void req_wait()                 {}
-    //void req_notify()               {}
-    //void req_cancel()               {}
-    //void req_specific()             {}
-    //void req_optional()             {}
-    //void req_free()                 {}
+    // Wait and cancel retain requests for subsequent timing/error queries.
+    // Explicit free or successful notification transfer releases ownership.
+    static herr_t          _request_wait(void *req, uint64_t timeout, H5VL_request_status_t *status);
+    static herr_t          _request_notify(void *req, H5VL_request_notify_t callback, void *context);
+    static herr_t          _request_cancel(void *req, H5VL_request_status_t *status);
+    static herr_t          _request_specific(void *req, H5VL_request_specific_args_t *args);
+    static herr_t          _request_optional(void *req, H5VL_optional_args_t *args);
+    static herr_t          _request_free(void *req);
+
+    // Prepare storage before submitting any asynchronous dataset operation.
+    static pass_through_t* create_request(size_t count, void *objects[]);
+    static void            set_request(pass_through_t* request, size_t index, void* underlying);
+    static void            drain_request(pass_through_t* request);
 
     static herr_t          _optional(void *obj, H5VL_optional_args_t* arg, hid_t dxpl_id, void **req);
     virtual herr_t          optional(void *obj, H5VL_optional_args_t* arg, hid_t dxpl_id, void **req);

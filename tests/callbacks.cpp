@@ -1,0 +1,1938 @@
+#include "test.hpp"
+#include "../src/metadata.hpp"
+#include "../src/vol-metadata-private.hpp"
+#include <array>
+#include <cstring>
+#include <vector>
+
+namespace
+{
+using test::Id;
+Id dataset(hid_t parent, const char* name, hid_t space)
+{
+    return Id(H5Dcreate2(parent, name, H5T_NATIVE_INT, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+}
+void write(hid_t d, int value) { CHECK(H5Dwrite(d, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &value) >= 0); }
+void value(hid_t d, int expected) { int actual = -1; CHECK(H5Dread(d, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &actual) >= 0); CHECK(actual == expected); }
+herr_t collect_attribute(hid_t, const char* name, const H5A_info_t*, void* data)
+{
+    static_cast<std::vector<std::string>*>(data)->emplace_back(name);
+    return 0;
+}
+void native_callbacks(const std::string& name)
+{
+    const std::string filename = "callbacks_" + name + ".h5";
+    const std::string second_filename = filename + ".second";
+    auto scalar = test::scalar();
+    {
+        Id file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+        if (name == "native_object_dataset_extent")
+        {
+            hsize_t dimensions = 1;
+            hsize_t maximum = 4;
+            Id space(H5Screate_simple(1, &dimensions, &maximum), H5Sclose);
+            Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+            hsize_t chunk = 1;
+            CHECK(H5Pset_chunk(dcpl, 1, &chunk) >= 0);
+            Id values(H5Dcreate2(file, "values", H5T_NATIVE_INT, space,
+                                  H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+        }
+        else if (name == "native_link_delete_idx_uncached")
+        {
+            Id group(H5Gcreate2(file, "existing_group", H5P_DEFAULT,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+            auto first = dataset(group, "a", scalar);
+            auto second = dataset(group, "b", scalar);
+            write(first, 1);
+            write(second, 2);
+        }
+        else if (name == "native_link_delete_idx")
+        {
+            auto first = dataset(file, "a", scalar);
+            auto second = dataset(file, "b", scalar);
+            write(first, 1);
+            write(second, 2);
+        }
+        else if (name == "native_datatype_attr" ||
+                 name == "native_datatype_object_open" ||
+                 name == "native_datatype_link_create")
+        {
+            int expected = 127;
+            Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "native-type", datatype, H5P_DEFAULT,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id attribute(H5Acreate2(datatype, "label", H5T_NATIVE_INT, scalar,
+                                    H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(attribute, H5T_NATIVE_INT, &expected) >= 0);
+        }
+        else if (name.rfind("native_attr_", 0) == 0)
+        {
+            int first_value = 11;
+            int second_value = 22;
+            Id first(H5Acreate2(file, "first", H5T_NATIVE_INT, scalar,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            Id second(H5Acreate2(file, "second", H5T_NATIVE_INT, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(first, H5T_NATIVE_INT, &first_value) >= 0);
+            CHECK(H5Awrite(second, H5T_NATIVE_INT, &second_value) >= 0);
+        }
+        else
+        {
+            auto source = dataset(file, "source", scalar);
+            write(source, 71);
+            CHECK(H5Lcreate_soft("/source", file, "soft", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "soft2", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id group(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+            if (name == "native_group_soft_link_uncached" ||
+                name == "native_dataset_intermediate_soft_link")
+            {
+                auto child = dataset(group, "child", scalar);
+                write(child, 73);
+            }
+        }
+    }
+    if (name == "native_link_copy_move")
+    {
+        Id second(H5Fcreate(second_filename.c_str(), H5F_ACC_TRUNC,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+    }
+
+    test::Connector connector("callbacks_" + name, "file");
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(connector.vol);
+    Id file(H5Fopen(filename.c_str(), H5F_ACC_RDWR, connector.fapl), H5Fclose);
+    if (name == "native_object_dataset_extent")
+    {
+        Id values(H5Oopen(file, "values", H5P_DEFAULT), H5Oclose);
+        CHECK(values.id >= 0 && H5Iget_type(values) == H5I_DATASET);
+        hsize_t extent = 2;
+        CHECK(H5Dset_extent(values, &extent) >= 0);
+        Id space(H5Dget_space(values), H5Sclose);
+        hsize_t actual = 0;
+        CHECK(H5Sget_simple_extent_dims(space, &actual, nullptr) == 1);
+        CHECK(actual == extent);
+    }
+    else if (name == "native_datatype_attr")
+    {
+        Id datatype(H5Topen2(file, "native-type", H5P_DEFAULT), H5Tclose);
+        Id attribute(H5Aopen(datatype, "label", H5P_DEFAULT), H5Aclose);
+        int actual = -1;
+        CHECK(H5Aread(attribute, H5T_NATIVE_INT, &actual) >= 0);
+        CHECK(actual == 127);
+        CHECK(H5Aexists(datatype, "label") > 0);
+        CHECK(H5Arename(datatype, "label", "renamed") >= 0);
+        CHECK(H5Aexists(datatype, "label") == 0);
+        CHECK(H5Aexists(datatype, "renamed") > 0);
+        CHECK(H5Adelete(datatype, "renamed") >= 0);
+        CHECK(H5Aexists(datatype, "renamed") == 0);
+        int created_value = 131;
+        Id created(H5Acreate2(datatype, "created", H5T_NATIVE_INT, scalar,
+                              H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(created.id >= 0);
+        CHECK(H5Awrite(created, H5T_NATIVE_INT, &created_value) >= 0);
+        int created_actual = -1;
+        CHECK(H5Aread(created, H5T_NATIVE_INT, &created_actual) >= 0);
+        CHECK(created_actual == created_value);
+    }
+    else if (name == "native_datatype_commit_parent")
+    {
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "group/type", datatype, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        Id opened(H5Topen2(file, "group/type", H5P_DEFAULT), H5Tclose);
+        CHECK(opened.id >= 0);
+        CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+    }
+    else if (name == "native_datatype_object_open")
+    {
+        Id object(H5Oopen(file, "native-type", H5P_DEFAULT), H5Oclose);
+        CHECK(object.id >= 0);
+        CHECK(H5Iget_type(object) == H5I_DATATYPE);
+        CHECK(H5Olink(object, file, "type-alias", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        CHECK(H5Ldelete(file, "native-type", H5P_DEFAULT) >= 0);
+        Id datatype(H5Topen2(file, "type-alias", H5P_DEFAULT), H5Tclose);
+        CHECK(datatype.id >= 0);
+        CHECK(H5Tequal(datatype, H5T_NATIVE_INT) > 0);
+    }
+    else if (name == "native_datatype_link_create")
+    {
+        Id datatype(H5Topen2(file, "native-type", H5P_DEFAULT), H5Tclose);
+        CHECK(H5Olink(datatype, file, "type-alias", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(file, "type-alias", H5P_DEFAULT) > 0);
+        Id alias(H5Topen2(file, "type-alias", H5P_DEFAULT), H5Tclose);
+        CHECK(alias.id >= 0);
+    }
+    else if (name == "native_attr_iteration")
+    {
+        std::vector<std::string> names;
+        hsize_t index = 0;
+        CHECK(H5Aiterate2(file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                          collect_attribute, &names) >= 0);
+        CHECK(names == std::vector<std::string>({"first", "second"}));
+    }
+    else if (name == "native_attr_open_delete")
+    {
+        Id attribute(H5Aopen(file, "first", H5P_DEFAULT), H5Aclose);
+        CHECK(attribute.id >= 0);
+        CHECK(H5Adelete(file, "first") >= 0);
+        int actual = -1;
+        CHECK(H5Aread(attribute, H5T_NATIVE_INT, &actual) >= 0);
+        CHECK(actual == 11);
+        attribute.reset();
+        CHECK(H5Aexists(file, "first") == 0);
+    }
+    else if (name == "native_attr_delete_idx")
+    {
+        CHECK(H5Adelete_by_idx(file, ".", H5_INDEX_NAME, H5_ITER_INC, 0,
+                               H5P_DEFAULT) >= 0);
+        CHECK(H5Aexists(file, "first") == 0);
+        CHECK(H5Aexists(file, "second") > 0);
+    }
+    else if (name == "native_attr_delete_idx_mixed")
+    {
+        { Id first(H5Aopen(file, "first", H5P_DEFAULT), H5Aclose); }
+        { Id second(H5Aopen(file, "second", H5P_DEFAULT), H5Aclose); }
+        vol.passthru.clear();
+        vol.set_passthru(filename, "/first");
+        vol.set_passthru(filename, "/second");
+        int expected = 33;
+        {
+            Id memory(H5Acreate2(file, "memory", H5T_NATIVE_INT, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(memory, H5T_NATIVE_INT, &expected) >= 0);
+        }
+        CHECK(H5Adelete_by_idx(file, ".", H5_INDEX_NAME, H5_ITER_INC, 0,
+                               H5P_DEFAULT) >= 0);
+        CHECK(H5Aexists(file, "first") == 0);
+        CHECK(H5Aexists(file, "second") > 0);
+        Id memory(H5Aopen(file, "memory", H5P_DEFAULT), H5Aclose);
+        int actual = -1;
+        CHECK(H5Aread(memory, H5T_NATIVE_INT, &actual) >= 0);
+        CHECK(actual == expected);
+    }
+    else if (name == "native_link_delete_idx")
+    {
+        Id second(H5Dopen2(file, "b", H5P_DEFAULT), H5Dclose);
+        value(second, 2);
+        vol.passthru.clear();
+        vol.set_passthru(filename, "/a");
+        vol.set_passthru(filename, "/b");
+        int expected = 44;
+        {
+            Id memory(H5Acreate2(second, "memory", H5T_NATIVE_INT, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(memory, H5T_NATIVE_INT, &expected) >= 0);
+        }
+        second.reset();
+        CHECK(H5Ldelete_by_idx(file, ".", H5_INDEX_NAME, H5_ITER_INC, 0,
+                               H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(file, "a", H5P_DEFAULT) == 0);
+        CHECK(H5Lexists(file, "b", H5P_DEFAULT) > 0);
+        Id reopened(H5Dopen2(file, "b", H5P_DEFAULT), H5Dclose);
+        Id memory(H5Aopen(reopened, "memory", H5P_DEFAULT), H5Aclose);
+        int actual = -1;
+        CHECK(H5Aread(memory, H5T_NATIVE_INT, &actual) >= 0);
+        CHECK(actual == expected);
+    }
+    else if (name == "native_link_delete_idx_uncached")
+    {
+        CHECK(H5Ldelete_by_idx(file, "existing_group", H5_INDEX_NAME,
+                               H5_ITER_INC, 0, H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(file, "existing_group/a", H5P_DEFAULT) == 0);
+        CHECK(H5Lexists(file, "existing_group/b", H5P_DEFAULT) > 0);
+    }
+    else if (name == "native_link_move_cached")
+    {
+        { Id cached(H5Dopen2(file, "source", H5P_DEFAULT), H5Dclose);
+          value(cached, 71); }
+        CHECK(H5Lmove(file, "source", file, "moved", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(file, "source", H5P_DEFAULT) == 0);
+        CHECK(H5Lexists(file, "moved", H5P_DEFAULT) > 0);
+        auto recreated = dataset(file, "source", scalar);
+        CHECK(recreated.id >= 0);
+    }
+    else if (name == "native_link_move_cycle")
+    {
+        Id group(H5Gopen2(file, "group", H5P_DEFAULT), H5Gclose);
+        CHECK(group.id >= 0);
+        CHECK(H5Lmove(file, "group", group, "self", H5P_DEFAULT,
+                      H5P_DEFAULT) < 0);
+        CHECK(H5Lexists(file, "group", H5P_DEFAULT) > 0);
+        CHECK(H5Lexists(group, "self", H5P_DEFAULT) == 0);
+    }
+    else if (name == "native_soft_link_uncached")
+    {
+        CHECK(H5Lcreate_soft("/source", file, "middle", H5P_DEFAULT,
+                            H5P_DEFAULT) >= 0);
+        CHECK(H5Lcreate_soft("/middle", file, "alias", H5P_DEFAULT,
+                            H5P_DEFAULT) >= 0);
+        Id alias(H5Dopen2(file, "alias", H5P_DEFAULT), H5Dclose);
+        value(alias, 71);
+    }
+    else if (name == "native_group_soft_link_uncached")
+    {
+        CHECK(H5Lcreate_soft("/group", file, "group-alias", H5P_DEFAULT,
+                            H5P_DEFAULT) >= 0);
+        Id alias(H5Gopen2(file, "group-alias", H5P_DEFAULT), H5Gclose);
+        Id gcpl(H5Gget_create_plist(alias), H5Pclose);
+        CHECK(gcpl.id >= 0);
+        Id child(H5Dopen2(alias, "child", H5P_DEFAULT), H5Dclose);
+        value(child, 73);
+    }
+    else if (name == "native_dataset_intermediate_soft_link")
+    {
+        CHECK(H5Lcreate_soft("/group", file, "group-alias", H5P_DEFAULT,
+                            H5P_DEFAULT) >= 0);
+        Id child(H5Dopen2(file, "group-alias/child", H5P_DEFAULT), H5Dclose);
+        value(child, 73);
+    }
+    else if (name == "native_object_soft_link_uncached")
+    {
+        CHECK(H5Lcreate_soft("/source", file, "alias", H5P_DEFAULT,
+                            H5P_DEFAULT) >= 0);
+        Id alias(H5Oopen(file, "alias", H5P_DEFAULT), H5Oclose);
+        CHECK(H5Iget_type(alias) == H5I_DATASET);
+        value(alias, 71);
+    }
+    else if (name == "native_link_delete")
+    {
+        { Id cached(H5Dopen2(file, "source", H5P_DEFAULT), H5Dclose); value(cached, 71); }
+        CHECK(H5Ldelete(file, "source", H5P_DEFAULT) >= 0);
+        CHECK(H5Ldelete(file, "group", H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(file, "source", H5P_DEFAULT) == 0);
+        CHECK(H5Lexists(file, "group", H5P_DEFAULT) == 0);
+        { auto recreated = dataset(file, "source", scalar); CHECK(recreated.id >= 0); }
+        { Id recreated(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT,
+                                  H5P_DEFAULT), H5Gclose); CHECK(recreated.id >= 0); }
+    }
+    else
+    {
+        CHECK(H5Lcopy(file, "source", file, "copy", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        { Id copied(H5Dopen2(file, "copy", H5P_DEFAULT), H5Dclose); value(copied, 71); }
+        vol.set_passthru(second_filename, "*");
+        Id second(H5Fopen(second_filename.c_str(), H5F_ACC_RDWR, connector.fapl), H5Fclose);
+        CHECK(H5Lcopy(file, "soft", second, "copied", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lmove(file, "soft2", second, "moved", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(second, "copied", H5P_DEFAULT) > 0);
+        CHECK(H5Lexists(second, "moved", H5P_DEFAULT) > 0);
+        second.reset();
+        std::remove(second_filename.c_str());
+    }
+}
+void run(const std::string& name)
+{
+    if (name == "wildcard")
+    {
+        const char subject[] = {'a', '\0', 'x', '\0'};
+        CHECK(!LowFive::MetadataVOL::match("a?x", subject));
+        CHECK(!LowFive::MetadataVOL::match("?", ""));
+        CHECK(LowFive::MetadataVOL::match("a*?", "ab"));
+        return;
+    }
+    if (name == "dataset-metadata-get-failure")
+    {
+        for (int failure = 1; failure < 4; ++failure)
+        {
+            int call = 0;
+            std::vector<hid_t> created;
+            auto result = LowFive::query_dataset_metadata(
+                [&](H5VL_dataset_get_args_t& args) -> herr_t
+                {
+                    if (call++ == failure) return -1;
+                    hid_t id = H5I_INVALID_HID;
+                    if (args.op_type == H5VL_DATASET_GET_TYPE)
+                    {
+                        id = H5Tcopy(H5T_NATIVE_INT);
+                        args.args.get_type.type_id = id;
+                    }
+                    else if (args.op_type == H5VL_DATASET_GET_SPACE)
+                    {
+                        id = H5Screate(H5S_SCALAR);
+                        args.args.get_space.space_id = id;
+                    }
+                    else if (args.op_type == H5VL_DATASET_GET_DCPL)
+                    {
+                        id = H5Pcreate(H5P_DATASET_CREATE);
+                        args.args.get_dcpl.dcpl_id = id;
+                    }
+                    else
+                    {
+                        id = H5Pcreate(H5P_DATASET_ACCESS);
+                        args.args.get_dapl.dapl_id = id;
+                    }
+                    CHECK(id >= 0);
+                    created.push_back(id);
+                    return 0;
+                });
+            CHECK(!result);
+            for (auto id : created) CHECK(H5Iis_valid(id) == 0);
+        }
+        return;
+    }
+    if (name == "file_plist_ownership")
+    {
+        Id fcpl(H5Pcreate(H5P_FILE_CREATE), H5Pclose), fapl(H5Pcreate(H5P_FILE_ACCESS), H5Pclose);
+        hid_t stored_fcpl, stored_fapl;
+        { LowFive::File file("ownership", fcpl.id, fapl.id); stored_fcpl = file.fcpl.id; stored_fapl = file.fapl.id; }
+        CHECK(H5Iis_valid(stored_fcpl) == 0); CHECK(H5Iis_valid(stored_fapl) == 0);
+        return;
+    }
+    if (name == "native_datatype_attr" ||
+        name == "native_datatype_object_open" ||
+        name == "native_datatype_link_create" ||
+        name == "native_datatype_commit_parent" ||
+        name == "native_object_dataset_extent" ||
+        name == "native_attr_iteration" || name == "native_attr_open_delete" ||
+        name == "native_attr_delete_idx" ||
+        name == "native_attr_delete_idx_mixed" ||
+        name == "native_link_delete" || name == "native_link_delete_idx" ||
+        name == "native_link_delete_idx_uncached" ||
+        name == "native_link_copy_move" || name == "native_link_move_cached" ||
+        name == "native_link_move_cycle" ||
+        name == "native_soft_link_uncached" ||
+        name == "native_group_soft_link_uncached" ||
+        name == "native_dataset_intermediate_soft_link" ||
+        name == "native_object_soft_link_uncached")
+    {
+        native_callbacks(name);
+        return;
+    }
+    const bool dual = name == "dual_reopen" || name == "extent_failure" ||
+                      name == "file-id-child-dual" ||
+                      name.find("failure") != std::string::npos;
+    const bool intermediate_native =
+        name == "intermediate-group-native" ||
+        name == "intermediate-dataset-native" ||
+        name == "intermediate-datatype-native" ||
+        name == "intermediate-links-native";
+    const auto mode = name == "file-id-child-file" ? "file" :
+                      (dual || intermediate_native ||
+                       name == "native_parent_attr" ? "dual" :
+                                                                  "memory");
+    test::Connector connector("callbacks_" + name, mode);
+    auto& vol = dynamic_cast<LowFive::MetadataVOL&>(connector.vol);
+    if (name == "reference-passthru-target" ||
+        name == "reference-native-identity" ||
+        name == "reference-native-identity-deferred" ||
+        name == "reference-after-file-close" ||
+        name == "reference-opened-native")
+    {
+        vol.memory.clear();
+        vol.passthru.clear();
+        vol.set_memory(connector.filename, "/reference");
+        vol.set_passthru(connector.filename, "/native");
+    }
+    if (name == "file_failure")
+    {
+        const std::string missing = "/lowfive_nonexistent_parent/callbacks.h5";
+        vol.set_passthru(missing, "*"); vol.set_memory(missing, "*");
+        CHECK(H5Fcreate(missing.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, connector.fapl) < 0);
+        CHECK(vol.files.count(missing) == 0);
+        CHECK(H5Fopen(missing.c_str(), H5F_ACC_RDWR, connector.fapl) < 0);
+        CHECK(vol.files.count(missing) == 0);
+        return;
+    }
+    if (name == "file_accessible")
+    {
+        CHECK(H5Fis_accessible(connector.filename.c_str(), connector.fapl) == 0);
+        auto writable = connector.file();
+        CHECK(H5Fis_accessible(connector.filename.c_str(), connector.fapl) > 0);
+        return;
+    }
+    if (name == "file_exclusive")
+    {
+        auto writable = connector.file();
+        auto original = dataset(writable, "original", test::scalar());
+        write(original, 31);
+        CHECK(H5Fcreate(connector.filename.c_str(), H5F_ACC_EXCL,
+                        H5P_DEFAULT, connector.fapl) < 0);
+        value(original, 31);
+        CHECK(H5Lexists(writable, "original", H5P_DEFAULT) > 0);
+        return;
+    }
+    if (name == "file_access")
+    {
+        auto writable = connector.file();
+        hsize_t current = 1, maximum = 2, chunk = 1;
+        Id extensible(H5Screate_simple(1, &current, &maximum), H5Sclose);
+        Id dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose);
+        CHECK(H5Pset_chunk(dcpl, 1, &chunk) >= 0);
+        Id values(H5Dcreate2(writable, "values", H5T_NATIVE_INT, extensible,
+                             H5P_DEFAULT, dcpl, H5P_DEFAULT), H5Dclose);
+        write(values, 4);
+        Id attribute(H5Acreate2(writable, "attribute", H5T_NATIVE_INT,
+                                test::scalar(), H5P_DEFAULT, H5P_DEFAULT),
+                     H5Aclose);
+        int attribute_value = 7;
+        CHECK(H5Awrite(attribute, H5T_NATIVE_INT, &attribute_value) >= 0);
+        CHECK(H5Lcreate_soft("/values", writable, "alias",
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+
+        Id readonly(H5Fopen(connector.filename.c_str(), H5F_ACC_RDONLY,
+                            connector.fapl), H5Fclose);
+        unsigned intent = H5F_ACC_RDWR;
+        CHECK(H5Fget_intent(readonly, &intent) >= 0);
+        CHECK(intent == H5F_ACC_RDONLY);
+        Id readonly_values(H5Dopen2(readonly, "values", H5P_DEFAULT), H5Dclose);
+        int replacement = 9;
+        CHECK(H5Dwrite(readonly_values, H5T_NATIVE_INT, H5S_ALL, H5S_ALL,
+                       H5P_DEFAULT, &replacement) < 0);
+        hsize_t extended = 2;
+        CHECK(H5Dset_extent(readonly_values, &extended) < 0);
+        Id readonly_attribute(H5Aopen(readonly, "attribute", H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(readonly_attribute, H5T_NATIVE_INT, &replacement) < 0);
+        CHECK(H5Arename(readonly, "attribute", "renamed") < 0);
+        CHECK(H5Adelete(readonly, "attribute") < 0);
+        CHECK(H5Gcreate2(readonly, "group", H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) < 0);
+        CHECK(H5Dcreate2(readonly, "dataset", H5T_NATIVE_INT, extensible,
+                         H5P_DEFAULT, dcpl, H5P_DEFAULT) < 0);
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(readonly, "datatype", datatype, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT) < 0);
+        CHECK(H5Lcreate_soft("/values", readonly, "second-alias",
+                             H5P_DEFAULT, H5P_DEFAULT) < 0);
+        CHECK(H5Ldelete(readonly, "alias", H5P_DEFAULT) < 0);
+
+        Id reopened(H5Freopen(readonly), H5Fclose);
+        CHECK(H5Fget_intent(reopened, &intent) >= 0);
+        CHECK(intent == H5F_ACC_RDONLY);
+        Id owning_file(H5Iget_file_id(readonly_values), H5Fclose);
+        CHECK(H5Fget_intent(owning_file, &intent) >= 0);
+        CHECK(intent == H5F_ACC_RDONLY);
+        value(readonly_values, 4);
+        int actual_attribute = 0;
+        CHECK(H5Aread(readonly_attribute, H5T_NATIVE_INT,
+                      &actual_attribute) >= 0);
+        CHECK(actual_attribute == attribute_value);
+        CHECK(H5Lexists(readonly, "alias", H5P_DEFAULT) > 0);
+        return;
+    }
+    auto file = [&]()
+    {
+        if (intermediate_native)
+        {
+            {
+                Id native_file(H5Fcreate(connector.filename.c_str(),
+                                          H5F_ACC_TRUNC, H5P_DEFAULT,
+                                          H5P_DEFAULT), H5Fclose);
+                Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+                CHECK(H5Pset_link_creation_order(
+                    gcpl, H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED) >= 0);
+                CHECK(H5Pset_link_phase_change(gcpl, 12, 10) >= 0);
+                Id existing(H5Gcreate2(native_file, "existing", H5P_DEFAULT,
+                                        gcpl, H5P_DEFAULT), H5Gclose);
+                if (name == "intermediate-links-native")
+                {
+                    for (auto path : {"existing-hard", "existing-copy",
+                                      "existing-move"})
+                    {
+                        Id group(H5Gcreate2(native_file, path, H5P_DEFAULT,
+                                             gcpl, H5P_DEFAULT), H5Gclose);
+                    }
+                    CHECK(H5Lcreate_soft("/source", native_file,
+                                         "uncached-soft", H5P_DEFAULT,
+                                         H5P_DEFAULT) >= 0);
+                }
+            }
+            return Id(H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR,
+                              connector.fapl), H5Fclose);
+        }
+        if (name != "reference-opened-native") return connector.file();
+        {
+            Id native_file(H5Fcreate(connector.filename.c_str(), H5F_ACC_TRUNC,
+                                     H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            auto native = dataset(native_file, "native", test::scalar());
+            write(native, 107);
+        }
+        return Id(H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR,
+                          connector.fapl), H5Fclose);
+    }();
+    auto scalar = test::scalar();
+    if (name.rfind("intermediate-", 0) == 0)
+    {
+        Id lcpl(H5Pcreate(H5P_LINK_CREATE), H5Pclose);
+        Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+        const unsigned tracked = H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED;
+        CHECK(H5Pset_link_creation_order(gcpl, tracked) >= 0);
+        CHECK(H5Pset_link_phase_change(gcpl, 12, 10) >= 0);
+        auto properties = [&](const char* path, bool final)
+        {
+            Id group(H5Gopen2(file, path, H5P_DEFAULT), H5Gclose);
+            Id actual(H5Gget_create_plist(group), H5Pclose);
+            unsigned order = 0, maximum = 0, minimum = 0;
+            CHECK(H5Pget_link_creation_order(actual, &order) >= 0);
+            CHECK(order == (final ? tracked : 0));
+            CHECK(H5Pget_link_phase_change(actual, &maximum, &minimum) >= 0);
+            CHECK(maximum == (final ? 12 : 8));
+            CHECK(minimum == (final ? 10 : 6));
+            auto* metadata = dynamic_cast<LowFive::Group*>(
+                vol.locate(connector.filename, path));
+            CHECK(metadata);
+            CHECK(H5Pget_link_creation_order(metadata->gcpl.id, &order) >= 0);
+            CHECK(order == (final ? tracked : 0));
+            CHECK(H5Pget_link_phase_change(metadata->gcpl.id,
+                                           &maximum, &minimum) >= 0);
+            CHECK(maximum == (final ? 12 : 8));
+            CHECK(minimum == (final ? 10 : 6));
+        };
+        auto absent = [&](const char* path, size_t before)
+        {
+            CHECK(H5Lexists(file, path, H5P_DEFAULT) == 0);
+            CHECK(vol.files.at(connector.filename)->children.size() == before);
+        };
+        CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+        const auto before_dot = vol.files.at(connector.filename)->children.size();
+        if (name.rfind("intermediate-group", 0) == 0)
+            CHECK(H5Gcreate2(file, "dot-parent/.", lcpl, gcpl, H5P_DEFAULT) < 0);
+        else if (name.rfind("intermediate-dataset", 0) == 0)
+            CHECK(H5Dcreate2(file, "dot-parent/.", H5T_NATIVE_INT, scalar, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) < 0);
+        else if (name.rfind("intermediate-datatype", 0) == 0)
+        {
+            Id type(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "dot-parent/.", type, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) < 0);
+            CHECK(H5Tcommitted(type) == 0);
+        }
+        else
+            CHECK(H5Lcreate_soft("/target", file, "dot-parent/.", lcpl,
+                                 H5P_DEFAULT) < 0);
+        absent("dot-parent", before_dot);
+        CHECK(H5Pset_create_intermediate_group(lcpl, 0) >= 0);
+        auto uncached_alias = [&](const char* target, const char* alias)
+        {
+            auto destination = "/" + std::string(target);
+            CHECK(H5Lcreate_soft(destination.c_str(), file, alias, H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+        };
+        if (intermediate_native) uncached_alias("existing", "uncached-alias");
+        if (name == "intermediate-group" ||
+            name == "intermediate-group-native")
+        {
+            CHECK(H5Lcreate_soft("/missing-group", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Gcreate2(file, "dangling", properties, gcpl,
+                                 H5P_DEFAULT) < 0);
+                if (!intermediate_native)
+                    CHECK(H5Gcreate2(file, "dangling/child", properties, gcpl,
+                                     H5P_DEFAULT) < 0);
+                absent("missing-group", before);
+                CHECK(H5Lexists(file, "dangling", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Gcreate2(file, "groups/branch/final", disabled, gcpl,
+                                 H5P_DEFAULT) < 0);
+                absent("groups", before);
+                reject_dangling(disabled);
+            }
+            {
+                Id trailing(H5Gcreate2(file, "trailing-default/", H5P_DEFAULT,
+                                       gcpl, H5P_DEFAULT), H5Gclose);
+                properties("/trailing-default", true);
+                H5G_info_t info {};
+                CHECK(H5Gget_info(trailing, &info) >= 0);
+                CHECK(info.nlinks == 0);
+                CHECK(vol.locate(connector.filename, "/trailing-default")
+                          ->children.empty());
+                Id explicit_disabled(H5Gcreate2(
+                    file, "trailing-disabled/", lcpl, gcpl, H5P_DEFAULT),
+                    H5Gclose);
+                properties("/trailing-disabled", true);
+                CHECK(vol.locate(connector.filename, "/trailing-disabled")
+                          ->children.empty());
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            Id group(H5Gcreate2(file, "/groups/branch/final/", lcpl, gcpl,
+                                H5P_DEFAULT), H5Gclose);
+            properties("/groups", false);
+            properties("/groups/branch", false);
+            properties("/groups/branch/final", true);
+            CHECK(vol.locate(connector.filename, "/groups/branch/final")
+                      ->children.empty());
+            CHECK(H5Lcreate_soft("/groups", file, "group-alias", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            Id alias_child(H5Gcreate2(file, "group-alias/more/final", lcpl,
+                                      gcpl, H5P_DEFAULT), H5Gclose);
+            properties("/groups/more", false);
+            properties("/groups/more/final", true);
+            if (intermediate_native)
+            {
+                Id child(H5Gcreate2(file, "uncached-alias/child", H5P_DEFAULT,
+                                    H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+                properties("/existing", true);
+                properties("/existing/child", false);
+            }
+        }
+        else if (name == "intermediate-dataset" ||
+                 name == "intermediate-dataset-native")
+        {
+            CHECK(H5Lcreate_soft("/missing-dataset", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Dcreate2(file, "dangling", H5T_NATIVE_INT, scalar,
+                                 properties, H5P_DEFAULT, H5P_DEFAULT) < 0);
+                if (!intermediate_native)
+                    CHECK(H5Dcreate2(file, "dangling/child", H5T_NATIVE_INT,
+                                     scalar, properties, H5P_DEFAULT,
+                                     H5P_DEFAULT) < 0);
+                absent("missing-dataset", before);
+                CHECK(H5Lexists(file, "dangling", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Dcreate2(file, "datasets/branch/value", H5T_NATIVE_INT,
+                                 scalar, disabled, H5P_DEFAULT,
+                                 H5P_DEFAULT) < 0);
+                absent("datasets", before);
+                reject_dangling(disabled);
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            Id created(H5Dcreate2(file, "datasets/branch/value", H5T_NATIVE_INT,
+                                  scalar, lcpl, H5P_DEFAULT, H5P_DEFAULT),
+                       H5Dclose);
+            write(created, 149);
+            Id opened(H5Dopen2(file, "datasets/branch/value", H5P_DEFAULT),
+                      H5Dclose);
+            value(opened, 149);
+            properties("/datasets", false);
+            properties("/datasets/branch", false);
+            CHECK(H5Lcreate_soft("/datasets", file, "dataset-alias",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id alias_child(H5Dcreate2(
+                file, "dataset-alias/more/value", H5T_NATIVE_INT, scalar,
+                lcpl, H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+            write(alias_child, 153);
+            Id alias_opened(H5Dopen2(file, "datasets/more/value", H5P_DEFAULT),
+                            H5Dclose);
+            value(alias_opened, 153);
+            properties("/datasets/more", false);
+            if (intermediate_native)
+            {
+                auto child = dataset(file, "uncached-alias/child", scalar);
+                properties("/existing", true);
+            }
+        }
+        else if (name == "intermediate-datatype" ||
+                 name == "intermediate-datatype-native")
+        {
+            CHECK(H5Lcreate_soft("/missing-type", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+                CHECK(H5Tcommit2(file, "dangling", datatype, properties,
+                                 H5P_DEFAULT, H5P_DEFAULT) < 0);
+                if (!intermediate_native)
+                    CHECK(H5Tcommit2(file, "dangling/child", datatype, properties,
+                                     H5P_DEFAULT, H5P_DEFAULT) < 0);
+                absent("missing-type", before);
+                CHECK(H5Lexists(file, "dangling", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+                CHECK(H5Tcommit2(file, "types/branch/type", datatype, disabled,
+                                 H5P_DEFAULT, H5P_DEFAULT) < 0);
+                absent("types", before);
+                reject_dangling(disabled);
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "types/branch/type", datatype, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id opened(H5Topen2(file, "types/branch/type", H5P_DEFAULT), H5Tclose);
+            CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+            properties("/types", false);
+            properties("/types/branch", false);
+            CHECK(H5Lcreate_soft("/types", file, "type-alias", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            Id alias_type(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "type-alias/more/type", alias_type, lcpl,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id alias_opened(H5Topen2(file, "types/more/type", H5P_DEFAULT),
+                            H5Tclose);
+            CHECK(H5Tequal(alias_opened, H5T_NATIVE_INT) > 0);
+            properties("/types/more", false);
+            if (intermediate_native)
+            {
+                Id child(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+                CHECK(H5Tcommit2(file, "uncached-alias/type", child, H5P_DEFAULT,
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                properties("/existing", true);
+            }
+        }
+        else
+        {
+            auto source = dataset(file, "source", scalar);
+            write(source, 151);
+            Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(file, "type", datatype, H5P_DEFAULT,
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "copy-source", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "move-source", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/missing-links", file, "dangling",
+                                 H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            auto reject_dangling = [&](hid_t properties)
+            {
+                if (intermediate_native) return;
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Lcreate_hard(file, "source", file, "dangling/hard",
+                                     properties, H5P_DEFAULT) < 0);
+                CHECK(H5Lcreate_soft("/source", file, "dangling/soft",
+                                     properties, H5P_DEFAULT) < 0);
+                CHECK(H5Olink(datatype, file, "dangling/type", properties,
+                               H5P_DEFAULT) < 0);
+                CHECK(H5Lcopy(file, "copy-source", file, "dangling/copy",
+                               properties, H5P_DEFAULT) < 0);
+                CHECK(H5Lmove(file, "move-source", file, "dangling/move",
+                               properties, H5P_DEFAULT) < 0);
+                absent("missing-links", before);
+                CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) > 0);
+            };
+            for (hid_t disabled : {hid_t(H5P_DEFAULT), lcpl.id})
+            {
+                auto before = vol.files.at(connector.filename)->children.size();
+                CHECK(H5Lcreate_hard(file, "source", file, "hard/branch/link",
+                                     disabled, H5P_DEFAULT) < 0);
+                absent("hard", before);
+                CHECK(H5Lcreate_soft("/source", file, "soft/branch/link",
+                                     disabled, H5P_DEFAULT) < 0);
+                absent("soft", before);
+                CHECK(H5Olink(datatype, file, "linked-type/branch/type",
+                               disabled, H5P_DEFAULT) < 0);
+                absent("linked-type", before);
+                CHECK(H5Lcopy(file, "copy-source", file, "copied/branch/link",
+                               disabled, H5P_DEFAULT) < 0);
+                absent("copied", before);
+                CHECK(H5Lmove(file, "move-source", file, "moved/branch/link",
+                               disabled, H5P_DEFAULT) < 0);
+                absent("moved", before);
+                CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) > 0);
+                reject_dangling(disabled);
+            }
+            CHECK(H5Pset_create_intermediate_group(lcpl, 1) >= 0);
+            reject_dangling(lcpl);
+            CHECK(H5Lcreate_hard(file, "source", file, "hard/branch/link",
+                                 lcpl, H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_soft("/source", file, "soft/branch/link", lcpl,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Olink(datatype, file, "linked-type/branch/type", lcpl,
+                           H5P_DEFAULT) >= 0);
+            CHECK(H5Lcopy(file, "copy-source", file, "copied/branch/link",
+                           lcpl, H5P_DEFAULT) >= 0);
+            CHECK(H5Lmove(file, "move-source", file, "moved/branch/link",
+                           lcpl, H5P_DEFAULT) >= 0);
+            CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) == 0);
+            for (auto path : {"hard", "soft", "linked-type", "copied", "moved"})
+            {
+                properties(path, false);
+                auto branch = std::string(path) + "/branch";
+                properties(branch.c_str(), false);
+            }
+            for (auto path : {"hard/branch/link", "soft/branch/link",
+                              "copied/branch/link", "moved/branch/link"})
+            {
+                Id opened(H5Dopen2(file, path, H5P_DEFAULT), H5Dclose);
+                value(opened, 151);
+            }
+            Id opened(H5Topen2(file, "linked-type/branch/type", H5P_DEFAULT),
+                      H5Tclose);
+            CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+            CHECK(H5Lcreate_soft("/soft", file, "alias", H5P_DEFAULT,
+                                 H5P_DEFAULT) >= 0);
+            CHECK(H5Lcreate_hard(file, "source", file,
+                                 "alias/more/levels/link", lcpl,
+                                 H5P_DEFAULT) >= 0);
+            properties("/soft/more", false);
+            properties("/soft/more/levels", false);
+            Id alias(H5Dopen2(file, "alias/more/levels/link", H5P_DEFAULT),
+                     H5Dclose);
+            value(alias, 151);
+            if (intermediate_native)
+            {
+                const auto second_name = connector.filename + ".uncached";
+                vol.set_passthru(second_name, "*");
+                vol.set_memory(second_name, "*");
+                {
+                    Id second(H5Fcreate(second_name.c_str(), H5F_ACC_TRUNC,
+                                          H5P_DEFAULT, connector.fapl),
+                              H5Fclose);
+                    auto second_source = dataset(second, "source", scalar);
+                    write(second_source, 157);
+                    CHECK(H5Lcopy(file, "uncached-soft", second, "copied",
+                                   H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                    Id copied(H5Dopen2(second, "copied", H5P_DEFAULT), H5Dclose);
+                    value(copied, 157);
+                }
+                std::remove(second_name.c_str());
+            }
+            if (intermediate_native)
+            {
+                CHECK(H5Lcreate_soft("/source", file, "uncached-alias/link",
+                                     H5P_DEFAULT, H5P_DEFAULT) >= 0);
+                properties("/existing", true);
+                uncached_alias("existing-hard", "uncached-hard-alias");
+                CHECK(H5Lcreate_hard(file, "source", file,
+                                     "uncached-hard-alias/link", H5P_DEFAULT,
+                                     H5P_DEFAULT) >= 0);
+                properties("/existing-hard", true);
+                uncached_alias("existing-copy", "uncached-copy-alias");
+                CHECK(H5Lcopy(file, "copy-source", file,
+                               "uncached-copy-alias/link", H5P_DEFAULT,
+                               H5P_DEFAULT) >= 0);
+                properties("/existing-copy", true);
+                uncached_alias("existing-move", "uncached-move-alias");
+                CHECK(H5Lmove(file, "copy-source", file,
+                               "uncached-move-alias/link", H5P_DEFAULT,
+                               H5P_DEFAULT) >= 0);
+                properties("/existing-move", true);
+            }
+        }
+        return;
+    }
+    if (name == "missing_callback_names")
+    {
+        H5O_info2_t object_info {};
+        H5G_info_t group_info {};
+        CHECK(H5Oget_info_by_name3(file, "missing", &object_info,
+                                  H5O_INFO_BASIC, H5P_DEFAULT) < 0);
+        CHECK(H5Gget_info_by_name(file, "missing", &group_info,
+                                  H5P_DEFAULT) < 0);
+        hsize_t index = 0;
+        std::vector<std::string> names;
+        CHECK(H5Aiterate_by_name(file, "missing", H5_INDEX_NAME, H5_ITER_INC,
+                                 &index, collect_attribute, &names,
+                                 H5P_DEFAULT) < 0);
+        CHECK(index == 0);
+        CHECK(names.empty());
+        CHECK(H5Giterate(file, "missing", nullptr,
+                         [](hid_t, const char*, void*) -> herr_t { return 0; },
+                         nullptr) < 0);
+        Id group(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        auto first = dataset(group, "a", scalar);
+        auto second = dataset(group, "b", scalar);
+        auto third = dataset(group, "c", scalar);
+        int next = 1;
+        auto collect = [](hid_t location, const char* child, void* context) -> herr_t
+        {
+            char path[16] {};
+            CHECK(H5Iget_name(location, path, sizeof(path)) == 6);
+            CHECK(std::string(path) == "/group");
+            static_cast<std::vector<std::string>*>(context)->emplace_back(child);
+            return 1;
+        };
+        CHECK(H5Giterate(file, "group", &next, collect, &names) == 1);
+        CHECK(next == 2 && names == std::vector<std::string>{"b"});
+        CHECK(H5Giterate(file, "group", &next, collect, &names) == 1);
+        CHECK(next == 3 && names == (std::vector<std::string>{"b", "c"}));
+        CHECK(H5Giterate(file, "group", &next, collect, &names) == 0);
+        CHECK(next == 3 && names.size() == 2);
+        return;
+    }
+    if (name == "metadata_optional_contract")
+    {
+        CHECK(H5Oset_comment(file, "not stored") < 0);
+        char comment[] = "unchanged";
+        CHECK(H5Oget_comment(file, comment, sizeof(comment)) < 0);
+        CHECK(std::strcmp(comment, "unchanged") == 0);
+        hsize_t storage = 123;
+        CHECK(H5Fget_filesize(file, &storage) < 0);
+        CHECK(storage == 123);
+        return;
+    }
+    if (name == "file_owned_object_ids")
+    {
+        uint64_t flags = H5VL_OPT_QUERY_SUPPORTED;
+        CHECK(H5VLquery_optional(file, H5VL_SUBCLS_OBJECT,
+                                  H5VL_NATIVE_OBJECT_SET_COMMENT, &flags) >= 0);
+        CHECK((flags & H5VL_OPT_QUERY_SUPPORTED) == 0);
+        const auto other_name = connector.filename + ".other";
+        vol.set_memory(other_name, "*");
+        Id other(H5Fcreate(other_name.c_str(), H5F_ACC_TRUNC,
+                           H5P_DEFAULT, connector.fapl), H5Fclose);
+        auto own_dataset = dataset(file, "own", scalar);
+        auto foreign_dataset = dataset(other, "foreign", scalar);
+        Id group(H5Gcreate2(file, "group", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        Id attr(H5Acreate2(group, "attribute", H5T_NATIVE_INT, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", datatype, H5P_DEFAULT,
+                         H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        Id transient(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_ALL) == 5);
+        CHECK(H5Fget_obj_count(other, H5F_OBJ_ALL) == 2);
+        const std::pair<unsigned, hid_t> expected[] = {
+            {H5F_OBJ_FILE, file.id}, {H5F_OBJ_GROUP, group.id},
+            {H5F_OBJ_DATASET, own_dataset.id}, {H5F_OBJ_ATTR, attr.id},
+            {H5F_OBJ_DATATYPE, datatype.id}
+        };
+        for (const auto& entry : expected)
+        {
+            CHECK(H5Fget_obj_count(file, entry.first) == 1);
+            std::array<hid_t, 2> ids {H5I_INVALID_HID, H5I_INVALID_HID};
+            CHECK(H5Fget_obj_ids(file, entry.first, 1, ids.data()) == 1);
+            CHECK(ids[0] == entry.second);
+            CHECK(ids[1] == H5I_INVALID_HID);
+        }
+        std::array<hid_t, 1> bounded {H5I_INVALID_HID};
+        CHECK(H5Fget_obj_ids(file, H5F_OBJ_ALL, 0, bounded.data()) == 0);
+        CHECK(bounded[0] == H5I_INVALID_HID);
+        Id reopened(H5Freopen(file), H5Fclose);
+        Id local_dataset(H5Dopen2(reopened, "own", H5P_DEFAULT), H5Dclose);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_DATASET) == 2);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_DATASET | H5F_OBJ_LOCAL) == 1);
+        CHECK(H5Fget_obj_count(reopened, H5F_OBJ_DATASET | H5F_OBJ_LOCAL) == 1);
+        CHECK(H5Fget_obj_ids(reopened, H5F_OBJ_DATASET | H5F_OBJ_LOCAL,
+                             1, bounded.data()) == 1);
+        CHECK(bounded[0] == local_dataset.id);
+        Id derived(H5Iget_file_id(local_dataset), H5Fclose);
+        CHECK(H5Fget_obj_count(derived, H5F_OBJ_DATASET | H5F_OBJ_LOCAL) == 1);
+        CHECK(H5Fget_obj_ids(derived, H5F_OBJ_DATASET | H5F_OBJ_LOCAL,
+                             1, bounded.data()) == 1);
+        CHECK(bounded[0] == local_dataset.id);
+        return;
+    }
+    if (name == "bounded_object_ids")
+    {
+        auto first = dataset(file, "first", scalar);
+        auto second = dataset(file, "second", scalar);
+        std::array<hid_t, 1> ids {H5I_INVALID_HID};
+        CHECK(H5Fget_obj_ids(file, H5F_OBJ_DATASET, ids.size(), ids.data()) == 1);
+        CHECK(ids[0] == first.id || ids[0] == second.id);
+        return;
+    }
+    if (name == "datatype_failures")
+    {
+        CHECK(H5Topen2(file, "missing", H5P_DEFAULT) < 0);
+        Id first(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", first, H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) >= 0);
+        Id duplicate(H5Tcopy(H5T_NATIVE_DOUBLE), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", duplicate, H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) < 0);
+        Id opened(H5Topen2(file, "type", H5P_DEFAULT), H5Tclose);
+        CHECK(H5Tequal(opened, H5T_NATIVE_INT) > 0);
+        return;
+    }
+    if (name == "committed_datatype_attributes")
+    {
+        Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+        CHECK(H5Tcommit2(file, "type", datatype, H5P_DEFAULT, H5P_DEFAULT,
+                         H5P_DEFAULT) >= 0);
+        Id attribute(H5Acreate2(datatype, "label", H5T_NATIVE_INT, scalar,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        std::vector<std::string> names;
+        hsize_t index = 0;
+        CHECK(H5Aiterate2(
+                  datatype, H5_INDEX_NAME, H5_ITER_INC, &index,
+                  [](hid_t object, const char* attribute_name,
+                     const H5A_info_t*, void* data) -> herr_t
+                  {
+                      CHECK(H5Iget_type(object) == H5I_DATATYPE);
+                      static_cast<std::vector<std::string>*>(data)->
+                          emplace_back(attribute_name);
+                      return 0;
+                  },
+                  &names) >= 0);
+        CHECK(names == std::vector<std::string>{"label"});
+        CHECK(index == 1);
+        return;
+    }
+    if (name == "group_plist_copy")
+    {
+        Id gcpl(H5Pcreate(H5P_GROUP_CREATE), H5Pclose);
+        CHECK(H5Pset_attr_phase_change(gcpl, 5, 4) >= 0);
+        Id group(H5Gcreate2(file, "group", H5P_DEFAULT, gcpl, H5P_DEFAULT),
+                 H5Gclose);
+        CHECK(H5Pset_attr_phase_change(gcpl, 1, 1) >= 0);
+        Id first(H5Gget_create_plist(group), H5Pclose);
+        unsigned maximum = 0, minimum = 0;
+        CHECK(H5Pget_attr_phase_change(first, &maximum, &minimum) >= 0);
+        CHECK(maximum == 5 && minimum == 4);
+        CHECK(H5Pset_attr_phase_change(first, 2, 2) >= 0);
+        Id second(H5Gget_create_plist(group), H5Pclose);
+        CHECK(H5Pget_attr_phase_change(second, &maximum, &minimum) >= 0);
+        CHECK(maximum == 5 && minimum == 4);
+        return;
+    }
+    if (name == "attr_iteration")
+    {
+        Id z(H5Acreate2(file, "z", H5T_NATIVE_INT, scalar,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        Id a(H5Acreate2(file, "a", H5T_NATIVE_INT, scalar,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        std::vector<std::string> names;
+        hsize_t index = 0;
+        CHECK(H5Aiterate2(file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                          collect_attribute, &names) >= 0);
+        CHECK(names == (std::vector<std::string>{"a", "z"}));
+        CHECK(index == 2);
+
+        names.clear();
+        index = 0;
+        CHECK(H5Aiterate2(
+                  file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                  [](hid_t, const char* attribute_name, const H5A_info_t*,
+                     void* data) -> herr_t
+                  {
+                      static_cast<std::vector<std::string>*>(data)->
+                          emplace_back(attribute_name);
+                      return 1;
+                  },
+                  &names) == 1);
+        CHECK(names == std::vector<std::string>{"a"});
+        CHECK(index == 1);
+        names.clear();
+        CHECK(H5Aiterate2(file, H5_INDEX_NAME, H5_ITER_INC, &index,
+                          collect_attribute, &names) >= 0);
+        CHECK(names == std::vector<std::string>{"z"});
+        CHECK(index == 2);
+        return;
+    }
+    if (name == "lifetime" || name == "multiple_files")
+    {
+        auto d = dataset(file, "d", scalar); write(d, 17);
+        if (name == "multiple_files")
+        {
+            Id second(H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR, connector.fapl), H5Fclose);
+            file.reset();
+            Id reopened(H5Dopen2(second, "d", H5P_DEFAULT), H5Dclose); value(reopened, 17);
+            second.reset(); value(d, 17);
+        }
+        else { file.reset(); value(d, 17); write(d, 19); value(d, 19); }
+    }
+    else if (name == "lifetime_group" || name == "lifetime_attr")
+    {
+        Id group(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+        Id attr(H5Acreate2(group, "a", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int input = 7; CHECK(H5Awrite(attr, H5T_NATIVE_INT, &input) >= 0);
+        file.reset();
+        if (name == "lifetime_group") { attr.reset(); Id reopened(H5Aopen(group, "a", H5P_DEFAULT), H5Aclose); int output = 0; CHECK(H5Aread(reopened, H5T_NATIVE_INT, &output) >= 0); CHECK(output == input); }
+        else { group.reset(); int output = 0; CHECK(H5Aread(attr, H5T_NATIVE_INT, &output) >= 0); CHECK(output == input); }
+    }
+    else if (name == "file-id-root-group")
+    {
+        Id root(H5Gopen2(file, "/", H5P_DEFAULT), H5Gclose);
+        file.reset();
+        Id reopened(H5Iget_file_id(root), H5Fclose);
+        CHECK(reopened.id >= 0);
+        reopened.reset();
+        H5G_info_t info{};
+        CHECK(H5Gget_info(root, &info) >= 0);
+    }
+    else if (name == "file-id-child" || name == "file-id-child-file" ||
+             name == "file-id-child-dual")
+    {
+        auto d = dataset(file, "d", scalar);
+        write(d, 29);
+        file.reset();
+        Id reopened(H5Iget_file_id(d), H5Fclose);
+        CHECK(reopened.id >= 0);
+        reopened.reset();
+        value(d, 29);
+    }
+    else if (name == "reference-region")
+    {
+        auto space = test::space(4);
+        Id d(H5Dcreate2(file, "d", H5T_NATIVE_INT, space, H5P_DEFAULT,
+                        H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+        const int values[] = {2, 3, 5, 7};
+        CHECK(H5Dwrite(d, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                       values) >= 0);
+        hsize_t start = 1, count = 2;
+        CHECK(H5Sselect_hyperslab(space, H5S_SELECT_SET, &start, nullptr,
+                                  &count, nullptr) >= 0);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_region(file, "d", space, H5P_DEFAULT, &input) >= 0);
+        Id attribute(H5Acreate2(file, "region", H5T_STD_REF, scalar,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(attribute, H5T_STD_REF, &input) >= 0);
+        H5R_ref_t output{};
+        CHECK(H5Aread(attribute, H5T_STD_REF, &output) >= 0);
+        CHECK(H5Rget_type(&output) == H5R_DATASET_REGION2);
+        Id selected(H5Ropen_region(&output, H5P_DEFAULT, H5P_DEFAULT),
+                    H5Sclose);
+        CHECK(selected.id >= 0);
+        CHECK(H5Sget_select_npoints(selected) == 2);
+        hsize_t bounds[2] = {};
+        CHECK(H5Sget_select_bounds(selected, bounds, bounds + 1) >= 0);
+        CHECK(bounds[0] == 1 && bounds[1] == 2);
+        CHECK(H5Rdestroy(&output) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+    }
+    else if (name == "reference-cross-file")
+    {
+        const std::string second_name = connector.filename + ".target";
+        vol.set_memory(second_name, "*");
+        Id second(H5Fcreate(second_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT,
+                            connector.fapl), H5Fclose);
+        auto target = dataset(second, "target", scalar);
+        write(target, 43);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(second, "target", H5P_DEFAULT, &input) >= 0);
+        Id attribute(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(attribute, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        target.reset();
+        second.reset();
+        H5R_ref_t output{};
+        CHECK(H5Aread(attribute, H5T_STD_REF, &output) >= 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        CHECK(opened.id >= 0);
+        value(opened, 43);
+        CHECK(H5Rdestroy(&output) >= 0);
+    }
+    else if (name == "reference-path-reuse")
+    {
+        auto original = dataset(file, "original", scalar);
+        write(original, 11);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(file, "original", H5P_DEFAULT, &input) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        original.reset();
+        CHECK(H5Lmove(file, "original", file, "renamed", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        auto replacement = dataset(file, "original", scalar);
+        write(replacement, 22);
+
+        H5R_ref_t output{};
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        CHECK(opened.id >= 0);
+        value(opened, 11);
+        value(replacement, 22);
+        CHECK(H5Rdestroy(&output) >= 0);
+    }
+    else if (name == "reference-deleted-path-reuse")
+    {
+        auto original = dataset(file, "original", scalar);
+        H5R_ref_t input {};
+        CHECK(H5Rcreate_object(file, "original", H5P_DEFAULT, &input) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        original.reset();
+        CHECK(H5Ldelete(file, "original", H5P_DEFAULT) >= 0);
+        auto replacement = dataset(file, "original", scalar);
+        write(replacement, 22);
+
+        H5R_ref_t output {};
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) < 0);
+        value(replacement, 22);
+    }
+    else if (name == "reference-passthru-target")
+    {
+        auto native = dataset(file, "native", scalar);
+        write(native, 59);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(file, "native", H5P_DEFAULT, &input) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        native.reset();
+        H5R_ref_t output{};
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        CHECK(opened.id >= 0);
+        value(opened, 59);
+        write(opened, 61);
+        value(opened, 61);
+        Id persisted(H5Dopen2(file, "native", H5P_DEFAULT), H5Dclose);
+        value(persisted, 61);
+        persisted.reset();
+        opened.reset();
+        CHECK(H5Rdestroy(&output) >= 0);
+        file.reset();
+
+        H5R_ref_t after_file_close{};
+        CHECK(H5Aread(holder, H5T_STD_REF, &after_file_close) >= 0);
+        Id reopened(H5Ropen_object(&after_file_close, H5P_DEFAULT,
+                                   H5P_DEFAULT), H5Oclose);
+        CHECK(reopened.id >= 0);
+        value(reopened, 61);
+        write(reopened, 67);
+        value(reopened, 67);
+        CHECK(H5Rdestroy(&after_file_close) >= 0);
+    }
+    else if (name == "reference-native-identity" ||
+             name == "reference-native-identity-deferred")
+    {
+        const bool deferred = name == "reference-native-identity-deferred";
+        auto native = dataset(file, "native", scalar);
+        write(native, 71);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(file, "native", H5P_DEFAULT, &input) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+
+        H5R_ref_t output{};
+        if (!deferred)
+        {
+            CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+            CHECK(H5Requal(&input, &output) > 0);
+            CHECK(H5Rdestroy(&output) >= 0);
+        }
+        CHECK(H5Lmove(file, "native", file, "renamed", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        native.reset();
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+        CHECK(H5Requal(&input, &output) > 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        CHECK(opened.id >= 0);
+        value(opened, 71);
+        CHECK(H5Rdestroy(&output) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+    }
+    else if (name == "reference-after-file-close")
+    {
+        auto native = dataset(file, "native", scalar);
+        write(native, 73);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        file.reset();
+
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(native, ".", H5P_DEFAULT, &input) >= 0);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        native.reset();
+
+        H5R_ref_t output{};
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        CHECK(opened.id >= 0);
+        value(opened, 73);
+        CHECK(H5Rdestroy(&output) >= 0);
+    }
+    else if (name == "reference-opened-native")
+    {
+        Id native(H5Dopen2(file, "native", H5P_DEFAULT), H5Dclose);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(file, "native", H5P_DEFAULT, &input) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        native.reset();
+
+        H5R_ref_t output{};
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        value(opened, 107);
+        CHECK(H5Rdestroy(&output) >= 0);
+    }
+    else if (name == "reference-registered-uncached")
+    {
+        const std::string target_name = connector.filename + ".target";
+        vol.set_passthru(target_name, "*");
+        {
+            Id native_file(H5Fcreate(target_name.c_str(), H5F_ACC_TRUNC,
+                                     H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            auto native = dataset(native_file, "native", scalar);
+            write(native, 113);
+            Id registered(H5Fopen(target_name.c_str(), H5F_ACC_RDWR,
+                                  connector.fapl), H5Fclose);
+
+            H5R_ref_t input{};
+            CHECK(H5Rcreate_object(native_file, "native", H5P_DEFAULT,
+                                   &input) >= 0);
+            Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+            CHECK(H5Rdestroy(&input) >= 0);
+
+            H5R_ref_t output{};
+            CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+            Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                      H5Oclose);
+            value(opened, 113);
+            CHECK(H5Rdestroy(&output) >= 0);
+        }
+        CHECK(std::remove(target_name.c_str()) == 0);
+    }
+    else if (name == "reference-registered-root")
+    {
+        const std::string target_name = connector.filename + ".root";
+        vol.set_passthru(target_name, "*");
+        {
+            Id native_file(H5Fcreate(target_name.c_str(), H5F_ACC_TRUNC,
+                                     H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            Id registered(H5Fopen(target_name.c_str(), H5F_ACC_RDWR,
+                                  connector.fapl), H5Fclose);
+
+            H5R_ref_t input{};
+            CHECK(H5Rcreate_object(native_file, "/", H5P_DEFAULT,
+                                   &input) >= 0);
+            Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+            CHECK(H5Rdestroy(&input) >= 0);
+
+            H5R_ref_t output{};
+            CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+            Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                      H5Oclose);
+            CHECK(opened.id >= 0);
+            CHECK(H5Iget_type(opened) == H5I_GROUP);
+            CHECK(H5Rdestroy(&output) >= 0);
+        }
+        CHECK(std::remove(target_name.c_str()) == 0);
+    }
+    else if (name == "reference-registered-uncached-objects" ||
+             name == "reference-registered-cached-objects")
+    {
+        const std::string target_name = connector.filename + ".objects";
+        vol.set_passthru(target_name, "*");
+        {
+            Id native_file(H5Fcreate(target_name.c_str(), H5F_ACC_TRUNC,
+                                     H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            Id group(H5Gcreate2(native_file, "native-group", H5P_DEFAULT,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+            Id datatype(H5Tcopy(H5T_NATIVE_INT), H5Tclose);
+            CHECK(H5Tcommit2(native_file, "native-type", datatype,
+                             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) >= 0);
+            Id registered(H5Fopen(target_name.c_str(), H5F_ACC_RDWR,
+                                  connector.fapl), H5Fclose);
+            if (name == "reference-registered-cached-objects")
+            {
+                Id cached_group(H5Gopen2(registered, "native-group",
+                                         H5P_DEFAULT), H5Gclose);
+                Id cached_type(H5Oopen(registered, "native-type",
+                                       H5P_DEFAULT), H5Oclose);
+            }
+
+            std::array<H5R_ref_t, 2> input {};
+            CHECK(H5Rcreate_object(native_file, "native-group", H5P_DEFAULT,
+                                   &input[0]) >= 0);
+            CHECK(H5Rcreate_object(native_file, "native-type", H5P_DEFAULT,
+                                   &input[1]) >= 0);
+            auto pair = test::space(2);
+            Id holder(H5Acreate2(file, "references", H5T_STD_REF, pair,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(holder, H5T_STD_REF, input.data()) >= 0);
+            for (auto& reference : input) CHECK(H5Rdestroy(&reference) >= 0);
+            if (name == "reference-registered-cached-objects")
+                vol.passthru.clear();
+
+            std::array<H5R_ref_t, 2> output {};
+            CHECK(H5Aread(holder, H5T_STD_REF, output.data()) >= 0);
+            Id opened_group(H5Ropen_object(&output[0], H5P_DEFAULT,
+                                           H5P_DEFAULT), H5Oclose);
+            Id gcpl(H5Gget_create_plist(opened_group), H5Pclose);
+            CHECK(gcpl.id >= 0);
+            Id opened_type(H5Ropen_object(&output[1], H5P_DEFAULT,
+                                          H5P_DEFAULT), H5Oclose);
+            CHECK(H5Tget_class(opened_type) == H5T_INTEGER);
+            for (auto& reference : output) CHECK(H5Rdestroy(&reference) >= 0);
+        }
+        CHECK(std::remove(target_name.c_str()) == 0);
+    }
+    else if (name == "reference-registered-intermediate-group")
+    {
+        const std::string target_name = connector.filename + ".intermediate";
+        vol.set_passthru(target_name, "*");
+        {
+            Id native_file(H5Fcreate(target_name.c_str(), H5F_ACC_TRUNC,
+                                     H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            Id group(H5Gcreate2(native_file, "group", H5P_DEFAULT,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+            auto native = dataset(group, "child", scalar);
+            Id registered(H5Fopen(target_name.c_str(), H5F_ACC_RDWR,
+                                  connector.fapl), H5Fclose);
+
+            std::array<H5R_ref_t, 2> input {};
+            CHECK(H5Rcreate_object(native_file, "group/child", H5P_DEFAULT,
+                                   &input[0]) >= 0);
+            CHECK(H5Rcreate_object(native_file, "group", H5P_DEFAULT,
+                                   &input[1]) >= 0);
+            auto pair = test::space(2);
+            Id holder(H5Acreate2(file, "references", H5T_STD_REF, pair,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(holder, H5T_STD_REF, input.data()) >= 0);
+            for (auto& reference : input) CHECK(H5Rdestroy(&reference) >= 0);
+            native.reset();
+            group.reset();
+            registered.reset();
+            native_file.reset();
+            vol.passthru.clear();
+
+            std::array<H5R_ref_t, 2> output {};
+            CHECK(H5Aread(holder, H5T_STD_REF, output.data()) >= 0);
+            Id opened(H5Ropen_object(&output[1], H5P_DEFAULT, H5P_DEFAULT),
+                      H5Oclose);
+            Id gcpl(H5Gget_create_plist(opened), H5Pclose);
+            CHECK(gcpl.id >= 0);
+            for (auto& reference : output) CHECK(H5Rdestroy(&reference) >= 0);
+        }
+        CHECK(std::remove(target_name.c_str()) == 0);
+    }
+    else if (name == "reference-live-file-collection" ||
+             name == "reference-retained-collection")
+    {
+        auto target = dataset(file, "target", scalar);
+        write(target, 131);
+        H5R_ref_t input{};
+        CHECK(H5Rcreate_object(file, "target", H5P_DEFAULT, &input) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+        CHECK(H5Rdestroy(&input) >= 0);
+        target.reset();
+        holder.reset();
+
+        if (name == "reference-live-file-collection")
+        {
+            const std::string other_name = connector.filename + ".other";
+            vol.set_memory(other_name, "*");
+            {
+                Id other(H5Fcreate(other_name.c_str(), H5F_ACC_TRUNC,
+                                   H5P_DEFAULT, connector.fapl), H5Fclose);
+            }
+            CHECK(vol.files.count(connector.filename) == 1);
+            Id reopened(H5Dopen2(file, "target", H5P_DEFAULT), H5Dclose);
+            value(reopened, 131);
+            CHECK(std::remove(other_name.c_str()) != 0);
+        }
+        else
+        {
+            file.reset();
+            CHECK(vol.files.count(connector.filename) == 0);
+        }
+    }
+    else if (name == "reference-native-attribute")
+    {
+        const std::string target_name = connector.filename + ".attribute";
+        vol.set_passthru(target_name, "*");
+        {
+            Id native_file(H5Fcreate(target_name.c_str(), H5F_ACC_TRUNC,
+                                     H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            auto native = dataset(native_file, "native", scalar);
+            int expected = 137;
+            Id label(H5Acreate2(native, "label", H5T_NATIVE_INT, scalar,
+                                H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(label, H5T_NATIVE_INT, &expected) >= 0);
+            Id registered(H5Fopen(target_name.c_str(), H5F_ACC_RDWR,
+                                  connector.fapl), H5Fclose);
+
+            H5R_ref_t input{};
+            CHECK(H5Rcreate_attr(native_file, "native", "label", H5P_DEFAULT,
+                                 &input) >= 0);
+            Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+            CHECK(H5Rdestroy(&input) >= 0);
+            label.reset();
+            native.reset();
+            registered.reset();
+            native_file.reset();
+
+            H5R_ref_t output{};
+            CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+            Id opened(H5Ropen_attr(&output, H5P_DEFAULT, H5P_DEFAULT),
+                      H5Aclose);
+            int actual = -1;
+            CHECK(H5Aread(opened, H5T_NATIVE_INT, &actual) >= 0);
+            CHECK(actual == expected);
+            CHECK(H5Rdestroy(&output) >= 0);
+        }
+        CHECK(std::remove(target_name.c_str()) == 0);
+    }
+    else if (name == "reference-external-native")
+    {
+        const std::string external_name = connector.filename + ".external";
+        {
+            Id external(H5Fcreate(external_name.c_str(), H5F_ACC_TRUNC,
+                                  H5P_DEFAULT, H5P_DEFAULT), H5Fclose);
+            auto native = dataset(external, "native", scalar);
+            write(native, 109);
+            H5R_ref_t input{};
+            CHECK(H5Rcreate_object(external, "native", H5P_DEFAULT,
+                                   &input) >= 0);
+            Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                                 H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Awrite(holder, H5T_STD_REF, &input) >= 0);
+            CHECK(H5Rdestroy(&input) >= 0);
+
+            H5R_ref_t output{};
+            CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+            Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                      H5Oclose);
+            value(opened, 109);
+            CHECK(H5Rdestroy(&output) >= 0);
+        }
+        CHECK(std::remove(external_name.c_str()) == 0);
+    }
+    else if (name == "dataset-reference-overwrite")
+    {
+        Id references(H5Dcreate2(file, "references", H5T_STD_REF, scalar,
+                                  H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                      H5Dclose);
+        auto obsolete = dataset(file, "obsolete", scalar);
+        H5R_ref_t first{};
+        CHECK(H5Rcreate_object(file, "obsolete", H5P_DEFAULT, &first) >= 0);
+        CHECK(H5Dwrite(references, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                       H5P_DEFAULT, &first) >= 0);
+        CHECK(H5Rdestroy(&first) >= 0);
+        obsolete.reset();
+        CHECK(H5Ldelete(file, "obsolete", H5P_DEFAULT) >= 0);
+
+        auto current = dataset(file, "current", scalar);
+        write(current, 79);
+        H5R_ref_t second{};
+        CHECK(H5Rcreate_object(file, "current", H5P_DEFAULT, &second) >= 0);
+        CHECK(H5Dwrite(references, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                       H5P_DEFAULT, &second) >= 0);
+        CHECK(H5Rdestroy(&second) >= 0);
+
+        H5R_ref_t output{};
+        CHECK(H5Dread(references, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, &output) >= 0);
+        Id opened(H5Ropen_object(&output, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        CHECK(opened.id >= 0);
+        value(opened, 79);
+        CHECK(H5Rdestroy(&output) >= 0);
+    }
+    else if (name == "reference-zero-copy-alias")
+    {
+        vol.set_zerocopy(connector.filename, "/references");
+        auto target = dataset(file, "target", scalar);
+        write(target, 83);
+        Id references(H5Dcreate2(file, "references", H5T_STD_REF, scalar,
+                                  H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                      H5Dclose);
+        H5R_ref_t reference{};
+        CHECK(H5Rcreate_object(file, "target", H5P_DEFAULT, &reference) >= 0);
+        CHECK(H5Dwrite(references, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                       H5P_DEFAULT, &reference) >= 0);
+        CHECK(H5Dread(references, H5T_STD_REF, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, &reference) >= 0);
+        CHECK(H5Rget_type(&reference) == H5R_OBJECT2);
+        Id opened(H5Ropen_object(&reference, H5P_DEFAULT, H5P_DEFAULT),
+                  H5Oclose);
+        value(opened, 83);
+        CHECK(H5Rdestroy(&reference) >= 0);
+    }
+    else if (name == "vlen-zero-copy-alias")
+    {
+        vol.set_zerocopy(connector.filename, "/values");
+        Id type(H5Tvlen_create(H5T_NATIVE_INT), H5Tclose);
+        Id values(H5Dcreate2(file, "values", type, scalar, H5P_DEFAULT,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+        int elements[] = {89, 97};
+        hvl_t value {2, elements};
+        CHECK(H5Dwrite(values, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                       &value) >= 0);
+        CHECK(H5Dread(values, type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                      &value) >= 0);
+        CHECK(value.len == 2 && value.p == elements);
+        auto* output = static_cast<int*>(value.p);
+        CHECK(output[0] == 89 && output[1] == 97);
+    }
+    else if (name == "reference-attribute")
+    {
+        auto d = dataset(file, "d", scalar);
+        Id label(H5Acreate2(d, "label", H5T_NATIVE_INT, scalar,
+                            H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int input = 47;
+        CHECK(H5Awrite(label, H5T_NATIVE_INT, &input) >= 0);
+        H5R_ref_t reference{};
+        CHECK(H5Rcreate_attr(file, "d", "label", H5P_DEFAULT,
+                             &reference) >= 0);
+        Id holder(H5Acreate2(file, "reference", H5T_STD_REF, scalar,
+                             H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        CHECK(H5Awrite(holder, H5T_STD_REF, &reference) >= 0);
+        H5R_ref_t output{};
+        CHECK(H5Aread(holder, H5T_STD_REF, &output) >= 0);
+        CHECK(H5Rget_type(&output) == H5R_ATTR);
+        std::array<char, 16> name{};
+        CHECK(H5Rget_attr_name(&output, name.data(), name.size()) == 5);
+        CHECK(std::string(name.data()) == "label");
+        Id opened(H5Ropen_attr(&output, H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int actual = 0;
+        CHECK(H5Aread(opened, H5T_NATIVE_INT, &actual) >= 0);
+        CHECK(actual == input);
+        CHECK(H5Rdestroy(&output) >= 0);
+        CHECK(H5Rdestroy(&reference) >= 0);
+    }
+    else if (name == "datatype_conversion")
+    {
+        auto d = dataset(file, "d", scalar);
+        float input = 12.75f; CHECK(H5Dwrite(d, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &input) >= 0);
+        double output = -1; CHECK(H5Dread(d, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &output) >= 0); CHECK(output == 12.0);
+    }
+    else if (name == "dual_reopen")
+    {
+        { auto d = dataset(file, "d", scalar); write(d, 1); }
+        { Id d(H5Dopen2(file, "d", H5P_DEFAULT), H5Dclose); write(d, 23); }
+        CHECK(H5Fflush(file, H5F_SCOPE_GLOBAL) >= 0);
+        file.reset();
+        Id native(H5Fopen(connector.filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT), H5Fclose);
+        Id d(H5Dopen2(native, "d", H5P_DEFAULT), H5Dclose); value(d, 23);
+    }
+    else if (name == "link_name")
+    {
+        auto d = dataset(file, "xyz", scalar);
+        std::array<char, 5> b{{'L','x','x','x','R'}};
+        CHECK(H5Lget_name_by_idx(file, ".", H5_INDEX_NAME, H5_ITER_INC, 0, b.data()+1, 3, H5P_DEFAULT) == 3);
+        CHECK(b[0] == 'L' && b[1] == 'x' && b[2] == 'y' && b[3] == '\0' && b[4] == 'R');
+        b.fill('Q'); CHECK(H5Lget_name_by_idx(file, ".", H5_INDEX_NAME, H5_ITER_INC, 0, b.data()+1, 1, H5P_DEFAULT) == 3);
+        CHECK(b[0] == 'Q' && b[1] == '\0' && b[2] == 'Q');
+        CHECK(H5Lget_name_by_idx(file, ".", H5_INDEX_NAME, H5_ITER_INC, 0, nullptr, 0, H5P_DEFAULT) == 3);
+    }
+    else if (name == "group_failure" || name == "dataset_failure" || name == "attr_failure")
+    {
+        if (name == "group_failure")
+        {
+            Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+            CHECK(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0);
+            CHECK(H5Gopen2(file, "missing", H5P_DEFAULT) < 0);
+        }
+        else if (name == "dataset_failure")
+        {
+            auto d = dataset(file, "d", scalar);
+            CHECK(H5Dcreate2(file, "d", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0);
+            CHECK(H5Dopen2(file, "missing", H5P_DEFAULT) < 0);
+        }
+        else
+        {
+            Id a(H5Acreate2(file, "a", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+            CHECK(H5Acreate2(file, "a", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT) < 0);
+            CHECK(H5Aopen(file, "missing", H5P_DEFAULT) < 0);
+        }
+        CHECK(vol.files.at(connector.filename)->children.size() == 1);
+    }
+    else if (name == "missing_dataset") { CHECK(H5Dopen2(file, "absent", H5P_DEFAULT) < 0); CHECK(vol.files.at(connector.filename)->children.empty()); }
+    else if (name == "tokens")
+    {
+        auto d = dataset(file, "d", scalar); write(d, 31);
+        H5O_info2_t direct{}, named{};
+        CHECK(H5Oget_info3(d, &direct, H5O_INFO_BASIC) >= 0);
+        CHECK(H5Oget_info_by_name3(file, "d", &named, H5O_INFO_BASIC, H5P_DEFAULT) >= 0);
+        int cmp = 1; CHECK(H5Otoken_cmp(file, &direct.token, &named.token, &cmp) >= 0); CHECK(cmp == 0);
+        H5R_ref_t ref{}; CHECK(H5Rcreate_object(file, "d", H5P_DEFAULT, &ref) >= 0);
+        Id opened(H5Ropen_object(&ref, H5P_DEFAULT, H5P_DEFAULT), H5Oclose);
+        CHECK(H5Iget_type(opened) == H5I_DATASET); value(opened, 31); CHECK(H5Rdestroy(&ref) >= 0);
+    }
+    else if (name == "attr_rename")
+    {
+        Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+        Id a(H5Acreate2(g, "old", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT), H5Aclose); a.reset();
+        CHECK(H5Arename(g, "old", "new") >= 0); CHECK(H5Aexists(g, "old") == 0); CHECK(H5Aexists(g, "new") > 0);
+        Id same(H5Gopen2(file, "g", H5P_DEFAULT), H5Gclose);
+        CHECK(H5Arename(g, "absent", "other") < 0);
+    }
+    else if (name == "hard_link_unlink")
+    {
+        auto d = dataset(file, "d", scalar);
+        write(d, 41);
+        CHECK(H5Lcreate_hard(file, "d", file, "alias", H5P_DEFAULT,
+                             H5P_DEFAULT) >= 0);
+        d.reset();
+        CHECK(H5Ldelete(file, "d", H5P_DEFAULT) >= 0);
+        Id alias(H5Dopen2(file, "alias", H5P_DEFAULT), H5Dclose);
+        value(alias, 41);
+    }
+    else if (name == "open_unlink_read")
+    {
+        auto d = dataset(file, "d", scalar);
+        write(d, 51);
+        CHECK(H5Ldelete(file, "d", H5P_DEFAULT) >= 0);
+        value(d, 51);
+        CHECK(H5Lexists(file, "d", H5P_DEFAULT) == 0);
+    }
+    else if (name == "anonymous_dataset_link")
+    {
+        Id anonymous(H5Dcreate_anon(file, H5T_NATIVE_INT, scalar,
+                                    H5P_DEFAULT, H5P_DEFAULT), H5Dclose);
+        write(anonymous, 67);
+        CHECK(H5Olink(anonymous, file, "named", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        H5G_info_t info{};
+        CHECK(H5Gget_info(file, &info) >= 0);
+        CHECK(info.nlinks == 1);
+        Id named(H5Dopen2(file, "named", H5P_DEFAULT), H5Dclose);
+        value(named, 67);
+        CHECK(H5Ldelete(file, "named", H5P_DEFAULT) >= 0);
+        CHECK(H5Gget_info(file, &info) >= 0);
+        CHECK(info.nlinks == 0);
+        value(anonymous, 67);
+    }
+    else if (name == "detached-self-link")
+    {
+        Id group(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        CHECK(H5Ldelete(file, "g", H5P_DEFAULT) >= 0);
+        CHECK(H5Olink(group, group, "self", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        Id self(H5Gopen2(group, "self", H5P_DEFAULT), H5Gclose);
+        CHECK(self.id >= 0);
+    }
+    else if (name == "hard_links" || name == "soft_links" || name == "absolute_paths")
+    {
+        auto d = dataset(file, "d", scalar); write(d, 41);
+        Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+        if (name == "hard_links") { CHECK(H5Olink(d, g, "alias", H5P_DEFAULT, H5P_DEFAULT) >= 0); Id original(H5Dopen2(file, "d", H5P_DEFAULT), H5Dclose); Id alias(H5Dopen2(g, "alias", H5P_DEFAULT), H5Dclose); value(original, 41); value(alias, 41); CHECK(H5Lcreate_hard(file, "g", file, "group_alias", H5P_DEFAULT, H5P_DEFAULT) >= 0); Id nested(H5Dopen2(file, "group_alias/alias", H5P_DEFAULT), H5Dclose); value(nested, 41); }
+        else if (name == "soft_links") { CHECK(H5Lcreate_soft("/d", g, "absolute", H5P_DEFAULT, H5P_DEFAULT) >= 0); CHECK(H5Lcreate_soft("absolute", g, "relative", H5P_DEFAULT, H5P_DEFAULT) >= 0); Id alias(H5Dopen2(g, "relative", H5P_DEFAULT), H5Dclose); value(alias, 41); CHECK(H5Lcreate_soft("cycle", g, "cycle", H5P_DEFAULT, H5P_DEFAULT) >= 0); CHECK(H5Dopen2(g, "cycle", H5P_DEFAULT) < 0); }
+        else { auto local = dataset(g, "d", scalar); write(local, 99); Id absolute(H5Dopen2(g, "/d", H5P_DEFAULT), H5Dclose); value(absolute, 41); }
+    }
+    else if (name == "link_copy_move")
+    {
+        auto d = dataset(file, "d", scalar); write(d, 41);
+        Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+        CHECK(H5Lcreate_soft("/d", g, "source", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lcopy(g, "source", g, "copy", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(g, "source", H5P_DEFAULT) > 0);
+        CHECK(H5Lexists(g, "copy", H5P_DEFAULT) > 0);
+        { Id alias(H5Dopen2(g, "copy", H5P_DEFAULT), H5Dclose); value(alias, 41); }
+        CHECK(H5Lmove(g, "source", g, "moved", H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(g, "source", H5P_DEFAULT) == 0);
+        CHECK(H5Lexists(g, "moved", H5P_DEFAULT) > 0);
+        { Id alias(H5Dopen2(g, "moved", H5P_DEFAULT), H5Dclose); value(alias, 41); }
+        CHECK(H5Ldelete(g, "copy", H5P_DEFAULT) >= 0);
+        CHECK(H5Ldelete(g, "moved", H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(g, "copy", H5P_DEFAULT) == 0);
+        CHECK(H5Lexists(g, "moved", H5P_DEFAULT) == 0);
+    }
+    else if (name == "soft-link-cross-file")
+    {
+        const std::string second_name = connector.filename + ".second";
+        vol.set_memory(second_name, "*");
+        Id second(H5Fcreate(second_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT,
+                            connector.fapl), H5Fclose);
+        auto copied_target = dataset(second, "copy-target", scalar);
+        auto moved_target = dataset(second, "move-target", scalar);
+        write(copied_target, 101);
+        write(moved_target, 103);
+        CHECK(H5Lcreate_soft("/copy-target", file, "copy-source",
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lcreate_soft("/move-target", file, "move-source",
+                             H5P_DEFAULT, H5P_DEFAULT) >= 0);
+        CHECK(H5Lcopy(file, "copy-source", second, "copied", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        CHECK(H5Lmove(file, "move-source", second, "moved", H5P_DEFAULT,
+                      H5P_DEFAULT) >= 0);
+        CHECK(H5Lexists(file, "copy-source", H5P_DEFAULT) > 0);
+        CHECK(H5Lexists(file, "move-source", H5P_DEFAULT) == 0);
+        Id copied(H5Dopen2(second, "copied", H5P_DEFAULT), H5Dclose);
+        Id moved(H5Dopen2(second, "moved", H5P_DEFAULT), H5Dclose);
+        value(copied, 101);
+        value(moved, 103);
+    }
+    else if (name == "attr_by_name" || name == "native_parent_attr")
+    {
+        if (name == "native_parent_attr") { vol.passthru.clear(); vol.set_passthru(connector.filename, "/g"); }
+        Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+        Id a(H5Acreate_by_name(file, "/g", "a", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int input = 53; CHECK(H5Awrite(a, H5T_NATIVE_INT, &input) >= 0); a.reset();
+        Id reopened(H5Aopen_by_name(file, "/g", "a", H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int output = 0; CHECK(H5Aread(reopened, H5T_NATIVE_INT, &output) >= 0); CHECK(output == input);
+        CHECK(H5Aexists(file, "a") == 0);
+    }
+    else if (name == "file_plists")
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            Id fcpl(H5Fget_create_plist(file), H5Pclose), fapl(H5Fget_access_plist(file), H5Pclose);
+            hsize_t size = 1; CHECK(H5Pget_userblock(fcpl, &size) >= 0); CHECK(size == 0);
+            CHECK(H5Pset_userblock(fcpl, 512) >= 0); CHECK(H5Pset_alignment(fapl, 1, 4096) >= 0);
+        }
+        Id first_fapl(H5Pcopy(connector.fapl), H5Pclose);
+        Id second_fapl(H5Pcopy(connector.fapl), H5Pclose);
+        CHECK(H5Pset_alignment(first_fapl, 101, 1001) >= 0);
+        CHECK(H5Pset_alignment(second_fapl, 202, 2002) >= 0);
+        Id first(H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR, first_fapl),
+                 H5Fclose);
+        Id second(
+            H5Fopen(connector.filename.c_str(), H5F_ACC_RDWR, second_fapl),
+            H5Fclose);
+        first_fapl.reset();
+        second_fapl.reset();
+        auto check_alignment = [](hid_t handle, hsize_t expected_threshold,
+                                  hsize_t expected_alignment)
+        {
+            Id actual(H5Fget_access_plist(handle), H5Pclose);
+            hsize_t threshold = 0;
+            hsize_t alignment = 0;
+            CHECK(H5Pget_alignment(actual, &threshold, &alignment) >= 0);
+            CHECK(threshold == expected_threshold);
+            CHECK(alignment == expected_alignment);
+        };
+        check_alignment(first, 101, 1001);
+        check_alignment(second, 202, 2002);
+
+        Id reopened(H5Freopen(first), H5Fclose);
+        check_alignment(reopened, 101, 1001);
+        Id group(H5Gcreate2(first, "fapl-child", H5P_DEFAULT, H5P_DEFAULT,
+                            H5P_DEFAULT), H5Gclose);
+        Id child_file(H5Iget_file_id(group), H5Fclose);
+        check_alignment(child_file, 101, 1001);
+    }
+    else if (name == "enumeration" || name == "indexed_lookup")
+    {
+        Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose);
+        Id a(H5Acreate2(g, "attr", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        auto z = dataset(g, "z", scalar); write(z, 1); auto b = dataset(g, "b", scalar); write(b, 2);
+        if (name == "enumeration") { H5G_info_t info{}; CHECK(H5Gget_info(g, &info) >= 0); CHECK(info.nlinks == 2); std::vector<std::string> names; hsize_t idx = 0; CHECK(H5Literate2(g, H5_INDEX_NAME, H5_ITER_INC, &idx, [](hid_t, const char* n, const H5L_info2_t*, void* p) -> herr_t { static_cast<std::vector<std::string>*>(p)->emplace_back(n); return 0; }, &names) >= 0); CHECK(names.size() == 2); CHECK(names[0] == "b" && names[1] == "z"); }
+        else { Id first(H5Oopen_by_idx(file, "g", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT), H5Oclose); value(first, 2); Id last(H5Oopen_by_idx(file, "g", H5_INDEX_NAME, H5_ITER_DEC, 0, H5P_DEFAULT), H5Oclose); value(last, 1); CHECK(H5Oopen_by_idx(file, "g", H5_INDEX_NAME, H5_ITER_INC, 2, H5P_DEFAULT) < 0); }
+    }
+    else if (name == "object_names")
+    {
+        Id g(H5Gcreate2(file, "g", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose); auto d = dataset(g, "d", scalar);
+        std::array<char, 16> b; b.fill('Q'); CHECK(H5Iget_name(d, b.data(), b.size()) == 4); CHECK(std::string(b.data()) == "/g/d");
+        b.fill('Q'); CHECK(H5Iget_name(d, b.data(), 3) == 4); CHECK(b[0] == '/' && b[1] == 'g' && b[2] == '\0' && b[3] == 'Q');
+    }
+    else if (name == "zero_file_name") { char guard[3] = {'L','X','R'}; CHECK(H5Fget_name(file, guard+1, 0) == static_cast<ssize_t>(connector.filename.size())); CHECK(guard[0] == 'L' && guard[1] == 'X' && guard[2] == 'R'); }
+    else if (name == "extent_failure") { auto space = test::space(4); auto d = dataset(file, "d", space); hsize_t smaller = 2; CHECK(H5Dset_extent(d, &smaller) < 0); auto* metadata = dynamic_cast<LowFive::Dataset*>(vol.locate(connector.filename, "/d")); CHECK(metadata); CHECK(metadata->space.size() == 4); }
+    else if (name == "reference_ids")
+    {
+        auto d = dataset(file, "d", scalar); write(d, 9);
+        Id a(H5Acreate2(file, "a", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT), H5Aclose);
+        int attribute_value = 4; CHECK(H5Awrite(a, H5T_NATIVE_INT, &attribute_value) >= 0);
+        auto* root = dynamic_cast<LowFive::File*>(vol.files.at(connector.filename));
+        auto* object = vol.locate(connector.filename, "/d");
+        const auto before = H5Fget_obj_count(file, H5F_OBJ_DATASET);
+        H5R_ref_t ref{};
+        root->references.emplace(
+            &ref, LowFive::File::PendingReference {
+                H5R_OBJECT2, root->name, object->token
+            });
+        CHECK(H5Aread(a, H5T_NATIVE_INT, &attribute_value) >= 0);
+        CHECK(H5Fget_obj_count(file, H5F_OBJ_DATASET) == before);
+        CHECK(H5Rdestroy(&ref) >= 0);
+    }
+    else CHECK(false);
+}
+}
+int main(int argc, char** argv) { return test::run(argc, argv, run); }

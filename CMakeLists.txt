@@ -1,5 +1,6 @@
+cmake_minimum_required      (VERSION 3.18)
 project                     (LowFive)
-cmake_minimum_required      (VERSION 3.9)
+include                     (GNUInstallDirs)
 
 option                      (wrapped_mpi      "MPI compiler wrapper requires no further MPI libs"     OFF)
 option                      (lowfive_python   "Build python bindings"                                 ON)
@@ -26,7 +27,23 @@ if                          (NOT CMAKE_BUILD_TYPE)
 endif                       (NOT CMAKE_BUILD_TYPE)
 
 # MPI
-if                          (NOT wrapped_mpi)
+if                          (wrapped_mpi)
+    if                      (NOT MPIEXEC_EXECUTABLE)
+        get_filename_component (_mpi_wrapper_dir "${CMAKE_C_COMPILER}" DIRECTORY)
+        find_program        (_mpi_wrapper_launcher NAMES mpiexec mpirun
+                             PATHS "${_mpi_wrapper_dir}" NO_DEFAULT_PATH)
+        if                  (_mpi_wrapper_launcher)
+            set             (MPIEXEC_EXECUTABLE "${_mpi_wrapper_launcher}" CACHE FILEPATH
+                             "Executable for running MPI programs")
+        else                ()
+            find_program    (MPIEXEC_EXECUTABLE NAMES mpiexec mpirun REQUIRED)
+        endif               ()
+    endif                   ()
+    if                      (NOT MPIEXEC_NUMPROC_FLAG)
+        set                 (MPIEXEC_NUMPROC_FLAG "-n" CACHE STRING
+                             "Flag used by MPI to specify the number of processes")
+    endif                   ()
+else                        ()
     find_package            (MPI REQUIRED)
     set                     (libraries MPI::MPI_C)
 endif                       ()
@@ -34,24 +51,31 @@ endif                       ()
 # Threads
 find_package                (Threads)
 
+# Keep fmt header-only across the shared and static targets. Embedding the
+# compiled archive in both lowfive and lowfive-dist consumers violates the ODR.
+# fmt
+option                      (FMT_INSTALL "" OFF)
+add_subdirectory            (ext/fmt EXCLUDE_FROM_ALL)
+
 # DIY
 option                      (build_examples "" OFF)
 option                      (build_tests "" OFF)
+set                         (_lowfive_disable_find_package_fmt "${CMAKE_DISABLE_FIND_PACKAGE_fmt}")
+set                         (CMAKE_DISABLE_FIND_PACKAGE_fmt ON)
 add_subdirectory            (ext/diy)
+set                         (CMAKE_DISABLE_FIND_PACKAGE_fmt "${_lowfive_disable_find_package_fmt}")
+unset                       (_lowfive_disable_find_package_fmt)
+target_compile_definitions  (diy INTERFACE DIY_SYSTEM_FMT)
+target_link_libraries       (diy INTERFACE fmt::fmt-header-only)
 set                         (libraries ${libraries} diy)
-add_definitions             ("-DDIY_SYSTEM_FMT")           # tell DIY to use the global (vendored) fmt
-
-# fmt
-option                      (FMT_INSTALL "" OFF)
-add_subdirectory            (ext/fmt)
-set                         (libraries ${libraries} fmt::fmt)
 
 # spdlog
-option                      (SPDLOG_FMT_EXTERNAL "" ON)
+set                         (SPDLOG_FMT_EXTERNAL OFF)
+set                         (SPDLOG_FMT_EXTERNAL_HO ON)
 option                      (SPDLOG_BUILD_EXAMPLE "" OFF)
 option                      (SPDLOG_BUILD_TESTS "" OFF)
-add_subdirectory            (ext/spdlog)
-set                         (libraries ${libraries} spdlog)
+add_subdirectory            (ext/spdlog EXCLUDE_FROM_ALL)
+set                         (libraries ${libraries} spdlog::spdlog_header_only)
 include_directories         (ext/spdlog/include)
 
 # HDF5
@@ -119,10 +143,12 @@ foreach                     (ITEM ${DEPLOY_FILES_AND_DIRS})
       list                  (APPEND FILES_TO_DEPLOY "${ITEM}")
    endif                    ()
 endforeach                  ()
-install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
-install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+install                     (FILES ${FILES_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install                     (DIRECTORY ${DIRS_TO_DEPLOY} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if                          (lowfive_python)
+    find_package            (Python REQUIRED COMPONENTS Interpreter Development.Module)
+    set                     (PYBIND11_FINDPYTHON ON)
     add_subdirectory        (ext/pybind11)
     add_subdirectory        (bindings/python)
 endif                       ()

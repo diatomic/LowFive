@@ -38,7 +38,20 @@ wrap_object(void *obj, H5I_type_t obj_type, void *wrap_ctx)
     }
 
     void* res = VOLBase::wrap_object(obj, obj_type, wrap_ctx);
-    return wrap(res);
+    auto* wrapped = wrap(res);
+    wrapped->file_wrapper = obj_type == H5I_FILE;
+    wrapped->reference_file_wrapper =
+        wrapped->file_wrapper && retaining_reference_file;
+    auto pending = pending_wrap_metadata.find(obj);
+    if (pending != pending_wrap_metadata.end())
+    {
+        wrapped->mdata_obj = pending->second.object;
+        wrapped->access_flags = pending->second.access_flags;
+        wrapped->file_handle = pending->second.file_handle;
+        wrapped->fapl = Hid(pending->second.fapl);
+        pending_wrap_metadata.erase(pending);
+    }
+    return wrapped;
 }
 
 void *
@@ -47,8 +60,7 @@ unwrap_object(void *obj)
 {
     void* res = VOLBase::unwrap_object(unwrap(obj));
     if (res)
-        return wrap(res);
-    else
-        return res;
+        drop(obj);
+    return res;
 }
 

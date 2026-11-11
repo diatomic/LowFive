@@ -85,12 +85,18 @@ struct IndexedDataset
         diy::MemoryBuffer queue;
 
         size_t count_calls = 0;
-        bool is_var_length_string = ds->type.is_var_length_string();
+        const bool is_var_length_string = ds->type.is_var_length_string();
+        const bool serialize_indirect =
+            ds->type.has_variable_length_values();
+        auto* file = dynamic_cast<File*>(ds->find_root());
+        auto* references = file ? &file->references : nullptr;
         for (auto& y : ds->data)
         {
             if (y.file.intersects(fs))
             {
                 Dataspace file_src(Dataspace::project_intersection(y.file.id, y.file.id,   fs.id), true);
+                if (H5Sget_select_npoints(file_src.id) == 0)
+                    continue;
                 Dataspace mem_src (Dataspace::project_intersection(y.file.id, y.memory.id, fs.id), true);
                 CALI_MARK_BEGIN("diy::save");
                 diy::save(queue, file_src);
@@ -106,7 +112,27 @@ struct IndexedDataset
                         ++count_calls;
                       }
                     });
-                } else
+                }
+                else if (serialize_indirect)
+                {
+                    Dataspace::iterate(
+                        mem_src, y.type.dtype_size,
+                        [&](size_t loc, size_t len)
+                        {
+                            for (size_t offset = 0;
+                                 offset < len;
+                                 offset += y.type.dtype_size)
+                            {
+                                serialize_values(
+                                    queue, y.type, 1,
+                                    static_cast<const char*>(y.data) +
+                                        loc + offset,
+                                    references);
+                                ++count_calls;
+                            }
+                        });
+                }
+                else
                 {
                     Dataspace::iterate(mem_src, y.type.dtype_size, [&](size_t loc, size_t len)
                     {
@@ -161,7 +187,11 @@ struct IndexServe
     diy::MemoryBuffer           get_file_hierarchy(std::string name)
     {
         diy::MemoryBuffer result;
-        serialize(result, files->at(name), *vol);
+        auto found = files->find(name);
+        if (found == files->end() ||
+            !dynamic_cast<File*>(found->second))
+            return result;
+        serialize(result, found->second, *vol);
         return result;
     }
 

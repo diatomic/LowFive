@@ -127,6 +127,10 @@ struct IndexQuery
         if (decomposer.nblocks == 0)
             return {};
 
+        // A scalar dataspace has one logical location and no coordinates.
+        if (decomposer.dim == 0)
+            return {0};
+
         int dim = decomposer.dim;
         std::vector< std::pair<Coordinate, Coordinate> > ranges(dim);
         for (int i = 0; i < dim; ++i)

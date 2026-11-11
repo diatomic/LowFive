@@ -6,82 +6,84 @@
 herr_t
 LowFive::MetadataVOL::link_create(H5VL_link_create_args_t* args, void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void** req)
 {
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
-
-    auto log = get_logger();
-    log->trace("link_create: obj = {}, create_type = {}", *obj_, args->op_type);
-
-    herr_t res = 0;
-
-    // see hdf5 src/H5VLnative_link.c, H5VL__native_link_create()
-
-    if (obj_->mdata_obj)
+    auto* destination = static_cast<ObjectPointers*>(obj);
+    auto* source = args->op_type == H5VL_LINK_CREATE_HARD
+        ? static_cast<ObjectPointers*>(args->args.hard.curr_obj) : nullptr;
+    if (!destination) destination = source;
+    if (!source) source = destination;
+    if (!destination) return -1;
+    if (!destination->writable()) return -1;
+    const bool native_destination = unwrap(destination);
+    const bool native_source = unwrap(source);
+    if (!destination->mdata_obj ||
+        (args->op_type == H5VL_LINK_CREATE_HARD && !source->mdata_obj))
     {
-        if(H5VL_LINK_CREATE_HARD == args->op_type)
-        {
-            // the only combination we currently support (needed for h5py)
-            assert(loc_params->type == H5VL_OBJECT_BY_NAME);
-            std::string name = loc_params->loc_data.loc_by_name.name;
-            assert(args->args.hard.curr_obj);
-            ObjectPointers* cur_obj_ = (ObjectPointers*) args->args.hard.curr_obj;
-            log->trace("  cur_obj = {}", *cur_obj_);
-
-            if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_SELF)
-            {
-                // TODO: probably should handle the path, in case it can be given
-                assert(name.find("/") == std::string::npos);      // expecting just a name, not a path
-                static_cast<Object*>(cur_obj_->mdata_obj)->name = name;
-            } else if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_NAME)
-            {
-                // (obj, loc_params) -> (cur_obj, cur_params)
-                auto obj_path = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
-                assert(obj_path.is_name());
-
-                auto cur_obj_path = static_cast<Object*>(cur_obj_->mdata_obj)->locate(args->args.hard.curr_loc_params);
-                Object* cur_obj = cur_obj_path.exact();     // assert that we found it
-                obj_path.obj->add_child(new HardLink(obj_path.path, cur_obj));
-            } else if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_TOKEN)
-            {
-                // TODO
-                throw MetadataError(fmt::format("link_create(): don't yet support cur_params->type = H5VL_OBJECT_BY_TOKEN"));
-            } else if (args->args.hard.curr_loc_params.type == H5VL_OBJECT_BY_IDX)
-            {
-                // TODO
-                throw MetadataError(fmt::format("link_create(): don't yet support cur_params->type = H5VL_OBJECT_BY_IDX"));
-            } else
-                throw MetadataError(fmt::format("link_create(): don't recognize cur_params->type = {}", args->args.hard.curr_loc_params.type));
-        } else if(H5VL_LINK_CREATE_SOFT == args->op_type)
-        {
-                // (obj, loc_params) -> target_name
-                auto obj_path = static_cast<Object*>(obj_->mdata_obj)->locate(*loc_params);
-                assert(obj_path.is_name());
-                obj_path.obj->add_child(new SoftLink(obj_path.path, args->args.soft.target));
-        } else
-        {
-            throw MetadataError(fmt::format("link_create(): unsupported create_type = {}", args->op_type));
-        }
+        if (!native_destination ||
+            (args->op_type == H5VL_LINK_CREATE_HARD && !native_source))
+            return -1;
+        auto native_args = *args;
+        if (native_args.op_type == H5VL_LINK_CREATE_HARD)
+            native_args.args.hard.curr_obj = unwrap(args->args.hard.curr_obj);
+        return link_create_trampoline(
+            &native_args, unwrap(obj), loc_params, under_vol_id, lcpl_id,
+            lapl_id, dxpl_id, req);
     }
-
-    if (unwrap(obj_))
+    auto* parent = static_cast<Object*>(destination->mdata_obj);
+    auto path = metadata_link_creation_path(
+        parent, *loc_params, native_destination);
+    if (!path.obj || path.path.empty()) return -1;
+    if (!native_destination && !metadata_creation_allowed(path, lcpl_id))
+        return -1;
+    Object* target = nullptr;
+    if (args->op_type == H5VL_LINK_CREATE_HARD)
     {
-        if(H5VL_LINK_CREATE_HARD == args->op_type)
-        {
-            // AN: modifying the args given to us to call trampoline, hopefully copying is not necessary
-            if (args->args.hard.curr_obj)
-                args->args.hard.curr_obj = unwrap(args->args.hard.curr_obj);
-
-            res = link_create_trampoline(args, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
-        } else if(H5VL_LINK_CREATE_SOFT == args->op_type)
-        {
-            // in 1.14, no need to keep this and next call separate
-            res = link_create_trampoline(args, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
-        } else
-        {
-            res = link_create_trampoline(args, unwrap(obj_), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
-        }
+        auto found =
+            static_cast<Object*>(source->mdata_obj)
+                ->locate(args->args.hard.curr_loc_params);
+        if (!found.path.empty() || !found.obj ||
+            found.obj->find_root() != parent->find_root())
+            return -1;
+        target = found.obj;
     }
-
-    return res;
+    else if (args->op_type != H5VL_LINK_CREATE_SOFT)
+        return -1;
+    if (unwrap(destination))
+    {
+        auto native_args = *args;
+        if (native_args.op_type == H5VL_LINK_CREATE_HARD)
+            native_args.args.hard.curr_obj = unwrap(args->args.hard.curr_obj);
+        auto result = link_create_trampoline(&native_args, unwrap(obj), loc_params, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+        if (result < 0) return result;
+    }
+    path = metadata_create_parents(*this, std::move(path), destination,
+                                   native_destination, dxpl_id);
+    if (!path.obj) return -1;
+    if (target)
+    {
+        auto* file = dynamic_cast<File*>(target->find_root());
+        auto detached = file ? std::find(file->unlinked.begin(),
+                                         file->unlinked.end(), target)
+                             : std::vector<Object*>::iterator {};
+        bool destination_within_target = false;
+        for (auto* owner = path.obj; owner; owner = owner->parent)
+            if (owner == target)
+            {
+                destination_within_target = true;
+                break;
+            }
+        if (file && target->name.empty() && target->parent == nullptr &&
+            !destination_within_target && detached != file->unlinked.end())
+        {
+            file->unlinked.erase(detached);
+            target->name = path.path;
+            path.obj->add_child(target);
+        }
+        else
+            path.obj->add_child(new HardLink(path.path, target));
+    }
+    else
+        path.obj->add_child(new SoftLink(path.path, args->args.soft.target));
+    return 0;
 }
 
 herr_t
@@ -96,27 +98,58 @@ link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
         void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
         hid_t lapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* src_obj_ = (ObjectPointers*)src_obj;
-    ObjectPointers* dst_obj_ = (ObjectPointers*)dst_obj;
+    auto* source = static_cast<ObjectPointers*>(src_obj ? src_obj : dst_obj);
+    auto* destination = static_cast<ObjectPointers*>(dst_obj ? dst_obj : src_obj);
+    if (!source || !destination) return -1;
+    if (!destination->writable()) return -1;
+    const bool native_source = unwrap(source);
+    const bool native_destination = unwrap(destination);
+    if (native_source != native_destination) return -1;
 
-    auto log = get_logger();
-    log->trace("link_copy: src_obj = {}, dst_obj = {}", *src_obj_, *dst_obj_);
 
-    herr_t res = 0;
-    if (unwrap(src_obj_) && unwrap(dst_obj_))
+    Object::ObjectPath source_path {nullptr, ""};
+    Object::ObjectPath destination_path {nullptr, ""};
+    if (source->mdata_obj && destination->mdata_obj)
     {
-        // warn if metadata are available but won't be used
-        if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
-            log->warn("Warning: link_copy: src obj = {} dst obj = {} metadata are available but won't be used", *src_obj_, *dst_obj_);
-
-        res = VOLBase::link_copy(unwrap(src_obj_), loc_params1, unwrap(dst_obj_), loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+        source_path = static_cast<Object*>(source->mdata_obj)->locate_link(*loc_params1);
+        destination_path = metadata_link_creation_path(
+            static_cast<Object*>(destination->mdata_obj), *loc_params2,
+            native_destination);
+        if (!native_source &&
+            (!source_path.obj || !source_path.path.empty() ||
+             !metadata_creation_allowed(destination_path, lcpl_id)))
+            return -1;
+        if (source_path.obj && source_path.path.empty() && destination_path.obj &&
+            source_path.obj->find_root() !=
+                destination_path.obj->find_root() &&
+            !dynamic_cast<SoftLink*>(source_path.obj))
+            return -1;
     }
-    else if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
-        log->warn("Warning: link_copy not implemented in metadata yet");
-    else
-        throw MetadataError(fmt::format("link_copy(): either passthru or metadata must be specified"));
+    if (native_source)
+    {
+        auto result = VOLBase::link_copy(
+            unwrap(src_obj), loc_params1, unwrap(dst_obj), loc_params2,
+            under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+        if (result < 0 || !source_path.obj || !source_path.path.empty() ||
+            !destination_path.obj || destination_path.path.empty())
+            return result;
+    }
 
-    return res;
+    if (!source_path.obj)
+        return -1;
+    destination_path = metadata_create_parents(
+        *this, std::move(destination_path), destination, native_destination,
+        dxpl_id);
+    if (!destination_path.obj) return -1;
+    Object* copied = nullptr;
+    if (auto* soft = dynamic_cast<SoftLink*>(source_path.obj))
+        copied = new SoftLink(destination_path.path, soft->target);
+    else if (auto* hard = dynamic_cast<HardLink*>(source_path.obj))
+        copied = new HardLink(destination_path.path, hard->target);
+    else
+        copied = new HardLink(destination_path.path, source_path.obj);
+    destination_path.obj->add_child(copied);
+    return 0;
 }
 
 herr_t
@@ -125,28 +158,61 @@ link_move(void *src_obj, const H5VL_loc_params_t *loc_params1,
         void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t under_vol_id, hid_t lcpl_id,
         hid_t lapl_id, hid_t dxpl_id, void **req)
 {
-    ObjectPointers* src_obj_ = (ObjectPointers*)src_obj;
-    ObjectPointers* dst_obj_ = (ObjectPointers*)dst_obj;
+    auto* source = static_cast<ObjectPointers*>(src_obj ? src_obj : dst_obj);
+    auto* destination = static_cast<ObjectPointers*>(dst_obj ? dst_obj : src_obj);
+    if (!source || !destination) return -1;
+    if (!source->writable() || !destination->writable()) return -1;
+    const bool native_source = unwrap(source);
+    const bool native_destination = unwrap(destination);
+    if (native_source != native_destination) return -1;
 
-    auto log = get_logger();
-    log->trace("link_move: src_obj = {}, dst_obj = {}", *src_obj_, *dst_obj_);
-
-    herr_t res = 0;
-    if (unwrap(src_obj_) && unwrap(dst_obj_))
+    Object::ObjectPath source_path {nullptr, ""};
+    Object::ObjectPath destination_path {nullptr, ""};
+    if (source->mdata_obj && destination->mdata_obj)
     {
-        // warn if metadata are available but won't be used
-        if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
-            log->warn("Warning: link_move: src obj = {} dst obj = {} metadata are available but won't be used", *src_obj_, *dst_obj_);
-
-        res = VOLBase::link_move(unwrap(src_obj_), loc_params1, unwrap(dst_obj_), loc_params2, under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+        source_path =
+            static_cast<Object*>(source->mdata_obj)->locate_link(*loc_params1);
+        destination_path = metadata_link_creation_path(
+            static_cast<Object*>(destination->mdata_obj), *loc_params2,
+            native_destination);
     }
-    else if (src_obj_->mdata_obj && dst_obj_->mdata_obj)
-        log->warn("Warning: link_move not implemented in metadata yet");
-    else
-        throw MetadataError(fmt::format("link_move(): either passthru or metadata must be specified"));
+    const bool tracked =
+        source_path.obj && source_path.path.empty() && source_path.obj->parent &&
+        destination_path.obj && !destination_path.path.empty() &&
+        (native_destination ||
+         metadata_creation_allowed(destination_path, lcpl_id));
+    if (tracked)
+        for (auto* parent = destination_path.obj; parent;
+             parent = parent->parent)
+            if (parent == source_path.obj) return -1;
 
-    return res;
+
+    if (native_source)
+    {
+        auto result = VOLBase::link_move(
+            unwrap(src_obj), loc_params1, unwrap(dst_obj), loc_params2,
+            under_vol_id, lcpl_id, lapl_id, dxpl_id, req);
+        if (result < 0 || !tracked) return result;
+    }
+    else
+    {
+        if (!tracked) return -1;
+        if (source_path.obj->find_root() !=
+                destination_path.obj->find_root() &&
+            !dynamic_cast<SoftLink*>(source_path.obj))
+            return -1;
+    }
+    destination_path = metadata_create_parents(
+        *this, std::move(destination_path), destination, native_destination,
+        dxpl_id);
+    if (!destination_path.obj) return -1;
+
+    source_path.obj->remove();
+    source_path.obj->name = destination_path.path;
+    destination_path.obj->add_child(source_path.obj);
+    return 0;
 }
+
 
 herr_t
 LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, H5VL_link_get_args_t* args, hid_t dxpl_id, void** req)
@@ -170,11 +236,17 @@ LowFive::MetadataVOL::link_get(void* obj, const H5VL_loc_params_t* loc_params, h
         auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
         if (args->op_type == H5VL_LINK_GET_NAME)
         {
-            auto* o = mdata_obj->locate(*loc_params).exact();
-            auto name_size = o->name.size();
-            if (args->args.get_name.name && args->args.get_name.name_size >= name_size)
-                memcpy(args->args.get_name.name, o->name.c_str(), name_size + 1);
-            *args->args.get_name.name_len = name_size + 1;                     // should this be +1 for c-string?
+            auto* o = mdata_obj->locate_link(*loc_params).exact();
+            if (!o) return -1;
+            auto length = o->name.size();
+            auto capacity = args->args.get_name.name_size;
+            if (args->args.get_name.name && capacity)
+            {
+                auto copied = std::min(length, capacity - 1);
+                memcpy(args->args.get_name.name, o->name.data(), copied);
+                args->args.get_name.name[copied] = '\0';
+            }
+            *args->args.get_name.name_len = length;
         } else
         {
             log->warn("Warning: link_get not implemented in metadata yet");
@@ -191,139 +263,114 @@ herr_t
 LowFive::MetadataVOL::
 link_iter(void *obj, H5VL_link_specific_args_t* args)
 {
-    if (args->op_type != H5VL_LINK_ITER)
-        throw MetadataError("called link_iter, but op_type is not H5VL_LINK_ITER");
-
-    ObjectPointers* obj_        = (ObjectPointers*) obj;
-    Object*         mdata_obj   = static_cast<Object*>(obj_->mdata_obj);
-
-    auto log = get_logger();
-
-    // get object type in HDF format and use that to get an HDF hid_t to the object
-    std::vector<int> h5_types = {H5I_FILE, H5I_GROUP, H5I_DATASET, H5I_ATTR, H5I_DATATYPE};     // map of our object type to hdf5 object types
-    if (static_cast<int>(mdata_obj->type) >= h5_types.size())     // sanity check
-        throw MetadataError(fmt::format("link_iter(): mdata_obj->type {} > H5I_DATATYPE, the last element of h5_types", mdata_obj->type));
-    int obj_type = h5_types[static_cast<int>(mdata_obj->type)];
-    ObjectPointers* obj_tmp = wrap(nullptr);
-    *obj_tmp = *obj_;
-    obj_tmp->tmp = true;
-    log->trace("link_iter: wrapping object type mdata_obj->type {} h5 obj_type {}", *obj_tmp, mdata_obj->type, obj_type);
-
-    hid_t obj_loc_id = H5VLwrap_register(obj_tmp, static_cast<H5I_type_t>(obj_type));
-
-    // info for link, defined in HDF5 H5Apublic.h  TODO: assigned with some defaults, not sure if they're corrent
-    H5L_info_t linfo;
-    linfo.corder_valid  = true;                     // whether creation order is valid
-    linfo.corder        = 0;                        // creation order (TODO: no idea what this is)
-    linfo.cset          = H5T_CSET_ASCII;           // character set of link names
-    linfo.u.val_size    = 0;                        // union of either token or val_size
-
-    log->trace("link_iter: iterating over direct children of object name {} in order children were created (ignoring itration order and index)",
-            mdata_obj->name);
-    if (args->args.iterate.idx_p)
-        log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is {}", args->args.iterate.order, *args->args.iterate.idx_p);
-    else
-        log->trace("link_iter: the provided order (H5_iter_order_t in H5public.h) is {} and the current index is unassigned", args->args.iterate.order);
-
-    if (args->args.iterate.recursive)
-        throw MetadataError(fmt::format("link_iter: recursive iteration not implemented yet"));
-
-    herr_t retval = 0;
-
-    // TODO: currently ignores the iteration order and current index
-    // just blindly goes through all the links in the order they were created
-    // also ignoring recursive flag (controls whether to iterate / visit, see H5VL__native_link_specific)
-    for (auto c : mdata_obj->children)
+    auto* pointers = static_cast<ObjectPointers*>(obj);
+    auto* metadata = static_cast<Object*>(pointers->mdata_obj);
+    if (!metadata || args->args.iterate.recursive) return -1;
+    auto entries = metadata->links(args->args.iterate.idx_type, args->args.iterate.order);
+    hsize_t index = args->args.iterate.idx_p ? *args->args.iterate.idx_p : 0;
+    if (index > entries.size()) return -1;
+    auto* temporary = wrap(nullptr);
+    temporary->mdata_obj = metadata;
+    temporary->tmp = true;
+    temporary->inherit_file_state(*pointers);
+    hid_t id = H5VLwrap_register(temporary, get_identifier_type(metadata));
+    if (id < 0) { drop(temporary); return -1; }
+    herr_t result = 0;
+    for (; index < entries.size(); ++index)
     {
-        // top-level attributes cannot be objects, skip over them
-        if (c->type == ObjectType::Attribute &&
-                (mdata_obj->type != ObjectType::Group && mdata_obj->type != ObjectType::Dataset && mdata_obj->type != ObjectType::NamedDtype))
+        auto* entry = entries[index];
+        H5L_info2_t info{};
+        info.cset = H5T_CSET_ASCII;
+        info.type = entry->type == ObjectType::SoftLink ? H5L_TYPE_SOFT : H5L_TYPE_HARD;
+        if (auto* soft = dynamic_cast<SoftLink*>(entry)) info.u.val_size = soft->target.size() + 1;
+        else
         {
-            log->trace("link_iter: skipping mdata object named {} type {}", mdata_obj->name, mdata_obj->type);
-            continue;
+            unsigned budget = 64;
+            auto* target = entry->resolve_link(budget);
+            if (!target) { result = -1; break; }
+            target->fill_token(info.u.token);
         }
-
-        // TODO: for now assume all the objects in our metadata are equivalent to a hard link
-        linfo.type = H5L_TYPE_HARD;
-
-        log->trace("link_iter: visiting object name {}", c->name);
-
-        std::vector<char> c_name(c->name.size() + 1);
-        strcpy(c_name.data(), c->name.c_str());
-
-        retval = (args->args.iterate.op)(obj_loc_id, c_name.data(), &linfo, args->args.iterate.op_data);
-        if (retval > 0)
-        {
-            log->trace("link_iter: terminating iteration because operator returned > 0 value, indicating user-defined success and early termination");
-            break;
-        }
-        else if (retval < 0)
-        {
-            log->trace("link_iter: terminating iteration because operator returned < 0 value, indicating user-defined failure and early termination");
-            break;
-        }
-    }   // for all children
-
-    auto refcount = H5Idec_ref(obj_loc_id);
-    log->trace("refcount = {}", refcount);
-
-    return retval;
+        result = args->args.iterate.op(id, entry->name.c_str(), &info, args->args.iterate.op_data);
+        if (args->args.iterate.idx_p) *args->args.iterate.idx_p = index + 1;
+        if (result != 0) break;
+    }
+    auto closed = H5Idec_ref(id);
+    return closed < 0 ? -1 : result;
 }
 
 herr_t
 LowFive::MetadataVOL::link_specific(void* obj, const H5VL_loc_params_t* loc_params, hid_t under_vol_id, H5VL_link_specific_args_t* args, hid_t dxpl_id, void** req)
 {
-    // see hdf5 src/H5VLnative_link.c, H5VL__native_link_specific()
-    // enum of specific types is in H5VLconnector.h
-
-    ObjectPointers* obj_ = (ObjectPointers*)obj;
-    auto* mdata_obj = static_cast<Object*>(obj_->mdata_obj);
-
-    auto log = get_logger();
-    log->trace("link_specific: obj = {}, specific_type = {}", *obj_, args->op_type);
-
-    herr_t res = 0;
-    if (unwrap(obj_))
+    auto* pointers = static_cast<ObjectPointers*>(obj);
+    if (args->op_type == H5VL_LINK_DELETE && !pointers->writable()) return -1;
+    auto* metadata = static_cast<Object*>(static_cast<ObjectPointers*>(obj)->mdata_obj);
+    Object* entry = nullptr;
+    if (args->op_type == H5VL_LINK_DELETE && metadata)
     {
-        // warn if metadata are available but won't be used
-        if (mdata_obj)
-            log->warn("Warning: link_specific: obj = {} metadata are available but won't be used", *obj_);
-
-        res = VOLBase::link_specific(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
-    }
-    else if (mdata_obj)
-    {
-        if (args->op_type == H5VL_LINK_DELETE)               // H5Ldelete(_by_name/idx)
+        if (unwrap(obj) && loc_params->type == H5VL_OBJECT_BY_IDX)
         {
-            // TODO
-            throw MetadataError(fmt::format("H5VL_LINK_DELETE not yet implemented in LowFive::MetadataVOL::link_specific()"));
-        }
-        else if (args->op_type == H5VL_LINK_EXISTS)         // H5Lexists(_by_name)
-        {
-            log->trace("link_specific: specific_type H5VL_LINK_EXISTS");
+            H5VL_link_get_args_t get_name{};
+            get_name.op_type = H5VL_LINK_GET_NAME;
+            size_t length = 0;
+            get_name.args.get_name.name_len = &length;
+            if (VOLBase::link_get(unwrap(obj), loc_params, under_vol_id, &get_name,
+                                  dxpl_id, nullptr) < 0)
+                return -1;
+            std::vector<char> name(length + 1);
+            get_name.args.get_name.name_size = name.size();
+            get_name.args.get_name.name = name.data();
+            if (VOLBase::link_get(unwrap(obj), loc_params, under_vol_id, &get_name,
+                                  dxpl_id, nullptr) < 0)
+                return -1;
 
-            auto op = static_cast<Object*>(mdata_obj)->locate(*loc_params);
-            *(args->args.exists.exists) = op.path.empty();
-            res = op.path.empty();
-        }
-        else if (args->op_type == H5VL_LINK_ITER)           // H5Liter/H5Lvisit(_by_name/_by_self)
-        {
-            log->trace("link_specific: specific_type H5VL_LINK_ITER");
-
-            // sanity check that the provided object matches the location parameters
-            // ie,  we're not supposed to operate on one of the children instead of the parent (which we don't support)
-            if (mdata_obj != mdata_obj->locate(*loc_params).exact())
-                throw MetadataError(fmt::format("link_specific: specific_type H5VL_LINK_ITER, object does not match location parameters"));
-
-            res = link_iter(obj, args);
+            const auto& by = loc_params->loc_data.loc_by_idx;
+            auto owner_path = metadata->search(by.name);
+            if (owner_path.obj && owner_path.path.empty())
+                for (auto* child : owner_path.obj->children)
+                    if (child->type != ObjectType::Attribute &&
+                        child->name == std::string(name.data(), length))
+                    {
+                        entry = child;
+                        break;
+                    }
         }
         else
-            throw MetadataError(fmt::format("link_specific unrecognized specific_type = {}", args->op_type));
+        {
+            auto path = metadata->locate_link(*loc_params);
+            if (path.obj && path.path.empty() && path.obj->parent)
+                entry = path.obj;
+        }
     }
-    else
-        throw MetadataError(fmt::format("link_specific(): either passthru or metadata must be specified"));
-
-    return res;
+    if (unwrap(obj))
+    {
+        auto result = VOLBase::link_specific(unwrap(obj), loc_params, under_vol_id,
+                                             args, dxpl_id, req);
+        if (result >= 0 && args->op_type == H5VL_LINK_DELETE && entry)
+            unlink_metadata(*this, entry);
+        return result;
+    }
+    if (args->op_type == H5VL_LINK_DELETE)
+    {
+        if (!entry) return -1;
+        unlink_metadata(*this, entry);
+        return 0;
+    }
+    if (!metadata) return -1;
+    if (args->op_type == H5VL_LINK_EXISTS)
+    {
+        auto path = metadata->locate_link(*loc_params);
+        *args->args.exists.exists = path.obj && path.path.empty();
+        return 0;
+    }
+    if (args->op_type == H5VL_LINK_ITER)
+    {
+        auto* owner = metadata->locate(*loc_params).exact();
+        if (!owner) return -1;
+        ObjectPointers temporary = *static_cast<ObjectPointers*>(obj);
+        temporary.mdata_obj = owner;
+        return link_iter(&temporary, args);
+    }
+    return -1;
 }
 
 herr_t
@@ -344,7 +391,7 @@ LowFive::MetadataVOL::link_optional(void* obj, const H5VL_loc_params_t* loc_para
         res = VOLBase::link_optional(unwrap(obj_), loc_params, under_vol_id, args, dxpl_id, req);
     }
     else if (obj_->mdata_obj)
-        log->warn("Warning: link_optional not implemented in metadata yet");
+        return -1;
     else
         throw MetadataError(fmt::format("link_optional(): either passthru or metadata must be specified"));
 

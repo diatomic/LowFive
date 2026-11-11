@@ -18,21 +18,17 @@ namespace py = pybind11;
 #include <lowfive/vol-dist-metadata.hpp>
 #include <lowfive/../../src/log-private.hpp>
 
-herr_t
-fail_on_hdf5_error(hid_t stack_id, void*)
-{
-    H5Eprint(stack_id, stderr);
-    fprintf(stderr, "An HDF5 error was detected. Terminating.\n");
-    exit(1);
-}
 
 // custom deleter for unique_ptrs for VOLs
 struct nodelete_unset_cb {
     template<class T>
     void operator()(T* vol)
     {
-        py::gil_scoped_acquire acq;
-        vol->unset_callbacks();
+        if (LowFive::VOLBase::info_t::vol == vol)
+        {
+            py::gil_scoped_acquire acq;
+            vol->unset_callbacks();
+        }
     }
 };
 
@@ -42,8 +38,6 @@ PYBIND11_MODULE(_lowfive, m)
 
     m.doc() = "LowFive python bindings";
 
-    // set HDF5 error handler
-    H5Eset_auto(H5E_DEFAULT, fail_on_hdf5_error, NULL);
 
 #if defined(LOWFIVE_MPI4PY)
     // import the mpi4py API
@@ -56,7 +50,7 @@ PYBIND11_MODULE(_lowfive, m)
     // 1. acquire GIL
     // 2. unset callbacks (so they are destroyed with GIL held)
     // and will NOT delete the object (this is done in _term when HDF5 library is closing)
-    using PVOLBase = std::unique_ptr<LowFive::VOLBase>;
+    using PVOLBase = std::unique_ptr<LowFive::VOLBase, py::nodelete>;
     using PMetadataVOL = std::unique_ptr<LowFive::MetadataVOL, nodelete_unset_cb>;
     using PDistMetadataVOL = std::unique_ptr<LowFive::DistMetadataVOL, nodelete_unset_cb>;
 
@@ -102,7 +96,7 @@ PYBIND11_MODULE(_lowfive, m)
                       }, "local"_a, "intercomms"_a, "construct the object");
 #endif
 
-    py::class_<LowFive::VOLBase> vol_base(m, "VOLBase", "base VOL object");
+    py::class_<LowFive::VOLBase, PVOLBase> vol_base(m, "VOLBase", "base VOL object");
 
     py::class_<LowFive::MetadataVOL, std::unique_ptr<LowFive::MetadataVOL, nodelete_unset_cb>> metadata_vol(m, "MetadataVOL", "metadata VOL object", vol_base);
     metadata_vol
@@ -133,12 +127,15 @@ PYBIND11_MODULE(_lowfive, m)
                                         },                                                              "set the after_dataset_write callback")
         .def("unset_callbacks",        [](LowFive::MetadataVOL* self)
                                         {
-                                          py::gil_scoped_acquire acq;
-                                          self->unset_callbacks();
+                                          if (LowFive::VOLBase::info_t::vol == self)
+                                          {
+                                              py::gil_scoped_acquire acq;
+                                              self->unset_callbacks();
+                                          }
                                         },                                                              "set the after_dataset_write callback")
     ;
 
-    py::class_<LowFive::DistMetadataVOL, std::unique_ptr<LowFive::DistMetadataVOL, py::nodelete>> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
+    py::class_<LowFive::DistMetadataVOL, PDistMetadataVOL> dist_metadata_vol(m, "DistMetadataVOL", "metadata VOL object", metadata_vol);
     dist_metadata_vol
         .def_readwrite("serve_on_close",              &LowFive::DistMetadataVOL::serve_on_close)
         .def_readonly("file_close_counter",           &LowFive::DistMetadataVOL::file_close_counter_)
@@ -177,8 +174,11 @@ PYBIND11_MODULE(_lowfive, m)
 
         .def("unset_dist_callbacks",    [](LowFive::DistMetadataVOL* self)
                                         {
-                                          py::gil_scoped_acquire acq;
-                                          self->unset_dist_callbacks();
+                                          if (LowFive::VOLBase::info_t::vol == self)
+                                          {
+                                              py::gil_scoped_acquire acq;
+                                              self->unset_dist_callbacks();
+                                          }
                                         },                                                              "unset DistMetadataVOL callbacks")
 
     ;

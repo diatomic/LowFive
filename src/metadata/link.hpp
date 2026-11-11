@@ -11,6 +11,13 @@ struct HardLink : public Object
         Object(ObjectType::HardLink, name), target(target_)
     {}
 
+    Object* resolve_link(unsigned& budget) override
+    {
+        if (!budget-- || !target) return nullptr;
+        return target->resolve_link(budget);
+    }
+    Object* link_target() override { return target; }
+
     void print(int depth) const override
     {
         print_depth(depth);
@@ -30,6 +37,13 @@ struct SoftLink: public Object
     SoftLink(std::string name, std::string target_):
         Object(ObjectType::SoftLink, name), target(target_)
     {}
+
+    Object* resolve_link(unsigned& budget) override
+    {
+        if (!budget-- || !parent) return nullptr;
+        auto found = parent->search_path(target, budget);
+        return found.path.empty() ? found.obj : nullptr;
+    }
 
     void print(int depth) const override
     {

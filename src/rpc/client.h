@@ -1,6 +1,8 @@
 #pragma once
 
 #include <map>
+#include <stdexcept>
+#include <tuple>
 
 #include <mpi.h>
 #include <diy/mpi.hpp>
@@ -48,24 +50,48 @@ struct client
     object          create(int target, std::string name, Args... args);
 
     inline void     destroy(int target, size_t id);
-
-    inline size_t&  ref_count(int target, size_t obj_id)    { return ref_count_[std::make_tuple(target, obj_id)]; }
-    inline void     finish(int target) const                { diy::MemoryBuffer out; diy::save(out, ops::finish); ssend(comm_, target, tags::consumer, out); }
+    size_t          tracked_object_count() const              { return ref_count_.size(); }
+    inline void     finish(int target) const                   { diy::MemoryBuffer out; diy::save(out, ops::finish); ssend(comm_, target, tags::consumer, out); }
 
     private:
+        using ObjectKey = std::tuple<int, size_t>;
+
+        inline void retain(int target, size_t obj_id)
+        {
+            ++ref_count_[ObjectKey {target, obj_id}];
+        }
+
+        inline bool release_ref(int target, size_t obj_id)
+        {
+            auto it = ref_count_.find(ObjectKey {target, obj_id});
+            if (it == ref_count_.end() || it->second == 0)
+                throw std::logic_error("Invalid RPC client object reference");
+            return --it->second == 0;
+        }
+
+        inline void restore_ref(int target, size_t obj_id)
+        {
+            ++ref_count_[ObjectKey {target, obj_id}];
+        }
+
+        inline void forget_ref(int target, size_t obj_id)
+        {
+            ref_count_.erase(ObjectKey {target, obj_id});
+        }
+
+        inline void check_response(diy::MemoryBuffer& in);
+
         template<class R>
         R           load(diy::MemoryBuffer& in, int target, bool own);
 
         template<class... Args>
         void        save(diy::MemoryBuffer& out, Args... args);
-
-    private:
         const module&               m_;
         diy::mpi::communicator      comm_;
 
         int                         default_target_;
 
-        std::map<std::tuple<int,size_t>, size_t>    ref_count_;
+        std::map<ObjectKey, size_t>    ref_count_;
 
 };
 
@@ -73,6 +99,20 @@ struct client
 }   // namespace LowFive
 
 #include "modules/client.h"
+
+void
+LowFive::rpc::client::
+check_response(diy::MemoryBuffer& in)
+{
+    bool success;
+    diy::load_back(in, success);
+    if (success)
+        return;
+
+    std::string message;
+    diy::load(in, message);
+    throw std::runtime_error("Remote RPC error: " + message);
+}
 
 template<class R>
 R
@@ -132,6 +172,7 @@ call(int target, std::string name, Args... args)
 
     send(comm_, target, tags::consumer, out);
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 
     return load<R>(in, target, false);
 }
@@ -152,6 +193,7 @@ call_mem_fn(int target, size_t obj, size_t fn, Args... args)
 
     send(comm_, target, tags::consumer, out);
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 
     return load<R>(in, target, false);
 }
@@ -173,6 +215,7 @@ LowFive::rpc::client::create(int target, std::string name, Args... args)
 
     send(comm_, target, tags::consumer, out);
     recv(comm_, target, tags::producer, in);
+    check_response(in);
 
     return load<object>(in, target, true);     // true indicates that we own this object (and will automatically delete it, when all references go out of scope)
 }
@@ -192,4 +235,7 @@ LowFive::rpc::client::destroy(int target, size_t id)
     diy::save(out, id);
 
     send(comm_, target, tags::consumer, out);
+    diy::MemoryBuffer in;
+    recv(comm_, target, tags::producer, in);
+    check_response(in);
 }

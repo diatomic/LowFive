@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 namespace LowFive
 {
 
@@ -11,10 +13,19 @@ struct Hid
                 id(id_)                             { if (id != 0 && !owned) H5Iinc_ref(id); }
 
             Hid(const Hid& other)                   { update(other.id); }
-            Hid(Hid&& other)                        { update(other.id); }
+            Hid(Hid&& other) noexcept:
+                id(std::exchange(other.id, 0))        {}
 
     Hid&    operator=(const Hid& other)             { update(other.id); return *this; }
-    Hid&    operator=(Hid&& other)                  { update(other.id); return *this; }
+    Hid&    operator=(Hid&& other) noexcept
+    {
+        if (this != &other)
+        {
+            Hid previous(std::move(*this));
+            id = std::exchange(other.id, 0);
+        }
+        return *this;
+    }
 
     void    inc_ref()                               { H5Iinc_ref(id); }
 

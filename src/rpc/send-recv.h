@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mpi.h>
+#include <utility>
 #include <diy/mpi.hpp>
 #include "../metadata/serialization.hpp"
 
@@ -62,14 +63,18 @@ inline void recv(diy::mpi::communicator comm, int source, int tag, diy::MemoryBu
 
         diy::detail::VectorWindow<char> window;
 
-        char* buffer = new char[count];
+        diy::MemoryBuffer::Blob blob {
+            { nullptr, [](const char* data) { delete[] data; } }, count
+        };
+        blob.pointer.reset(new char[count]);
 
-        window.begin = buffer;
+        window.begin = const_cast<char*>(blob.pointer.get());
         window.count = count;
 
         comm.recv(source, tag, window);
 
-        bb.save_binary_blob(buffer, count);
+        // Move the owner directly so failed insertion cannot leave two owners.
+        bb.blobs.push_back(std::move(blob));
     }
 }
 

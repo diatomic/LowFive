@@ -1,6 +1,53 @@
 #include <lowfive/vol-base.hpp>
 #include "../log-private.hpp"
 
+namespace
+{
+template<class Operation>
+herr_t transfer_datasets(size_t count, void* datasets[], void** request, Operation operation)
+{
+    if (request) *request = nullptr;
+    if (!count) return 0;
+    using Base = LowFive::VOLBase;
+    using Wrapper = Base::pass_through_t;
+    // Allocate and retain all connector IDs before the first operation can use
+    // a caller buffer. Each submission receives a fresh underlying request slot.
+    Wrapper* aggregate = request ? Base::create_request(count, datasets) : nullptr;
+    bool asynchronous = false;
+    for (size_t index = 0; index < count; ++index)
+    {
+        auto* object = static_cast<Wrapper*>(datasets[index]);
+        void* underlying = nullptr;
+        herr_t result;
+        try
+        {
+            result = operation(object, index, request ? &underlying : nullptr);
+        }
+        catch (...)
+        {
+            if (aggregate)
+            {
+                Base::set_request(aggregate, index, underlying);
+                Base::drain_request(aggregate);
+            }
+            throw;
+        }
+        if (aggregate) Base::set_request(aggregate, index, underlying);
+        asynchronous |= underlying != nullptr;
+        if (result < 0)
+        {
+            if (aggregate) Base::drain_request(aggregate);
+            return result;
+        }
+    }
+    if (asynchronous)
+        *request = aggregate;
+    else if (aggregate)
+        Wrapper::destroy_wrapper(aggregate);
+    return 0;
+}
+}
+
 /*-------------------------------------------------------------------------
  * Function:    dataset_create
  *
@@ -171,28 +218,11 @@ _dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_i
 
     log->debug("------- PASS THROUGH VOL DATASET Read count = {}", count);
 
-    herr_t ret_value = 0;
-
-    // iterate over all datasets
-    for(size_t dset_idx = 0; dset_idx < count; ++ dset_idx) {
-
-        pass_through_t* o = (pass_through_t*)dset[dset_idx];
-
-        // call dataset_read
-        auto ret_value_per_dset = o->vol->dataset_read(o->under_object, mem_type_id[dset_idx], mem_space_id[dset_idx], file_space_id[dset_idx], plist_id, buf[dset_idx], req);
-
-        if (ret_value == 0) {
-            ret_value = ret_value_per_dset;
-            // TODO: signal error and break loop?
-            // Is anything really going to call it with count > 1?
-        }
-
-        /* Check for async request */
-        if (req && *req)
-            *req = o->create(*req);
-    }
-
-    return ret_value;
+    return transfer_datasets(count, dset, req, [&](pass_through_t* object, size_t index, void** underlying)
+    {
+        return object->vol->dataset_read(object->under_object, mem_type_id[index], mem_space_id[index],
+                                         file_space_id[index], plist_id, buf[index], underlying);
+    });
 } /* end dataset_read() */
 
 
@@ -213,27 +243,12 @@ _dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_
 {
     auto log = get_logger();
 
-    herr_t ret_value = 0;
-
     log->debug("------- PASS THROUGH VOL DATASET Write count = {}", count);
-    for(size_t dset_idx = 0; dset_idx < count; ++dset_idx) {
-
-        pass_through_t* o = (pass_through_t*)dset[dset_idx];
-
-        auto ret_value_loc = o->vol->dataset_write(o->under_object, mem_type_id[dset_idx], mem_space_id[dset_idx], file_space_id[dset_idx], plist_id, buf[dset_idx], req);
-
-        if (ret_value == 0) {
-            // do not overwrite FAIL
-            // TODO: break here if ret_value_loc == FAIL?
-            ret_value = ret_value_loc;
-        }
-
-        /* Check for async request */
-        if (req && *req)
-            *req = o->create(*req);
-    }
-
-    return ret_value;
+    return transfer_datasets(count, dset, req, [&](pass_through_t* object, size_t index, void** underlying)
+    {
+        return object->vol->dataset_write(object->under_object, mem_type_id[index], mem_space_id[index],
+                                          file_space_id[index], plist_id, buf[index], underlying);
+    });
 } /* end dataset_write() */
 
 

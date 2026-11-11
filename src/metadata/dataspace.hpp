@@ -11,12 +11,12 @@ struct Dataspace: Hid
     enum class Class     { scalar, simple, null };
     enum class Selection { none, points, hyperslabs, all };
 
-    int                             dim;
+    int                             dim = 0;
     std::vector<size_t>             min, max,
                                     dims, maxdims;
 
-    Class                           cls;
-    Selection                       selection;
+    Class                           cls = Class::null;
+    Selection                       selection = Selection::none;
 
     // hyperslab
     std::vector<size_t>             start, stride, count, block;
@@ -41,7 +41,11 @@ struct Dataspace: Hid
             cls = Class::null;
 
         if (cls != Class::simple)
+        {
+            selection = H5Sget_select_type(id) == H5S_SEL_ALL ?
+                        Selection::all : Selection::none;
             return;
+        }
 
         dim = H5Sget_simple_extent_ndims(id);
         min.resize(dim);
@@ -166,6 +170,11 @@ struct Dataspace: Hid
 
     bool    intersects(const Dataspace& other) const
     {
+        if (cls == Class::null || other.cls == Class::null)
+            return false;
+        if (cls == Class::scalar || other.cls == Class::scalar)
+            return cls == Class::scalar && other.cls == Class::scalar;
+
         std::vector<hsize_t> start, end;
         for (int i = 0; i < other.dim; ++i)
         {
